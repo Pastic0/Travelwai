@@ -1,0 +1,303 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lịch trình du lịch - TravelwAI</title>
+    <link rel="icon" href="/logo/travelwai-paper-plane.webp" type="image/webp" />
+    <link rel="preload" as="image" href="/main_site_image/travelwai-bg-light.webp" />
+
+    <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="css/schedule_style.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-24-contact-ai-v2" />
+    <script src="script/accounts.js?v=2026-06-24-contact-ai-v2"></script>
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-24-contact-ai-v2" />
+  </head>
+  <body class="schedule-page">
+    @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "schedule")
+
+    <main class="schedule-shell">
+      <section class="schedule-hero">
+        <div class="hero-copy">
+          <span class="eyebrow">Quản lý hành trình</span>
+          <h1>Lịch trình du lịch của tôi</h1>
+
+        </div>
+        <div class="schedule-hero-actions">
+          <button id="aiCreateScheduleBtn" class="create-btn ai-create-btn" type="button">
+            <span>AI</span> AI lập lịch trình
+          </button>
+          <button id="createScheduleBtn" class="create-btn" type="button">
+            <span>+</span> Tạo lịch trình mới
+          </button>
+        </div>
+      </section>
+
+      <section class="schedule-overview-cards" aria-label="Tổng quan lịch trình">
+        <article class="overview-card">
+          <div>
+            <strong id="totalSchedulesCount">0</strong>
+            <span>Tổng lịch trình</span>
+          </div>
+        </article>
+        <article class="overview-card">
+          <div>
+            <strong id="ownedSchedulesCount">0</strong>
+            <span>Của tôi</span>
+          </div>
+        </article>
+        <article class="overview-card">
+          <div>
+            <strong id="sharedSchedulesCount">0</strong>
+            <span>Được chia sẻ</span>
+          </div>
+        </article>
+      </section>
+
+      <section class="schedule-board">
+        <div class="schedule-board-header">
+          <div>
+            <h2>Danh sách lịch trình</h2>
+          </div>
+          <div class="schedule-tools">
+            <select id="scheduleFilterSelect" aria-label="Lọc lịch trình">
+              <option value="all">Tất cả</option>
+              <option value="owned">Của tôi</option>
+              <option value="shared">Được chia sẻ</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="schedules-grid" id="schedulesGrid">
+          <div class="loading-message">Đang tải lịch trình...</div>
+        </div>
+
+        <div class="empty-state" id="emptyState" style="display: none">
+          <h3>Chưa có lịch trình</h3>
+          <button class="create-btn" type="button" onclick="openCreateModal()">
+            <span>+</span> Tạo lịch trình đầu tiên
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <div id="scheduleModal" class="modal" aria-hidden="true">
+      <div class="modal-content schedule-editor-modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-header">
+          <div>
+            <span class="modal-kicker">Lịch trình</span>
+            <h2 id="modalTitle">Tạo lịch trình mới</h2>
+          </div>
+          <button type="button" class="close" aria-label="Đóng hộp thoại">&times;</button>
+        </div>
+
+        <form id="scheduleForm">
+          <div class="modal-body">
+            <div class="form-section ai-schedule-section">
+              <div class="form-section-title">
+                <span>AI</span>
+                <div>
+                  <h3>AI lập lịch trình</h3>
+                </div>
+              </div>
+              <div class="ai-schedule-box">
+                <div class="ai-schedule-messages" id="scheduleAiMessages">
+                  <div class="ai-schedule-message assistant">
+                    Ví dụ: Đi Đà Lạt, 2 ngày, đi hôm nay".
+                  </div>
+                </div>
+                <div class="ai-schedule-input-row">
+                  <textarea id="scheduleAiPrompt" rows="2" placeholder="Nhập yêu cầu cho AI lập lịch trình..."></textarea>
+                  <button type="button" id="askScheduleAiBtn" class="btn-primary ai-schedule-send-btn">Gửi AI</button>
+                </div>
+                <small class="form-help">Nếu AI tạo lịch trình xong, bạn vẫn có thể chỉnh lại rồi bấm Tạo lịch trình để lưu.</small>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section-title">
+                <span>01</span>
+                <div>
+                  <h3>Thông tin chuyến đi</h3>
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="scheduleTitle">Tên lịch trình *</label>
+                  <input
+                    type="text"
+                    id="scheduleTitle"
+                    required
+                    placeholder="VD: Hành trình khám phá Trung Bộ"
+                  />
+                </div>
+
+                <div class="form-group full-width">
+                  <label for="scheduleDescription">Mô tả</label>
+                  <textarea
+                    id="scheduleDescription"
+                    rows="2"
+
+                  ></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label for="startDate">Ngày bắt đầu *</label>
+                  <input type="date" id="startDate" required />
+                </div>
+                <div class="form-group">
+                  <label for="endDate">Ngày kết thúc *</label>
+                  <input type="date" id="endDate" required />
+                </div>
+
+                <div class="form-group">
+                  <label for="budget">Ngân sách</label>
+                  <input type="number" id="budget" placeholder="0" min="0" />
+                </div>
+                <div class="form-group">
+                  <label for="currency">Đơn vị tiền tệ</label>
+                  <select id="currency">
+                    <option value="VND">VND - Việt Nam đồng</option>
+                    <option value="USD">USD - Đô la Mỹ</option>
+                    <option value="EUR">EUR - Euro</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="tags">Thẻ gợi nhớ</label>
+                  <input
+                    type="text"
+                    id="tags"
+                    placeholder="biển, gia đình, tiết kiệm, nghỉ dưỡng..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section-title">
+                <span>02</span>
+                <div>
+                  <h3>Chia sẻ lịch trình</h3>
+                </div>
+              </div>
+
+              <div class="visibility-options">
+                <label class="radio-label">
+                  <input type="radio" name="visibility" value="private" id="visibilityPrivate" checked />
+                  <span class="radio-card">
+                    <strong>Riêng tư</strong>
+                    <small>Chỉ mình tôi xem</small>
+                  </span>
+                </label>
+
+                <label class="radio-label">
+                  <input type="radio" name="visibility" value="shared" id="visibilityShared" />
+                  <span class="radio-card">
+                    <strong>Chia sẻ</strong>
+                    <small>Cho phép bạn bè xem lịch trình</small>
+                  </span>
+                </label>
+              </div>
+
+              <div class="form-group email-sharing-section" id="emailSharingSection" style="display: none">
+                <label for="emailInput">Chia sẻ với email bạn bè</label>
+                <div class="email-input-container">
+                  <div class="email-search-wrapper">
+                    <input
+                      type="email"
+                      id="emailInput"
+                      placeholder="Nhập email hoặc tìm bạn bè"
+                      autocomplete="off"
+                    />
+                    <div id="userSearchResults" class="user-search-results"></div>
+                  </div>
+                  <button type="button" id="addEmailBtn" class="btn-add-email">Thêm</button>
+                </div>
+                <div id="emailList" class="email-list"></div>
+                <small class="form-help">Có thể nhập nhiều email, mỗi email bấm Thêm một lần.</small>
+              </div>
+            </div>
+
+            <div class="form-section daily-planning-section">
+              <div class="form-section-title">
+                <span>03</span>
+                <div>
+                  <h3>Kế hoạch từng ngày</h3>
+                </div>
+              </div>
+
+              <div id="dailyPlansContainer" class="daily-plans-container-redesigned">
+                <div class="daily-plans-placeholder-redesigned">
+                  <div class="placeholder-content">
+                    <h3>Sẵn sàng lập kế hoạch?</h3>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group" style="display: none">
+              <label class="checkbox-label">
+                <input type="checkbox" id="isPublic" />
+                <span class="checkmark"></span>
+                Công khai lịch trình này
+              </label>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" onclick="closeModal()">Hủy</button>
+            <button type="submit" class="btn-primary" id="saveScheduleBtn">Tạo lịch trình</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="detailModal" class="modal" aria-hidden="true">
+      <div class="modal-content large-modal" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+        <div class="modal-header">
+          <div>
+            <span class="modal-kicker">Chi tiết</span>
+            <h2 id="detailTitle">Chi tiết lịch trình</h2>
+          </div>
+          <div class="header-actions">
+            <button id="editScheduleBtn" class="btn-secondary" type="button">Sửa</button>
+            <button id="deleteScheduleBtn" class="btn-danger" type="button">Xóa</button>
+            <button type="button" class="close" aria-label="Đóng hộp thoại">&times;</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div id="scheduleDetails"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="dayPlanModal" class="modal" aria-hidden="true">
+      <div class="modal-content medium-modal" role="dialog" aria-modal="true" aria-labelledby="dayPlanTitle">
+        <div class="modal-header">
+          <div>
+            <span class="modal-kicker">Tổng quan ngày</span>
+            <h2 id="dayPlanTitle">Tổng quan kế hoạch trong ngày</h2>
+          </div>
+          <div class="header-actions">
+            <button id="editDayPlanBtn" class="btn-secondary" type="button">Sửa ngày</button>
+            <button type="button" class="close" aria-label="Đóng hộp thoại">&times;</button>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div id="dayPlanDetails" class="day-plan-preview"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="script/schedule.script.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="/script/travelwai_contact_panel.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="/script/travelwai_notification_panel.js?v=2026-06-24-contact-ai-v2"></script>
+      <script src="/script/theme_toggle.js?v=2026-06-24-mini-nav-v4"></script>
+</body>
+</html>
+

@@ -1,0 +1,64 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Liên hệ - TravelwAI</title>
+    <link rel="icon" href="/logo/travelwai-paper-plane.webp" type="image/webp" />
+    <link rel="preload" as="image" href="/main_site_image/travelwai-bg-light.webp" />
+    <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="css/schedule_style.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="css/contact.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-24-contact-ai-v2" />
+    <script src="script/accounts.js?v=2026-06-24-contact-ai-v2"></script>
+  </head>
+  <body class="schedule-page contact-page">
+    @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "contact")
+
+    <main class="schedule-shell contact-shell">
+      <section class="schedule-hero contact-hero">
+        <div class="hero-copy">
+          <span class="eyebrow">Phản hồi</span>
+          <h1>Liên hệ</h1>
+        </div>
+        <div class="schedule-hero-actions contact-hero-actions">
+          <button type="button" class="create-btn" data-contact-panel-trigger><span>+</span> Gửi phản hồi</button>
+          <a href="/messaging" class="create-btn contact-secondary-btn"><span>💬</span> Mở tin nhắn</a>
+        </div>
+      </section>
+
+      <section class="schedule-board contact-board">
+        <div class="schedule-board-header">
+          <div>
+            <h2>Hỗ trợ</h2>
+          </div>
+          <div class="schedule-tools contact-tools">
+            <button type="button" class="create-btn" data-contact-panel-trigger><span>+</span> Phản hồi</button>
+          </div>
+        </div>
+
+        <div class="contact-support-grid">
+          <button type="button" class="contact-support-card" data-contact-panel-trigger>
+            <strong>Gửi Admin</strong>
+          </button>
+          <a class="contact-support-card" href="/messaging">
+            <strong>Tin nhắn</strong>
+          </a>
+          <a class="contact-support-card" href="/home">
+            <strong>Trang chủ</strong>
+          </a>
+        </div>
+      </section>
+    </main>
+
+    <script src="/script/travelwai_contact_panel.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="/script/travelwai_notification_panel.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="/script/notification-badge-loader.js?v=2026-06-24-contact-ai-v2"></script>
+      <script src="/script/theme_toggle.js?v=2026-06-24-mini-nav-v4"></script>
+</body>
+</html>
+

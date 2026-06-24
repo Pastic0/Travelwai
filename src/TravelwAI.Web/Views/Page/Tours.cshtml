@@ -1,0 +1,110 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tour du lịch - TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-paper-plane.webp" type="image/webp" />
+    <link rel="preload" as="image" href="/main_site_image/travelwai-bg-light.webp" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-24-contact-ai-v2" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-24-contact-ai-v2" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-24-contact-ai-v2" />
+<link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-24-contact-ai-v2" />
+</head>
+<body class="tour-admin-page public-tour-page" data-page="public-tours">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "tours")
+
+  <main class="tour-admin-shell public-tour-shell">
+    <section class="tour-admin-hero public-tour-hero">
+      <div>
+        <span class="eyebrow">Tour TravelwAI</span>
+        <h1>Tour du lịch</h1>
+
+      </div>
+      <div class="public-tour-hero-actions">
+        <button type="button" id="tourOfferBtn" class="tour-offer-btn">
+          <svg class="tour-offer-btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8"></path>
+            <path d="M2 8h20v4H2z"></path>
+            <path d="M12 8v13"></path>
+            <path d="M12 8H8.5A2.5 2.5 0 1 1 12 5.5V8z"></path>
+            <path d="M12 8h3.5A2.5 2.5 0 1 0 12 5.5V8z"></path>
+          </svg>
+          <span>Ưu đãi</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="tour-search-panel public-tour-search-panel">
+      <div class="tour-search-box">
+        <input id="publicTourSearch" type="search" placeholder="Tìm tour theo tên, điểm đến, thời gian..." autocomplete="off" />
+        <button class="btn-soft btn-clear-tour-search" id="clearPublicTourSearch" type="button">Xóa</button>
+      </div>
+    </section>
+
+    <section class="public-tour-grid" id="publicToursGrid">
+      <div class="management-panel">Đang tải tour...</div>
+    </section>
+  </main>
+
+  <div class="form-modal" id="publicBookModal">
+    <form class="form-card" id="publicBookForm">
+      <h2>Chi tiết tour & đặt chỗ</h2>
+      <input type="hidden" id="bookTourId" />
+      <div class="public-book-tour-details" id="publicBookTourDetails"></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Tên khách</label><input id="bookName" /></div>
+        <div class="form-group"><label>Email</label><input id="bookEmail" type="email" /></div>
+        <div class="form-group"><label>Số lượng</label><input id="bookQuantity" type="number" min="1" value="1" /></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closePublicBookModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Đặt tour</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="form-modal tour-offer-modal" id="tourOfferModal">
+    <div class="form-card tour-offer-card">
+      <div class="tour-offer-modal-header">
+        <div>
+          <h2>Ưu đãi</h2>
+        </div>
+        <button type="button" class="tour-offer-close" onclick="closeTourOfferModal()" aria-label="Đóng">&times;</button>
+      </div>
+
+      <div class="tour-offer-progress-wrap">
+        <div class="tour-offer-progress-info">
+          <strong id="tourOfferDiscountText">Giảm 0%</strong>
+          <span id="tourOfferProgressText">0/5 người</span>
+        </div>
+        <div class="tour-offer-progress-bar">
+          <span id="tourOfferProgressFill"></span>
+        </div>
+      </div>
+
+      <form class="tour-offer-invite-form" id="tourOfferInviteForm">
+        <div class="form-group">
+          <label>Gmail người muốn mời</label>
+          <input type="email" id="tourOfferInviteEmail" placeholder="example@gmail.com" required />
+        </div>
+        <button class="btn-primary" type="submit">Gửi lời mời</button>
+      </form>
+
+      <div class="tour-offer-invite-list" id="tourOfferInviteList"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="tourToast"></div>
+
+  <script src="/script/accounts.js?v=2026-06-24-contact-ai-v2"></script>
+  <script src="/script/public_tours.js?v=2026-06-24-contact-ai-v2"></script>
+  <script src="/script/travelwai_contact_panel.js?v=2026-06-24-contact-ai-v2"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="/script/theme_toggle.js?v=2026-06-24-mini-nav-v4"></script>
+</body>
+</html>
+

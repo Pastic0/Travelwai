@@ -1,0 +1,464 @@
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--travelwai-font, Tahoma, Arial, sans-serif);
+  background-color: #f4f4f9;
+  color: #333;
+  padding: 20px;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+header h1 {
+  text-align: center;
+  color: #2c3e50;
+  font-size: 2.5em;
+  margin-bottom: 20px;
+}
+
+.contact-info {
+  margin-top: 30px;
+}
+
+.contact-info h2 {
+  font-size: 2em;
+  color: #2980b9;
+  margin-bottom: 10px;
+}
+
+.contact-info p {
+  font-size: 1.2em;
+  margin-bottom: 20px;
+}
+
+.contact-info ul {
+  list-style-type: none;
+}
+
+.contact-info ul li {
+  font-size: 1.2em;
+  margin-bottom: 15px;
+}
+
+.contact-info a {
+  color: #2980b9;
+  text-decoration: none;
+}
+
+.contact-info a:hover {
+  text-decoration: underline;
+}
+
+#friend-request-panel {
+  position: fixed;
+  right: -350px;
+  top: 0;
+  width: 300px;
+  height: 100%;
+  background-color: #fff;
+  border-left: 1px solid #ddd;
+  box-shadow: -3px 0 10px rgba(0, 0, 0, 0.1);
+  padding: 20px;
+  z-index: 1000;
+  transition: right 0.3s ease-in-out;
+  display: flex;
+  flex-direction: column;
+}
+
+#friend-request-panel.visible {
+  right: 0;
+}
+
+#friend-request-panel h2 {
+  font-size: 1.5em;
+  color: #2c3e50;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+#friend-request-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+  flex-grow: 1;
+  overflow-y: auto;
+}
+
+#friend-request-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#friend-request-list li:last-child {
+  border-bottom: none;
+}
+
+#friend-request-list li span {
+  font-size: 0.95em;
+  color: #333;
+}
+
+#friend-request-list li div button {
+  padding: 6px 10px;
+  margin-left: 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85em;
+  transition: background-color 0.2s ease;
+}
+
+#friend-request-list .accept-btn {
+  background-color: #28a745;
+  color: white;
+}
+
+#friend-request-list .accept-btn:hover {
+  background-color: #218838;
+}
+
+#friend-request-list .decline-btn {
+  background-color: #dc3545;
+  color: white;
+}
+
+#friend-request-list .decline-btn:hover {
+  background-color: #c82333;
+}
+
+#close-panel-btn {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.9em;
+}
+
+#close-panel-btn:hover {
+  background-color: #5a6268;
+}
+
+@media (max-width: 768px) {
+  body {
+    padding: 10px;
+  }
+
+  .container {
+    padding: 15px;
+    margin: 10px auto;
+  }
+
+  header h1 {
+    font-size: 2rem;
+    margin-bottom: 15px;
+  }
+
+  .contact-info h2 {
+    font-size: 1.6rem;
+    margin-bottom: 8px;
+  }
+
+  .contact-info p {
+    font-size: 1rem;
+    margin-bottom: 15px;
+  }
+
+  .contact-info ul li {
+    font-size: 1rem;
+    margin-bottom: 12px;
+  }
+
+  #friend-request-panel {
+    width: 100%;
+    right: -100%;
+    border-left: none;
+    border-top: 1px solid #ddd;
+    height: 70vh;
+    top: auto;
+    bottom: 0;
+    border-radius: 15px 15px 0 0;
+  }
+
+  #friend-request-panel.visible {
+    right: 0;
+  }
+
+  #friend-request-panel h2 {
+    font-size: 1.3rem;
+    margin-bottom: 12px;
+  }
+
+  #friend-request-list li {
+    padding: 8px 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  #friend-request-list li span {
+    font-size: 0.9rem;
+  }
+
+  #friend-request-list li div {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  #friend-request-list li div button {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+  }
+
+  #close-panel-btn {
+    padding: 8px;
+    font-size: 0.85rem;
+    margin-top: 15px;
+  }
+}
+
+@media (max-width: 576px) {
+  body {
+    padding: 5px;
+  }
+
+  .container {
+    padding: 12px;
+    margin: 5px auto;
+  }
+
+  header h1 {
+    font-size: 1.8rem;
+    margin-bottom: 12px;
+  }
+
+  .contact-info h2 {
+    font-size: 1.4rem;
+    margin-bottom: 6px;
+  }
+
+  .contact-info p {
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+  }
+
+  .contact-info ul li {
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+  }
+
+  #friend-request-panel {
+    height: 80vh;
+    padding: 15px;
+  }
+
+  #friend-request-panel h2 {
+    font-size: 1.2rem;
+    margin-bottom: 10px;
+  }
+
+  #friend-request-list li span {
+    font-size: 0.85rem;
+  }
+
+  #friend-request-list li div button {
+    padding: 3px 6px;
+    font-size: 0.75rem;
+  }
+
+  #close-panel-btn {
+    padding: 6px;
+    font-size: 0.8rem;
+    margin-top: 12px;
+  }
+}
+
+@media (max-width: 400px) {
+  .container {
+    padding: 10px;
+  }
+
+  header h1 {
+    font-size: 1.6rem;
+  }
+
+  .contact-info h2 {
+    font-size: 1.2rem;
+  }
+
+  .contact-info p,
+  .contact-info ul li {
+    font-size: 0.85rem;
+  }
+
+  #friend-request-panel {
+    padding: 12px;
+    height: 85vh;
+  }
+}
+:root {
+  --travelwai-title-gap: 18px;
+  --travelwai-title-height: 116px;
+}
+
+body.contact-page {
+  margin: 0 !important;
+  padding: 0 !important;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.72), rgba(37, 99, 235, 0.38)),
+    var(--twai-page-bg-image) center / cover fixed no-repeat !important;
+  color: var(--schedule-text, #172033) !important;
+  font-family: var(--travelwai-font, Tahoma, Arial, sans-serif) !important;
+}
+
+body.contact-page main.content {
+  width: min(1240px, calc(100% - 32px)) !important;
+  max-width: 1240px !important;
+  height: auto !important;
+  min-height: calc(100vh - 130px) !important;
+  margin: var(--travelwai-title-gap) auto 0 !important;
+  padding: 0 !important;
+  justify-content: flex-start !important;
+}
+
+body.contact-page .content .province-hero {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: var(--travelwai-title-height) !important;
+  margin: 0 0 var(--travelwai-title-gap) !important;
+  padding: 20px 24px !important;
+  border-radius: 22px !important;
+  box-sizing: border-box !important;
+}
+
+.contact-shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 34px auto 56px;
+}
+
+.contact-hero {
+  min-height: 150px;
+}
+
+.contact-hero h1 {
+  margin-bottom: 0 !important;
+}
+
+.contact-hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.contact-hero-actions .create-btn,
+.contact-tools .create-btn {
+  text-decoration: none;
+}
+
+.contact-secondary-btn {
+  background: linear-gradient(135deg, #2563eb, #7c3aed) !important;
+  box-shadow: 0 16px 32px rgba(37, 99, 235, 0.25) !important;
+}
+
+.contact-board {
+  margin-top: 26px;
+}
+
+.contact-tools {
+  min-width: auto !important;
+}
+
+.contact-support-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  padding: 24px;
+}
+
+.contact-support-card {
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  border: 1px solid var(--schedule-border, #e2e8f0);
+  border-radius: 20px;
+  background: #fff;
+  color: var(--schedule-text, #172033);
+  text-decoration: none;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.contact-support-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+}
+
+.contact-support-card strong {
+  font-size: 1.05rem;
+}
+
+@media (max-width: 980px) {
+  body.contact-page main.content {
+    width: min(100% - 24px, 1240px) !important;
+    margin-top: 16px !important;
+  }
+
+  body.contact-page .content .province-hero {
+    min-height: 108px !important;
+    padding: 18px !important;
+  }
+}
+
+@media (max-width: 860px) {
+  .contact-hero {
+    align-items: flex-start;
+  }
+
+  .contact-hero-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .contact-support-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  body.contact-page main.content {
+    width: calc(100% - 20px) !important;
+    margin-top: 14px !important;
+  }
+
+  body.contact-page .content .province-hero {
+    min-height: auto !important;
+    padding: 16px !important;
+  }
+}

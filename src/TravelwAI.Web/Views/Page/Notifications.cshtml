@@ -1,0 +1,69 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Thông báo - TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-paper-plane.webp" type="image/webp" />
+    <link rel="preload" as="image" href="/main_site_image/travelwai-bg-light.webp" />
+  <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-24-contact-ai-v2" />
+  <link rel="stylesheet" href="css/schedule_style.css?v=2026-06-24-contact-ai-v2" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-24-contact-ai-v2" />
+  <link rel="stylesheet" href="/css/notifications.css?v=2026-06-24-contact-ai-v2" />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-24-contact-ai-v2" />
+  <script src="script/accounts.js?v=2026-06-24-contact-ai-v2"></script>
+</head>
+<body class="schedule-page notifications-page">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "notifications")
+
+  <main class="schedule-shell notifications-shell">
+    <section class="schedule-hero notifications-hero">
+      <div class="hero-copy">
+        <span class="eyebrow">Thông báo</span>
+        <h1>Trung tâm thông báo</h1>
+      </div>
+      <div class="schedule-hero-actions notification-page-actions">
+        <div>Chưa đọc: <strong id="notificationPageUnreadCount">0</strong></div>
+        <button type="button" id="markAllNotificationsReadBtn" class="create-btn"><span>✓</span> Đã đọc tất cả</button>
+      </div>
+    </section>
+
+    <section class="schedule-overview-cards notification-summary">
+      <article class="overview-card notification-stat"><div><strong id="scheduleCount">0</strong><span>Tạo lịch trình mới</span></div></article>
+      <article class="overview-card notification-stat"><div><strong id="friendCount">0</strong><span>Lời mời kết bạn</span></div></article>
+      <article class="overview-card notification-stat"><div><strong id="messageCount">0</strong><span>Tin nhắn mới</span></div></article>
+      <article class="overview-card notification-stat"><div><strong id="systemCount">0</strong><span>Hệ thống</span></div></article>
+    </section>
+
+    <section class="schedule-board notification-section">
+      <div class="schedule-board-header notification-section-header"><h2>Tạo lịch trình mới</h2></div>
+      <div class="notification-list" id="scheduleNotificationList"><div class="notification-loading">Đang tải...</div></div>
+    </section>
+
+    <section class="schedule-board notification-section">
+      <div class="schedule-board-header notification-section-header"><h2>Lời mời kết bạn</h2></div>
+      <div class="notification-list" id="friendNotificationList"><div class="notification-loading">Đang tải...</div></div>
+    </section>
+
+    <section class="schedule-board notification-section">
+      <div class="schedule-board-header notification-section-header"><h2>Tin nhắn mới</h2></div>
+      <div class="notification-list" id="messageNotificationList"><div class="notification-loading">Đang tải...</div></div>
+    </section>
+
+    <section class="schedule-board notification-section">
+      <div class="schedule-board-header notification-section-header"><h2>Thông báo hệ thống</h2></div>
+      <div class="notification-list" id="systemNotificationList"><div class="notification-loading">Đang tải...</div></div>
+    </section>
+  </main>
+
+  <script src="/script/travelwai_contact_panel.js?v=2026-06-24-contact-ai-v2"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-06-24-contact-ai-v2"></script>
+  <script src="/script/notification-badge-loader.js?v=2026-06-24-contact-ai-v2"></script>
+  <script src="/script/notifications.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="/script/theme_toggle.js?v=2026-06-24-mini-nav-v4"></script>
+</body>
+</html>
+

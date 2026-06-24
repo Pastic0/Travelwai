@@ -1,0 +1,27 @@
+# Build/cache
+**/bin/
+**/obj/
+.vs/
+.vscode/
+*.user
+*.suo
+
+# Secrets / local config
+.env
+.env.*
+secrets.json
+appsettings.Development.json
+appsettings.Production.json
+**/appsettings.Development.json
+**/appsettings.Production.json
+**/bin/**/appsettings.json
+**/bin/**/appsettings.Development.json
+
+# Runtime uploads
+src/TravelwAI.Web/wwwroot/uploads/chat/*
+src/TravelwAI.Web/wwwroot/uploads/memories/*
+src/TravelwAI.Web/wwwroot/uploads/profiles/*
+src/TravelwAI.Web/wwwroot/uploads/posts/*
+src/TravelwAI.Web/wwwroot/uploads/tours/*
+!src/TravelwAI.Web/wwwroot/uploads/**/.gitkeep
+!src/TravelwAI.Web/wwwroot/uploads/**/README.txt

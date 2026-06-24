@@ -1,0 +1,78 @@
+@model TravelwAI.Web.Models.ProvincesPageViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bản đồ 34 tỉnh thành - TravelwAI</title>
+    <link rel="icon" href="/logo/travelwai-paper-plane.webp" type="image/webp" />
+    <link rel="preload" as="image" href="/main_site_image/travelwai-bg-light.webp" />
+
+    <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="css/all_34_style.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-24-contact-ai-v2" />
+<link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-24-contact-ai-v2" />
+</head>
+  <body>
+    @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "provinces")
+
+    <div class="content">
+      <section class="province-hero province-hero-title-only">
+        <div>
+          <h1>Bản đồ Việt Nam</h1>
+        </div>
+        <div class="province-hero-actions">
+          <button type="button" id="memoryJournalBtn" class="memory-journal-btn">
+            <svg class="memory-journal-btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z"></path>
+              <path d="M7 18h12"></path>
+              <path d="M9 8h6M9 12h5"></path>
+            </svg>
+            <span>Nhật ký</span>
+          </button>
+          <button type="button" id="festivalCalendarBtn" class="memory-journal-btn festival-calendar-btn" aria-label="Xem lịch tháng này">
+            <svg class="festival-calendar-btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="5" width="16" height="15" rx="3"></rect>
+              <path d="M8 3v4M16 3v4M4 10h16"></path>
+            </svg>
+            <span>Lịch</span>
+          </button>
+        </div>
+      </section>
+
+      <div class="province-layout">
+        <aside class="province-list-panel">
+          <h2>Danh sách tỉnh thành</h2>
+          <input
+            type="text"
+            class="search-bar province-list-search"
+            placeholder="Tìm kiếm tỉnh/thành"
+          />
+          <div class="province-quick-list" id="provinceQuickList">
+            @foreach (var province in Model.Provinces)
+            {
+              <button type="button" class="province-pill" data-province="@province.Name"><strong>@province.Name</strong><span>@province.Area · @province.Region</span></button>
+            }
+          </div>
+        </aside>
+
+        <div class="map-info-container">
+          <div class="map-container"></div>
+          <aside class="province-side-panel" id="provinceSidePanel" aria-live="polite"></aside>
+        </div>
+      </div>
+    </div>
+
+    <script src="/script/image_upload_optimizer.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="script/accounts.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="script/vietnam_provinces.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="script/all_34_script.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="/script/travelwai_contact_panel.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="/script/travelwai_notification_panel.js?v=2026-06-24-contact-ai-v2"></script>
+      <script src="/script/theme_toggle.js?v=2026-06-24-mini-nav-v4"></script>
+</body>
+</html>
+

@@ -1,0 +1,100 @@
+@model TravelwAI.Web.Models.ProvinceDetailPageViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chi tiết điểm đến - TravelwAI</title>
+    <link rel="stylesheet" href="css/detail_style.css?v=2026-06-24-contact-ai-v2" />
+    <link
+      rel="stylesheet"
+      href="https:
+    />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-24-contact-ai-v2" />
+  </head>
+  <body>
+    <div class="header">
+      <button class="back-btn" id="backButton">
+        <i class="fas fa-arrow-left"></i> Quay lại
+      </button>
+    </div>
+
+    <div class="container">
+
+      <div class="province-detail" data-server-rendered="@Model.HasData.ToString().ToLowerInvariant()">
+        <div class="content-box">
+                    <h1 class="province-name">@(Model.HasData ? Model.Name : "Chưa chọn tỉnh thành")</h1>
+          <p class="province-detail-lead">@(Model.HasData ? Model.Description : "Chọn một tỉnh thành từ bản đồ để xem mô tả, khu vực, điểm đến nổi bật và thông tin du lịch chi tiết.")</p>
+          @if (Model.HasData)
+          {
+            <div class="province-meta">
+              <span>Khu vực: @Model.Area</span>
+              <span>Vùng: @Model.Region</span>
+              @if (!string.IsNullOrWhiteSpace(Model.BelongsTo))
+              {
+                <span>Thuộc: @Model.BelongsTo</span>
+              }
+              @if (!string.IsNullOrWhiteSpace(Model.NaturalAreaKm2))
+              {
+                <span>Diện tích: @Model.NaturalAreaKm2 km²</span>
+              }
+              @if (!string.IsNullOrWhiteSpace(Model.Population))
+              {
+                <span>Dân số: @Model.Population người</span>
+              }
+            </div>
+          }
+          <div class="province-detail-actions">
+            <button class="download-btn" type="button">
+              <i class="fas fa-download"></i> Tải về thông tin
+            </button>
+            @if (Model.HasData)
+            {
+              <button class="ask-ai-detail-btn" id="askAiProvinceDetailBtn" type="button" data-province="@Model.Name" data-description="@Model.Description">
+                <i class="fas fa-robot"></i> Hỏi AI
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="gallery">
+        <div class="main-image">
+          <div class="content-box">
+            <div class="image-placeholder">Hình ảnh</div>
+            <div class="image-name">Tên ảnh</div>
+          </div>
+        </div>
+
+        <div class="thumbnail-container">
+          <div class="thumbnail">
+            <div class="content-box">
+              <div class="image-placeholder">Hình ảnh</div>
+              <div class="image-name">Tên ảnh</div>
+            </div>
+          </div>
+          <div class="thumbnail">
+            <div class="content-box">
+              <div class="image-placeholder">Hình ảnh</div>
+              <div class="image-name">Tên ảnh</div>
+            </div>
+          </div>
+          <div class="thumbnail">
+            <div class="content-box">
+              <div class="image-placeholder">Hình ảnh</div>
+              <div class="image-name">Tên ảnh</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="script/vietnam_provinces.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="script/detail_script.js?v=2026-06-24-contact-ai-v2"></script>
+      <script src="/script/theme_toggle.js?v=2026-06-24-mini-nav-v4"></script>
+</body>
+</html>
+

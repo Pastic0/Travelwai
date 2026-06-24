@@ -1,0 +1,77 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hồ sơ người dùng - TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-paper-plane.webp" type="image/webp" />
+  <link rel="preload" as="image" href="/main_site_image/travelwai-bg-light.webp" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-24-contact-ai-v2" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-24-contact-ai-v2" />
+  <link rel="stylesheet" href="/css/profile_style.css?v=2026-06-24-contact-ai-v2" />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-24-contact-ai-v2" />
+</head>
+<body class="profile-page">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "profile")
+
+  <main class="profile-shell">
+    <section class="profile-hero">
+      <div><span class="eyebrow">Tài khoản TravelwAI</span><h1>Hồ sơ người dùng</h1></div>
+      <div class="profile-hero-badge"><span>Đang đăng nhập</span><strong id="profileHeroName">TravelwAI</strong></div>
+    </section>
+
+    <section class="profile-grid">
+      <article class="profile-card profile-summary-card">
+        <div class="profile-picture-section">
+          <div class="profile-picture-container">
+            <img id="profilePicture" src="/logo/profile-icon-white.webp" alt="Ảnh đại diện" class="profile-picture" />
+            <button type="button" class="profile-picture-overlay" onclick="document.getElementById('profilePictureInput').click()" aria-label="Đổi ảnh đại diện"><span>📷</span></button>
+          </div>
+          <input type="file" id="profilePictureInput" accept="image/*" hidden />
+          <button class="upload-btn" type="button" onclick="document.getElementById('profilePictureInput').click()">Đổi ảnh đại diện</button>
+        </div>
+        <h2 id="profileDisplayName">Đang tải...</h2>
+        <p id="profileEmailText">Đang tải thông tin tài khoản</p>
+      </article>
+
+      <article class="profile-card profile-detail-card">
+        <h2>Chi tiết tài khoản</h2>
+        <div class="profile-detail-list">
+          <div class="profile-detail-item"><span>✉️</span><div><small>Email</small><strong id="userEmail">Đang tải...</strong></div></div>
+          <div class="profile-detail-item"><span>👤</span><div><small>Tên người dùng</small><strong id="username">Đang tải...</strong></div></div>
+          <div class="profile-detail-item"><span>📅</span><div><small>Ngày tạo tài khoản</small><strong id="createdAt">Đang tải...</strong></div></div>
+        </div>
+        <div class="profile-actions">
+          <a class="profile-btn" href="/home">Về trang chủ</a>
+          <button class="profile-btn" type="button" onclick="openProfilePasswordModal()">Đổi mật khẩu</button>
+          <button class="profile-btn profile-btn-danger" type="button" onclick="logout()">Đăng xuất</button>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <div class="profile-password-modal" id="profilePasswordModal" hidden>
+    <form class="profile-password-card" id="profilePasswordForm">
+      <button type="button" class="profile-password-close" onclick="closeProfilePasswordModal()" aria-label="Đóng">&times;</button>
+      <div class="profile-password-brand"><img src="/logo/travelwai-paper-plane.webp" alt="TravelwAI" /><span>TravelwAI</span></div>
+      <p>Bảo mật tài khoản</p>
+      <h2>Tạo mật khẩu mới</h2>
+      <div class="form-group"><label>Mật khẩu mới</label><input id="profileNewPassword" type="password" autocomplete="new-password" required /></div>
+      <div class="form-group"><label>Nhập lại mật khẩu</label><input id="profileConfirmPassword" type="password" autocomplete="new-password" required /></div>
+      <div class="modal-actions"><button class="btn-soft profile-password-cancel" type="button" onclick="closeProfilePasswordModal()">Hủy</button><button class="btn-primary profile-password-submit" type="submit">Lưu mật khẩu</button></div>
+    </form>
+  </div>
+
+  <div class="profile-toast" id="profileToast" hidden></div>
+
+  <script src="/script/accounts.js?v=2026-06-24-contact-ai-v2"></script>
+  <script src="/script/image_upload_optimizer.js?v=2026-06-24-contact-ai-v2"></script>
+  <script src="/script/profile_script.js?v=2026-06-24-contact-ai-v2"></script>
+  <script src="/script/travelwai_contact_panel.js?v=2026-06-24-contact-ai-v2"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-06-24-contact-ai-v2"></script>
+  <script src="/script/theme_toggle.js?v=2026-06-24-mini-nav-v4"></script>
+</body>
+</html>

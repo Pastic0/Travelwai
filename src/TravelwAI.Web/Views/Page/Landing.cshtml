@@ -1,0 +1,204 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TravelwAI - Bản đồ văn hoá và làng nghề Việt Nam</title>
+    <link rel="icon" href="/logo/travelwai-paper-plane.webp" type="image/webp" />
+    <link rel="preload" as="image" href="/main_site_image/travelwai-bg-light.webp" />
+    <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-24-contact-ai-v2" />
+  </head>
+  <body class="landing-page landing-culture-page">
+    <div class="background-slider landing-background-slider" aria-hidden="true"></div>
+    <div class="landing-overlay" aria-hidden="true"></div>
+    <div class="landing-grain" aria-hidden="true"></div>
+
+    <header class="landing-header culture-header">
+      <a class="landing-logo" href="/" aria-label="TravelwAI trang giới thiệu">
+        <img src="/logo/travelwai-paper-plane.webp" alt="TravelwAI Logo" />
+        <span>TravelwAI</span>
+      </a>
+      <nav class="landing-nav culture-tabs" aria-label="Điều hướng landing page">
+        <a class="active" href="#overview">Tổng quan</a>
+        <a href="#features">Tính năng</a>
+        <a href="#story">Câu chuyện</a>
+        <a href="#method">Phương pháp</a>
+        <a href="#questions">Câu hỏi</a>
+        <a href="#start">Bắt đầu</a>
+      </nav>
+      <div class="landing-auth-actions">
+        <a class="landing-login-btn culture-login landing-register-btn" href="/signup"><span class="btn-icon" aria-hidden="true">✦</span><span>Đăng ký</span></a>
+        <a class="landing-login-btn culture-login" href="/login"><span class="btn-icon" aria-hidden="true">↗</span><span>Đăng nhập</span></a>
+      </div>
+    </header>
+
+    <aside class="landing-section-rail" aria-label="Điều hướng nhanh landing page">
+      <a class="active" href="#overview"><span>Tổng quan</span></a>
+      <a href="#features"><span>Tính năng</span></a>
+      <a href="#story"><span>Câu chuyện</span></a>
+      <a href="#method"><span>Phương pháp</span></a>
+      <a href="#questions"><span>Câu hỏi</span></a>
+      <a href="#start"><span>Bắt đầu</span></a>
+    </aside>
+
+    <main>
+      <section class="culture-hero landing-hero-modern" id="overview">
+        <div class="culture-hero-copy">
+          <h1>Đánh thức những miền di sản đang bị lãng quên.</h1>
+          <p class="landing-lead">
+            TravelwAI đưa địa danh lịch sử, lễ hội, làng nghề, câu chuyện văn hoá và tour trải nghiệm
+            vào một hành trình số dễ xem, dễ hiểu và dễ bắt đầu.
+          </p>
+          <div class="landing-actions landing-overview-actions">
+            <a class="landing-primary-btn landing-login-main-btn" href="/login"><span class="btn-icon" aria-hidden="true">↗</span><span>Đăng nhập</span></a>
+            <a class="landing-secondary-btn landing-see-more-btn" href="#features"><span>Khám phá trải nghiệm</span><span class="btn-icon" aria-hidden="true">↓</span></a>
+          </div>
+        </div>
+
+        <div class="culture-hero-board" aria-label="Bản đồ Việt Nam trên TravelwAI">
+          <div class="culture-board-main culture-board-map" id="landingVietnamMap">
+            <div class="culture-map-loading">Đang tải bản đồ...</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-feature-section" id="features">
+        <div class="landing-section-title-row title-only">
+          <h2>Gói gọn tiện ích - Mở lối hành trình.</h2>
+        </div>
+        <div class="landing-feature-grid landing-feature-grid-focused">
+          <article class="feature-card-posts">
+            <b>Bài viết khám phá</b>
+            <p>Tạo và đọc nội dung thiên về văn hoá, lịch sử, lễ hội và trải nghiệm địa phương.</p>
+          </article>
+          <article class="feature-card-tour">
+            <b>Tour du lịch</b>
+            <p>Xem tour, đặt tour, áp dụng ưu đãi và lưu lại thông tin chuyến đi trong tài khoản.</p>
+          </article>
+          <article class="feature-card-memory">
+            <b>Nhật ký hành trình</b>
+            <p>Lưu lại điểm đã đi, ảnh kỷ niệm và những câu chuyện riêng sau mỗi chuyến khám phá.</p>
+          </article>
+          <article class="feature-card-community">
+            <b>Cộng đồng du lịch</b>
+            <p>Kết bạn, nhắn tin, tạo nhóm kế hoạch và cùng nhau biến chuyến đi thành trải nghiệm thật.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="landing-story-section" id="story">
+        <div class="landing-story-card">
+          <div class="landing-story-quote">
+            <h2>Vì sao TravelwAI tồn tại.</h2>
+          </div>
+          <div class="landing-story-copy">
+            <p>Một lễ hội nhỏ, một ngôi đình cũ, một nghề thủ công đang ít người biết đến có thể bị bỏ quên nếu không được kể lại bằng cách gần gũi hơn.</p>
+                                    <a href="#method">Xem phương pháp hoạt động →</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="landing-method-section" id="method">
+        <div class="landing-section-title-row title-only">
+          <h2>Kiến tạo hành trình thành thước phim vô giá.</h2>
+        </div>
+        <div class="landing-method-list">
+          <article>
+            <b>Biết nơi mình sắp đến</b>
+            <p>Trước khi đi, người dùng có thể xem nhanh lịch sử, văn hoá, lễ hội, làng nghề và điểm nổi bật của từng địa phương.</p>
+          </article>
+          <article>
+            <b>Biến dữ liệu thành lịch trình</b>
+            <p>AI dùng thông tin đã chọn để tạo lịch trình phù hợp, không chỉ đi nhiều điểm mà còn đi đúng mục đích.</p>
+          </article>
+          <article>
+            <b>Lưu lại và tiếp tục khám phá</b>
+            <p>Sau chuyến đi, nhật ký, bài viết, ảnh và kế hoạch giúp hành trình không biến mất sau khi kết thúc.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="landing-faq-section" id="questions">
+        <div class="landing-faq-heading">
+          <h2>Câu hỏi thường gặp.</h2>
+        </div>
+        <div class="landing-faq-list">
+          <details open>
+            <summary>TravelwAI giúp gì cho một chuyến du lịch?</summary>
+            <p>TravelwAI giúp xem thông tin điểm đến, văn hoá, lịch sử, lễ hội, làng nghề, tạo lịch trình và kết nối trải nghiệm trong cùng một nơi.</p>
+          </details>
+          <details>
+            <summary>Có thể khám phá theo tỉnh/thành không?</summary>
+            <p>Có. Người dùng chọn tỉnh/thành trên bản đồ Việt Nam để xem dữ liệu nổi bật, câu chuyện địa phương và các trải nghiệm phù hợp.</p>
+          </details>
+          <details>
+            <summary>AI lập lịch trình hoạt động thế nào?</summary>
+            <p>AI dựa trên thời gian, số người, sở thích, trạng thái du lịch và điểm đến để gợi ý lịch trình dễ đi, có trọng tâm và tiết kiệm thời gian.</p>
+          </details>
+          <details>
+            <summary>Đặt tour và nhận ưu đãi ra sao?</summary>
+            <p>Người dùng có thể xem tour, đặt tour, nhận email xác nhận, dùng mã mời và theo dõi ưu đãi ngay trong tài khoản.</p>
+          </details>
+        </div>
+      </section>
+
+      <section class="culture-final" id="start">
+        <h2>Vào TravelwAI và bắt đầu hành trình khám phá văn hoá/lịch sử.</h2>
+        <div class="landing-actions culture-final-actions">
+          <a class="landing-primary-btn" href="/login"><span class="btn-icon" aria-hidden="true">↗</span><span>Đăng nhập</span></a>
+          <a class="landing-secondary-btn" href="/signup"><span class="btn-icon" aria-hidden="true">✦</span><span>Đăng ký</span></a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="landing-footer landing-footer-market landing-footer-compact" aria-label="Thông tin TravelwAI">
+      <div class="landing-footer-main">
+        <div class="landing-footer-brand-wrap">
+          <div class="landing-footer-brand">
+            <img src="/logo/travelwai-paper-plane.webp" alt="TravelwAI" />
+            <div>
+              <strong>TravelwAI</strong>
+              <span>Hành trình di sản Việt Nam</span>
+            </div>
+          </div>
+          <p class="landing-footer-mini-text">Khám phá văn hoá, lịch sử và lên kế hoạch du lịch Việt Nam gọn trong một nền tảng.</p>
+          <form class="landing-footer-newsletter" id="landingNewsletterForm" aria-label="Đăng ký nhận tin TravelwAI">
+            <input id="landingNewsletterEmail" name="email" type="email" placeholder="Email nhận tin" aria-label="Email nhận tin" autocomplete="email" required />
+            <button type="submit">Nhận tin</button>
+            <p class="landing-newsletter-status" id="landingNewsletterStatus" aria-live="polite"></p>
+          </form>
+        </div>
+
+        <div class="landing-footer-link-groups" aria-label="Liên kết footer">
+          <div class="landing-footer-link-group">
+            <h3>Sản phẩm</h3>
+            <span>Bản đồ Việt Nam</span>
+            <span>Lịch trình</span>
+            <span>Bài viết</span>
+            <span>Tour du lịch</span>
+          </div>
+          <div class="landing-footer-link-group">
+            <h3>Công ty</h3>
+            <a href="#overview">Tổng quan</a>
+            <a href="#features">Tính năng</a>
+            <a href="#faq">Câu hỏi thường gặp</a>
+          </div>
+          <div class="landing-footer-link-group">
+            <h3>Liên hệ</h3>
+            <a href="mailto:2324802010387@student.tdmu.edu.vn">2324802010387@student.tdmu.edu.vn</a>
+            <a href="https:
+            <a href="https://youtube.com" target="_blank" rel="noopener">YouTube</a>
+          </div>
+        </div>
+      </div>
+      <p class="landing-footer-copy">© 2026 TravelwAI. Kết nối văn hoá, lịch sử và trải nghiệm du lịch Việt Nam.</p>
+    </footer>
+
+    <script src="/script/landing_page.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="/script/theme_toggle.js?v=2026-06-24-mini-nav-v4"></script>
+  </body>
+</html>

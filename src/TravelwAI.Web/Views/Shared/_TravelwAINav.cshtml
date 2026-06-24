@@ -1,0 +1,169 @@
+@model string
+@{
+    var activeNav = (Model ?? string.Empty).ToLowerInvariant();
+    var travelNavActive = activeNav == "schedule" || activeNav == "plans";
+    var exploreNavActive = activeNav == "messaging" || activeNav == "posts" || activeNav == "tours";
+}
+<header>
+  <div class="logo">
+    <img src="/logo/travelwai-paper-plane.webp" alt="TravelwAI Logo" />
+    <span class="logo-text"><a href="/home">TravelwAI</a></span>
+  </div>
+  <nav>
+    <ul class="main-nav">
+      <li class="nav-dropdown">
+        <button class="nav-menu-trigger @(travelNavActive ? "current active" : null)" type="button" aria-haspopup="true">
+          Du lịch
+        </button>
+        <div class="nav-dropdown-menu">
+          <a href="/schedule" class="@(activeNav == "schedule" ? "current active" : null)" aria-current="@(activeNav == "schedule" ? "page" : null)">Lịch trình</a>
+          <a href="/plans" class="@(activeNav == "plans" ? "current active" : null)" aria-current="@(activeNav == "plans" ? "page" : null)">Kế hoạch</a>
+        </div>
+      </li>
+      <li><a href="/provinces" class="@(activeNav == "provinces" ? "current active" : null)" aria-current="@(activeNav == "provinces" ? "page" : null)">Bản đồ Việt Nam</a></li>
+      <li class="nav-dropdown">
+        <button class="nav-menu-trigger @(exploreNavActive ? "current active" : null)" type="button" aria-haspopup="true">
+          Khám phá
+        </button>
+        <div class="nav-dropdown-menu">
+          <a href="/messaging" class="@(activeNav == "messaging" ? "current active" : null)" aria-current="@(activeNav == "messaging" ? "page" : null)">Nhắn tin</a>
+          <a href="/posts" class="@(activeNav == "posts" ? "current active" : null)" aria-current="@(activeNav == "posts" ? "page" : null)">Bài viết</a>
+          <a href="/tours" class="@(activeNav == "tours" ? "current active" : null)" aria-current="@(activeNav == "tours" ? "page" : null)">Tour du lịch</a>
+        </div>
+      </li>
+    </ul>
+  </nav>
+  <div class="contact-icons">
+    <a id="roleDashboardIcon" href="/admin" class="icon role-dashboard-icon" hidden style="display:none" aria-label="Trang quản trị">
+      <img src="/logo/dashboard-icon-white.svg" alt="Quản trị" />
+    </a>
+    <a href="/contact" class="icon phone @(activeNav == "contact" ? "current active" : null)" aria-current="@(activeNav == "contact" ? "page" : null)" data-contact-panel-trigger>
+      <img src="logo/phone-icon-white.webp" alt="Điện thoại" />
+    </a>
+    <a href="/notifications" id="notificationIconContainer" class="notification-icon-container icon @(activeNav == "notifications" ? "current active" : null)" aria-current="@(activeNav == "notifications" ? "page" : null)" data-notification-panel-trigger onclick="return openNotificationPanel(event)" aria-label="Thông báo">
+      <img src="logo/notification-icon-white.webp" alt="Thông báo" />
+      <span class="notification-badge" id="notificationBadge" style="display:none">0</span>
+    </a>
+    <a id="profileIcon" href="/profile" class="icon profile">
+      <img src="logo/profile-icon-white.webp" alt="Hồ sơ" />
+    </a>
+  </div>
+</header>
+
+<script>
+(function () {
+  function readCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift() || '');
+    return '';
+  }
+
+  function normalizeRole(value) {
+    return String(value || '').trim().toLowerCase().replace(/[_-]+/g, ' ');
+  }
+
+  function showRoleButton(role) {
+    const button = document.getElementById('roleDashboardIcon');
+    if (!button) return;
+
+    const normalized = normalizeRole(role);
+    button.hidden = true;
+    button.style.setProperty('display', 'none', 'important');
+    button.removeAttribute('href');
+
+    if (normalized === 'admin') {
+      button.href = '/admin';
+      button.title = 'Trang Admin';
+      button.setAttribute('aria-label', 'Trang Admin');
+      button.hidden = false;
+      button.style.setProperty('display', 'inline-flex', 'important');
+      return;
+    }
+
+    if (normalized === 'tour sales' || normalized === 'toursales') {
+      button.href = '/tour-sales';
+      button.title = 'Trang Tài khoản';
+      button.setAttribute('aria-label', 'Trang Tài khoản');
+      button.hidden = false;
+      button.style.setProperty('display', 'inline-flex', 'important');
+    }
+  }
+
+  async function syncRoleDashboardIcon() {
+    const token = localStorage.getItem('idToken') || readCookie('TravelwAIAuth');
+    showRoleButton('User');
+
+    if (!token) {
+      localStorage.removeItem('userRole');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/verify-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: token })
+      });
+      const result = await response.json().catch(function () { return {}; });
+      const role = result && result.user ? result.user.role : '';
+      localStorage.setItem('userRole', role || 'User');
+      showRoleButton(role || 'User');
+    } catch (_) {
+      localStorage.removeItem('userRole');
+      showRoleButton('User');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', syncRoleDashboardIcon);
+  window.addEventListener('storage', syncRoleDashboardIcon);
+  window.refreshRoleDashboardIcon = syncRoleDashboardIcon;
+})();
+</script>
+
+<aside class="notification-slide-panel" id="notification-panel" aria-hidden="true">
+  <div class="panel-header">
+    <div>
+      <h3>Trung tâm thông báo</h3>
+    </div>
+    <button class="close-panel-btn" type="button" data-close-notification-panel aria-label="Đóng thông báo">&times;</button>
+  </div>
+  <div class="panel-body">
+    <div class="notification-panel-summary" id="notification-panel-summary">
+      <span>📅 0</span>
+      <span>👥 0</span>
+      <span>💬 0</span>
+      <span>⚙️ 0</span>
+    </div>
+    <div class="notification-panel-list" id="notification-panel-list">
+      <div class="notification-panel-state">Đang tải thông báo...</div>
+    </div>
+  </div>
+</aside>
+
+<aside class="contact-slide-panel admin-ai-chat-panel" id="contact-panel" aria-hidden="true">
+  <div class="panel-header admin-ai-header">
+    <div class="admin-ai-header-info">
+      <img class="admin-ai-header-avatar" src="/logo/travelwai-manager-avatar.webp" alt="Quản lý TravelwAI" />
+      <div>
+        <h3>Quản lý TravelwAI</h3>
+        <p>Chatbot Admin hỗ trợ điều hướng, tài khoản, lịch trình, tour và tin nhắn.</p>
+      </div>
+    </div>
+    <button class="close-panel-btn" type="button" data-close-contact-panel aria-label="Đóng chatbot">&times;</button>
+  </div>
+  <div class="panel-body admin-ai-panel-body">
+    <div class="admin-ai-messages" id="supportAdminAiMessages" aria-live="polite"></div>
+    <div class="admin-ai-suggestions" id="supportAdminAiSuggestions">
+      <button type="button" data-admin-ai-suggestion="Tôi muốn lập lịch trình">Lập lịch trình</button>
+      <button type="button" data-admin-ai-suggestion="Tôi muốn xem bản đồ">Bản đồ</button>
+      <button type="button" data-admin-ai-suggestion="Tôi muốn đổi mật khẩu">Đổi mật khẩu</button>
+    </div>
+    <form class="admin-ai-input-form" id="supportAdminAiForm">
+      <input id="supportAdminAiInput" maxlength="1200" autocomplete="off" placeholder="Nhập câu hỏi cho Quản lý TravelwAI..." />
+      <button class="admin-ai-send-btn" type="submit">Gửi</button>
+    </form>
+    <div class="support-admin-status" id="supportAdminStatus" hidden></div>
+    <a class="support-admin-open-btn admin-ai-open-full" href="/messaging?ai=travelwai">Mở trong Tin nhắn</a>
+  </div>
+</aside>

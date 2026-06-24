@@ -1,0 +1,12 @@
+Các biến cần thêm trên Render nếu muốn ảnh upload không bị mất sau redeploy/restart:
+
+Supabase__StorageBucket=travelwai-uploads
+Supabase__StorageApiKey=SERVICE_ROLE_KEY_CUA_SUPABASE
+Supabase__StorageEnabled=true
+Supabase__StorageFallbackToLocal=true
+
+Trong Supabase cần tạo bucket public tên: travelwai-uploads
+Vào Supabase → Storage → New bucket → Name: travelwai-uploads → Public bucket: bật.
+
+Cron ping nhẹ hơn:
+https://travelwai.id.vn/health

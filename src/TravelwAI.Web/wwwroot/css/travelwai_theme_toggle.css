@@ -1,0 +1,134 @@
+
+:root {
+  --travelwai-theme-background: url("/main_site_image/travelwai-bg-light.webp");
+  --travelwai-theme-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(14, 165, 233, 0.08));
+  --travelwai-theme-toggle-bg: rgba(255, 255, 255, 0.96);
+  --travelwai-theme-toggle-fg: #0f172a;
+  --travelwai-theme-toggle-border: rgba(186, 230, 253, 0.46);
+  --travelwai-theme-toggle-shadow: rgba(2, 6, 23, 0.28);
+}
+
+body.travelwai-theme-light {
+  --travelwai-theme-background: url("/main_site_image/travelwai-bg-light.webp");
+  --travelwai-theme-overlay: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(14, 165, 233, 0.08));
+  --travelwai-theme-toggle-bg: rgba(255, 255, 255, 0.96);
+  --travelwai-theme-toggle-fg: #0f172a;
+  --travelwai-theme-toggle-border: rgba(186, 230, 253, 0.46);
+  --travelwai-theme-toggle-shadow: rgba(2, 6, 23, 0.28);
+}
+
+body.travelwai-theme-dark {
+  --travelwai-theme-background: url("/main_site_image/travelwai-bg-night.webp");
+  --travelwai-theme-overlay: linear-gradient(180deg, rgba(2, 6, 23, 0.18), rgba(2, 6, 23, 0.36));
+  --travelwai-theme-toggle-bg: rgba(15, 23, 42, 0.92);
+  --travelwai-theme-toggle-fg: #f8fafc;
+  --travelwai-theme-toggle-border: rgba(147, 197, 253, 0.32);
+  --travelwai-theme-toggle-shadow: rgba(0, 0, 0, 0.44);
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background-image: var(--travelwai-theme-overlay), var(--travelwai-theme-background) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+  background-repeat: no-repeat !important;
+  transition: background-color 0.22s ease, filter 0.22s ease !important;
+}
+
+.background-slider,
+.landing-background-slider {
+  background-image: var(--travelwai-theme-overlay), var(--travelwai-theme-background) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  transition: none !important;
+}
+
+.travelwai-theme-toggle-host {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin-left: 10px;
+  flex: 0 0 48px;
+}
+
+h1 .travelwai-theme-toggle-host {
+  vertical-align: middle;
+}
+
+.travelwai-theme-toggle {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--travelwai-theme-toggle-border);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--travelwai-theme-toggle-fg);
+  background: var(--travelwai-theme-toggle-bg);
+  box-shadow: 0 14px 34px var(--travelwai-theme-toggle-shadow);
+  backdrop-filter: blur(12px) saturate(1.14);
+  -webkit-backdrop-filter: blur(12px) saturate(1.14);
+  cursor: pointer;
+  line-height: 1;
+  outline: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-4px) scale(0.92);
+  transition: opacity 0.18s ease, visibility 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.logo:hover .travelwai-theme-toggle,
+.logo:focus-within .travelwai-theme-toggle,
+.title:hover .travelwai-theme-toggle,
+.title:focus-within .travelwai-theme-toggle,
+.travelwai-theme-toggle-host:hover .travelwai-theme-toggle,
+.travelwai-theme-toggle-host:focus-within .travelwai-theme-toggle,
+.travelwai-theme-toggle:focus-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.travelwai-theme-toggle:hover {
+  box-shadow: 0 18px 40px var(--travelwai-theme-toggle-shadow);
+}
+
+.travelwai-theme-toggle:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.travelwai-theme-toggle svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .travelwai-theme-toggle-host {
+    width: 44px;
+    height: 44px;
+    margin-left: 8px;
+    flex-basis: 44px;
+  }
+
+  .travelwai-theme-toggle {
+    width: 38px;
+    height: 38px;
+  }
+}

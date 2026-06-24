@@ -1,0 +1,201 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/logo/travelwai-paper-plane.webp" type="image/webp" />
+    <link rel="preload" as="image" href="/main_site_image/travelwai-bg-light.webp" />
+    <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="css/schedule_style.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="css/plans_style.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-24-contact-ai-v2" />
+    <script src="script/accounts.js?v=2026-06-24-contact-ai-v2"></script>
+    <title>Kế hoạch - TravelwAI</title>
+  </head>
+  <body class="schedule-page plans-page">
+    @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "plans")
+
+    <main class="schedule-shell plans-shell">
+      <section class="schedule-hero plans-hero">
+        <div class="hero-copy">
+          <span class="eyebrow">Kế hoạch cá nhân</span>
+          <h1>Kế hoạch du lịch của tôi</h1>
+
+        </div>
+        <div class="schedule-hero-actions plan-hero-actions">
+          <div class="plan-status-avatar-wrap">
+            <button id="planStatusAvatarBtn" class="plan-status-avatar-button" type="button" aria-haspopup="listbox" aria-expanded="false" title="Bấm để đổi trạng thái muốn đi">
+              <img id="planStatusAvatarImg" src="/logo/profile-icon-white.webp" alt="Ảnh đại diện" />
+              <span id="planStatusAvatarDot" class="plan-status-avatar-dot" aria-hidden="true"></span>
+            </button>
+            <div id="activePlanStatusBubble" class="active-plan-status-bubble" role="status">
+              <span id="activePlanStatusLabel">Chưa chọn trạng thái</span>
+            </div>
+            <div id="planStatusDropdown" class="plan-status-dropdown" role="listbox" aria-label="Chọn trạng thái muốn đi" hidden>
+              <div class="plan-status-dropdown-title">Chọn màu trạng thái</div>
+              <div id="planStatusChoiceList" class="plan-status-choice-list">
+                <div class="loading-message">Đang tải trạng thái...</div>
+              </div>
+            </div>
+          </div>
+          <button id="openPlanModalBtn" class="create-btn" type="button">
+            <span>+</span> Lập kế hoạch
+          </button>
+        </div>
+      </section>
+
+      <section class="schedule-overview-cards plan-overview-cards" aria-label="Tổng quan kế hoạch">
+        <article class="overview-card"><div><strong id="totalPlansCount">0</strong><span>Tổng kế hoạch</span></div></article>
+        <article class="overview-card"><div><strong id="ownedPlansCount">0</strong><span>Của tôi</span></div></article>
+        <article class="overview-card"><div><strong id="readyPlansCount">0</strong><span>Đã đủ người</span></div></article>
+      </section>
+
+      <section class="schedule-board plans-board">
+        <div class="schedule-board-header">
+          <div>
+            <h2>Danh sách kế hoạch</h2>
+          </div>
+          <div class="schedule-tools">
+            <select id="planStatusFilterSelect" aria-label="Lọc theo trạng thái">
+              <option value="all">Tất cả trạng thái</option>
+            </select>
+            <select id="planFilterSelect" aria-label="Lọc kế hoạch">
+              <option value="all">Tất cả</option>
+              <option value="owned">Của tôi</option>
+              <option value="joined">Đã tham gia</option>
+              <option value="invited">Được mời</option>
+              <option value="ready">Đã đủ người</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="plansGrid" class="schedules-grid plans-grid">
+          <div class="loading-message">Đang tải kế hoạch...</div>
+        </div>
+
+        <div class="empty-state" id="plansEmptyState" style="display:none">
+          <h3>Chưa có kế hoạch</h3>
+          <button class="create-btn" type="button" onclick="openPlanModal()"><span>+</span> Lập kế hoạch</button>
+        </div>
+      </section>
+    </main>
+
+    <div id="planModal" class="modal" aria-hidden="true">
+      <div class="modal-content schedule-editor-modal plan-editor-modal" role="dialog" aria-modal="true" aria-labelledby="planModalTitle">
+        <div class="modal-header">
+          <div>
+            <span class="modal-kicker">Kế hoạch</span>
+            <h2 id="planModalTitle">Lập kế hoạch mới</h2>
+          </div>
+          <button type="button" class="close" aria-label="Đóng hộp thoại">&times;</button>
+        </div>
+
+        <form id="planForm">
+          <div class="modal-body">
+            <div class="form-section">
+              <div class="form-section-title">
+                <span>01</span>
+                <div>
+                  <h3>Thông tin kế hoạch</h3>
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="planTitle">Tên kế hoạch *</label>
+                  <input id="planTitle" type="text" required placeholder="VD: Kế hoạch Đà Lạt cuối tuần" />
+                </div>
+
+                <div class="form-group">
+                  <label for="planDestinationStatus">Trạng thái muốn đi *</label>
+                  <select id="planDestinationStatus" required>
+                    <option value="">Chọn trạng thái</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="planProvinceName">Tỉnh/thành phù hợp *</label>
+                  <select id="planProvinceName" required>
+                    <option value="">Chọn trạng thái trước</option>
+                  </select>
+                </div>
+
+                <div class="form-group full-width">
+                  <label for="planDescription">Mô tả</label>
+                  <textarea id="planDescription" rows="2"></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label for="planStartDate">Ngày bắt đầu *</label>
+                  <input id="planStartDate" type="date" required />
+                </div>
+                <div class="form-group">
+                  <label for="planEndDate">Ngày kết thúc *</label>
+                  <input id="planEndDate" type="date" required />
+                </div>
+
+                <div class="form-group">
+                  <label for="planTargetPeople">Số người cần *</label>
+                  <input id="planTargetPeople" type="number" min="2" max="50" value="2" required />
+                </div>
+                <div class="form-group">
+                  <label for="planBudget">Ngân sách</label>
+                  <input id="planBudget" type="number" min="0" placeholder="0" />
+                </div>
+
+                <div class="form-group">
+                  <label for="planCurrency">Đơn vị tiền tệ</label>
+                  <select id="planCurrency">
+                    <option value="VND">VND - Việt Nam đồng</option>
+                    <option value="USD">USD - Đô la Mỹ</option>
+                    <option value="EUR">EUR - Euro</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="planTags">Thẻ gợi nhớ</label>
+                  <input id="planTags" type="text" placeholder="biển, nhóm bạn, tiết kiệm..." />
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <div class="form-section-title">
+                <span>02</span>
+                <div>
+                  <h3>Mời người lập kế hoạch</h3>
+                </div>
+              </div>
+
+              <div class="plan-invite-layout">
+                <div class="form-group full-width">
+                  <label for="planUserSearchInput">Tìm người để mời</label>
+                  <div class="email-search-wrapper plan-search-wrapper">
+                    <input id="planUserSearchInput" type="text" placeholder="Nhập tên hoặc email" autocomplete="off" />
+                    <div id="planUserSearchResults" class="user-search-results"></div>
+                  </div>
+                  <small class="form-help">Có thể chọn nhiều người, khi đủ số người hệ thống sẽ tự tạo lịch trình.</small>
+                </div>
+                <div id="selectedInviteList" class="selected-invite-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" onclick="closePlanModal()">Hủy</button>
+            <button type="submit" class="btn-primary" id="savePlanBtn">Lập kế hoạch</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="script/plans.script.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="/script/travelwai_contact_panel.js?v=2026-06-24-contact-ai-v2"></script>
+    <script src="/script/travelwai_notification_panel.js?v=2026-06-24-contact-ai-v2"></script>
+      <script src="/script/theme_toggle.js?v=2026-06-24-mini-nav-v4"></script>
+</body>
+</html>
+

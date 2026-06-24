@@ -1,0 +1,2985 @@
+* { box-sizing: border-box; }
+body.tour-admin-page {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top left, rgba(37, 99, 235, .32), transparent 32%), linear-gradient(135deg, #07111f 0%, #0f172a 55%, #111827 100%);
+  color: #f8fafc;
+  font-family: var(--travelwai-font, Tahoma, Arial, sans-serif);
+}
+.tour-admin-shell {
+  width: min(1240px, calc(100% - 32px));
+  margin: 120px auto 48px;
+}
+.tour-admin-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-end;
+  padding: 28px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 28px;
+  background: rgba(15,23,42,.72);
+  box-shadow: 0 24px 70px rgba(0,0,0,.28);
+  backdrop-filter: blur(18px);
+}
+.tour-admin-hero h1 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 46px); line-height: 1.05; }
+.tour-admin-hero p { margin: 0; color: #cbd5e1; max-width: 720px; }
+.eyebrow { color: #93c5fd; font-weight: 800; text-transform: uppercase; letter-spacing: .12em; font-size: 12px; }
+.tour-actions { display: flex; gap: 12px; flex-wrap: nowrap; align-items: center; }
+.btn-primary, .btn-soft, .btn-danger, .btn-warning {
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform .18s ease, opacity .18s ease, background .18s ease, border-color .18s ease;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn-primary:hover, .btn-soft:hover, .btn-danger:hover, .btn-warning:hover { transform: translateY(-1px); }
+.btn-primary:disabled, .btn-soft:disabled, .btn-danger:disabled, .btn-warning:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+.btn-primary { background: #2563eb; color: white; border: 1px solid rgba(96,165,250,.45); box-shadow: 0 16px 34px rgba(37,99,235,.25); }
+.btn-soft { background: rgba(255,255,255,.11); color: white; border: 1px solid rgba(255,255,255,.14); box-shadow: 0 16px 34px rgba(0,0,0,.16); }
+.tour-actions .btn-primary,
+.tour-actions .btn-soft {
+  min-width: 152px;
+  min-height: 54px;
+  padding: 0 22px;
+  font-size: 16px;
+  border-radius: 999px;
+}
+.btn-danger { background: #dc2626; color: white; }
+.btn-warning { background: #f59e0b; color: #111827; }
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+  padding: 18px;
+  border-radius: 28px;
+  background: rgba(15, 23, 42, .58);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 24px 70px rgba(0,0,0,.22);
+  backdrop-filter: blur(18px);
+}
+.stat-card {
+  padding: 22px;
+  border-radius: 24px;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.16);
+  backdrop-filter: blur(12px);
+  min-height: 132px;
+}
+.stat-card span { color: #cbd5e1; font-weight: 700; }
+.stat-card strong { display: block; font-size: 34px; margin-top: 18px; }
+.management-panel {
+  background: rgba(15,23,42,.86);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 26px;
+  padding: 22px;
+  box-shadow: 0 20px 55px rgba(0,0,0,.24);
+}
+.panel-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.panel-header-row h2 { margin: 0; }
+.panel-header-row p { margin: 4px 0 0; color: #cbd5e1; }
+.tabs { display: flex; gap: 10px; flex-wrap: wrap; margin: 24px 0; }
+.tab-btn {
+  color: white;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 999px;
+  padding: 11px 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.tab-btn.active { background: #2563eb; border-color: #60a5fa; }
+.table-wrap { overflow-x: auto; border-radius: 18px; border: 1px solid rgba(255,255,255,.1); }
+table { width: 100%; border-collapse: collapse; min-width: 860px; }
+th, td { padding: 14px 15px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.08); vertical-align: top; }
+th { color: #93c5fd; background: rgba(37,99,235,.12); font-size: 13px; text-transform: uppercase; letter-spacing: .05em; }
+td { color: #e2e8f0; }
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+.badge-admin { background: rgba(245,158,11,.18); color: #fbbf24; }
+.badge-sales { background: rgba(34,197,94,.16); color: #86efac; }
+.badge-user { background: rgba(59,130,246,.16); color: #93c5fd; }
+.badge-lock { background: rgba(239,68,68,.16); color: #fca5a5; }
+.badge-open { background: rgba(16,185,129,.16); color: #6ee7b7; }
+.badge-offer { background: rgba(168,85,247,.18); color: #d8b4fe; }
+.tour-status-badge {
+  min-width: 86px;
+  justify-content: center;
+  padding: 8px 13px;
+  border: 1px solid rgba(255,255,255,.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 10px 24px rgba(0,0,0,.14);
+}
+.tour-status-badge::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+}
+.status-selling { background: rgba(16,185,129,.18); color: #7ef7c4; }
+.status-booked { background: rgba(59,130,246,.18); color: #bfdbfe; }
+.status-sold { background: rgba(239,68,68,.18); color: #fecaca; }
+.status-paused { background: rgba(245,158,11,.18); color: #fde68a; }
+.status-canceled { background: rgba(100,116,139,.22); color: #cbd5e1; }
+.status-closed { background: rgba(148,163,184,.16); color: #e2e8f0; }
+.inline-actions { display: flex; gap: 8px; flex-wrap: nowrap; align-items: center; min-width: max-content; }
+.inline-actions button { padding: 8px 13px; font-size: 12px; white-space: nowrap; flex: 0 0 auto; min-height: 36px; }
+td:has(.inline-actions) { min-width: 190px; }
+
+.form-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  place-items: center;
+  background: rgba(2,6,23,.72);
+  z-index: 2000;
+  padding: 20px;
+}
+.form-modal.open { display: grid; }
+.form-card {
+  width: min(720px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  border-radius: 26px;
+  background: #0f172a;
+  border: 1px solid rgba(255,255,255,.15);
+  padding: 24px;
+  box-shadow: 0 30px 100px rgba(0,0,0,.45);
+}
+.form-card h2 { margin: 0 0 18px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.form-group.full { grid-column: 1 / -1; }
+.form-group label { display: block; margin-bottom: 7px; color: #cbd5e1; font-weight: 700; }
+.form-group input, .form-group textarea, .form-group select {
+  width: 100%;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 14px;
+  padding: 12px 13px;
+  background: rgba(255,255,255,.08);
+  color: white;
+  outline: none;
+}
+.form-group textarea { min-height: 96px; resize: vertical; }
+.form-group select option { color: #111827; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.empty-line { color: #cbd5e1; padding: 18px; }
+.toast {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  background: #111827;
+  color: white;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: none;
+  z-index: 3000;
+}
+.toast.show { display: block; }
+@media (max-width: 980px) {
+  .tour-admin-hero { align-items: flex-start; flex-direction: column; }
+  .tour-actions { flex-wrap: wrap; }
+  .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .tour-admin-shell { width: min(100% - 18px, 1240px); margin-top: 96px; }
+  .dashboard-grid, .form-grid { grid-template-columns: 1fr; }
+  table { min-width: 760px; }
+}
+
+.contact-icons .role-dashboard-icon[hidden] {
+  display: none !important;
+}
+
+.contact-icons .role-dashboard-icon {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.72), rgba(124, 58, 237, 0.72));
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.contact-icons .role-dashboard-icon:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.86), rgba(139, 92, 246, 0.86));
+}
+
+body.public-tour-page,
+body.tour-sales-page,
+body.admin-page {
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  position: relative;
+}
+
+body.public-tour-page {
+  background-image: linear-gradient(135deg, rgba(3, 7, 18, 0.66), rgba(15, 23, 42, 0.56)), var(--twai-page-bg-image);
+}
+
+body.tour-sales-page,
+body.admin-page {
+  background-image: linear-gradient(135deg, rgba(3, 7, 18, 0.74), rgba(15, 23, 42, 0.56)), var(--twai-page-bg-image);
+  background-color: #0b63f6;
+}
+
+body.public-tour-page::before,
+body.tour-sales-page::before,
+body.admin-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(circle at top left, rgba(37, 99, 235, 0.28), transparent 34%), radial-gradient(circle at bottom right, rgba(249, 115, 22, 0.18), transparent 32%);
+  pointer-events: none;
+}
+
+.public-tour-shell {
+  margin-top: 108px;
+}
+
+.public-tour-hero {
+  min-height: 310px;
+  align-items: center;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.64), rgba(30, 64, 175, 0.38));
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.public-tour-hero h1 {
+  max-width: 860px;
+  font-size: clamp(28px, 4vw, 46px);
+  text-shadow: 0 12px 36px rgba(0, 0, 0, 0.38);
+}
+
+.public-tour-hero p {
+  font-size: 1.06rem;
+  line-height: 1.7;
+}
+
+.public-tour-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.public-tour-card {
+  overflow: hidden;
+  border-radius: 28px;
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(16px);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.public-tour-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(147, 197, 253, 0.45);
+  box-shadow: 0 28px 80px rgba(37, 99, 235, 0.2);
+}
+
+.public-tour-image {
+  height: 210px;
+  display: grid;
+  place-items: center;
+  color: white;
+  font-size: 42px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.78), rgba(15, 23, 42, 0.82)), var(--twai-page-bg-image);
+  background-size: cover;
+  background-position: center;
+}
+
+.public-tour-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.public-tour-body {
+  padding: 22px;
+}
+
+.public-tour-body h3 {
+  margin: 0 0 10px;
+  font-size: 1.28rem;
+}
+
+.public-tour-body p {
+  min-height: 54px;
+  margin: 0;
+  color: #dbeafe;
+  line-height: 1.55;
+}
+
+.tour-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0;
+  color: #cbd5e1;
+}
+
+.tour-price {
+  color: #fde68a;
+  font-size: 1.4rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .public-tour-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .public-tour-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .public-tour-hero {
+    min-height: auto;
+  }
+}
+
+.form-card {
+  width: min(820px, 100%);
+}
+
+.order-time-small {
+  display: inline-block;
+  margin-top: 4px;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.tour-admin-hero h1,
+.public-tour-hero h1 {
+  font-size: clamp(28px, 4vw, 46px);
+  line-height: 1.05;
+}
+
+.form-help {
+  display: block;
+  margin-top: 7px;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.form-group input[type="file"] {
+  cursor: pointer;
+}
+
+.form-group input[type="file"]::file-selector-button {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  margin-right: 10px;
+  background: rgba(37, 99, 235, 0.95);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tour-sales-page .sales-hero-actions {
+  padding: 8px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 18px 42px rgba(0,0,0,.18);
+}
+
+.tour-sales-page .btn-sales-refresh {
+  min-width: 142px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.22), rgba(37, 99, 235, 0.18));
+  border-color: rgba(147, 197, 253, 0.38);
+  color: #dbeafe;
+}
+
+.tour-sales-page .btn-sales-refresh:hover {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.34), rgba(37, 99, 235, 0.28));
+  border-color: rgba(191, 219, 254, 0.55);
+}
+
+.tour-sales-page .btn-admin-link {
+  min-width: 132px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tour-sales-page .sales-list-header {
+  align-items: center;
+  padding: 14px 14px 14px 18px;
+  margin: -2px -2px 18px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(14, 165, 233, 0.08));
+  border: 1px solid rgba(147, 197, 253, 0.16);
+}
+
+.tour-sales-page .sales-list-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tour-sales-page .btn-add-tour {
+  min-width: 156px;
+  min-height: 50px;
+  padding: 0 22px;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  border-color: rgba(147, 197, 253, 0.60);
+  box-shadow: 0 18px 38px rgba(37, 99, 235, 0.24);
+}
+
+.tour-sales-page .btn-add-tour:hover {
+  box-shadow: 0 22px 44px rgba(37, 99, 235, 0.32);
+}
+
+@media (max-width: 640px) {
+  .tour-sales-page .sales-hero-actions,
+  .tour-sales-page .sales-list-actions {
+    width: 100%;
+  }
+
+  .tour-sales-page .btn-sales-refresh,
+  .tour-sales-page .btn-admin-link,
+  .tour-sales-page .btn-add-tour {
+    width: 100%;
+  }
+
+  .tour-sales-page .sales-list-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+body.admin-page,
+body.tour-sales-page {
+  background-image:
+    linear-gradient(135deg, rgba(3, 7, 18, 0.74), rgba(15, 23, 42, 0.64)),
+    var(--twai-page-bg-image);
+}
+
+body.admin-page .tour-admin-shell,
+body.tour-sales-page .tour-admin-shell {
+  width: min(1240px, calc(100% - 32px));
+  margin: 116px auto 48px;
+}
+
+body.admin-page .tour-admin-hero,
+body.tour-sales-page .tour-admin-hero {
+  min-height: 168px;
+  padding: 28px;
+  border-radius: 30px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(30, 64, 175, 0.34));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 26px 74px rgba(0, 0, 0, 0.30);
+  backdrop-filter: blur(18px);
+}
+
+body.admin-page .tour-admin-hero h1,
+body.tour-sales-page .tour-admin-hero h1 {
+  margin: 8px 0 0;
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  text-shadow: 0 14px 38px rgba(0, 0, 0, 0.34);
+}
+
+body.admin-page .page-hero-actions,
+body.tour-sales-page .page-hero-actions,
+body.tour-sales-page .sales-hero-actions {
+  padding: 8px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 42px rgba(0, 0, 0, 0.18);
+}
+
+body.admin-page .btn-page-refresh,
+body.tour-sales-page .btn-page-refresh,
+body.tour-sales-page .btn-sales-refresh {
+  min-width: 142px;
+  min-height: 50px;
+  padding: 0 22px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.26), rgba(37, 99, 235, 0.20));
+  border-color: rgba(147, 197, 253, 0.40);
+  color: #dbeafe;
+  box-shadow: 0 16px 34px rgba(14, 165, 233, 0.16);
+}
+
+body.admin-page .btn-page-refresh:hover,
+body.tour-sales-page .btn-page-refresh:hover,
+body.tour-sales-page .btn-sales-refresh:hover {
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.36), rgba(37, 99, 235, 0.30));
+  border-color: rgba(191, 219, 254, 0.56);
+}
+
+body.admin-page .btn-page-link,
+body.tour-sales-page .btn-page-link,
+body.tour-sales-page .btn-admin-link {
+  min-width: 132px;
+  min-height: 50px;
+  padding: 0 22px;
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+body.admin-page .dashboard-grid,
+body.tour-sales-page .dashboard-grid {
+  gap: 16px;
+  margin: 24px 0;
+  padding: 18px;
+  border-radius: 30px;
+  background: rgba(15, 23, 42, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(18px);
+}
+
+body.admin-page .stat-card,
+body.tour-sales-page .stat-card {
+  min-height: 132px;
+  padding: 22px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 14px 36px rgba(0, 0, 0, 0.12);
+}
+
+body.admin-page .management-panel,
+body.tour-sales-page .management-panel {
+  padding: 22px;
+  border-radius: 28px;
+  background: rgba(15, 23, 42, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(18px);
+}
+
+body.admin-page .panel-header-row,
+body.tour-sales-page .panel-header-row,
+body.tour-sales-page .sales-list-header {
+  align-items: center;
+  padding: 14px 14px 14px 18px;
+  margin: -2px -2px 18px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(14, 165, 233, 0.08));
+  border: 1px solid rgba(147, 197, 253, 0.16);
+}
+
+body.admin-page .panel-header-row h2,
+body.tour-sales-page .panel-header-row h2 {
+  margin: 0;
+  font-size: 1.28rem;
+  letter-spacing: -0.01em;
+}
+
+body.admin-page .table-wrap,
+body.tour-sales-page .table-wrap {
+  overflow: hidden;
+  overflow-x: auto;
+  border-radius: 20px;
+  background: rgba(2, 6, 23, 0.20);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+body.admin-page table,
+body.tour-sales-page table {
+  min-width: 860px;
+}
+
+body.admin-page th,
+body.tour-sales-page th {
+  padding: 15px;
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.16);
+  border-bottom: 1px solid rgba(147, 197, 253, 0.14);
+}
+
+body.admin-page td,
+body.tour-sales-page td {
+  padding: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.admin-page .tabs,
+body.tour-sales-page .tabs {
+  padding: 8px;
+  margin: 24px 0;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.26);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 16px 38px rgba(0, 0, 0, 0.16);
+}
+
+body.admin-page .tab-btn,
+body.tour-sales-page .tab-btn {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+  font-size: 14px;
+}
+
+body.admin-page .tab-btn.active,
+body.tour-sales-page .tab-btn.active {
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  border-color: rgba(191, 219, 254, 0.48);
+  color: #fff;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.25);
+}
+
+body.admin-page .btn-add-tour,
+body.tour-sales-page .btn-add-tour {
+  min-width: 156px;
+  min-height: 50px;
+  padding: 0 22px;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9);
+  border-color: rgba(147, 197, 253, 0.60);
+  box-shadow: 0 18px 38px rgba(37, 99, 235, 0.24);
+}
+
+body.admin-page .btn-add-tour:hover,
+body.tour-sales-page .btn-add-tour:hover {
+  box-shadow: 0 22px 44px rgba(37, 99, 235, 0.32);
+}
+
+body.admin-page .inline-actions .btn-soft,
+body.tour-sales-page .inline-actions .btn-soft,
+body.admin-page .inline-actions .btn-primary,
+body.tour-sales-page .inline-actions .btn-primary,
+body.admin-page .inline-actions .btn-danger,
+body.tour-sales-page .inline-actions .btn-danger,
+body.admin-page .inline-actions .btn-warning,
+body.tour-sales-page .inline-actions .btn-warning {
+  min-height: 36px;
+  padding: 0 13px;
+  border-radius: 999px;
+  font-size: 12px;
+  box-shadow: none;
+}
+
+body.admin-page .form-card,
+body.tour-sales-page .form-card {
+  border-radius: 28px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.48);
+}
+
+body.admin-page .form-group input,
+body.admin-page .form-group textarea,
+body.admin-page .form-group select,
+body.tour-sales-page .form-group input,
+body.tour-sales-page .form-group textarea,
+body.tour-sales-page .form-group select {
+  min-height: 46px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+@media (max-width: 980px) {
+  body.admin-page .page-hero-actions,
+  body.tour-sales-page .page-hero-actions,
+  body.tour-sales-page .sales-hero-actions {
+    flex-wrap: wrap;
+    border-radius: 24px;
+  }
+
+  body.admin-page .tabs,
+  body.tour-sales-page .tabs {
+    width: 100%;
+    border-radius: 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  body.admin-page .btn-page-refresh,
+  body.admin-page .btn-page-link,
+  body.admin-page .btn-add-tour,
+  body.tour-sales-page .btn-page-refresh,
+  body.tour-sales-page .btn-page-link,
+  body.tour-sales-page .btn-add-tour {
+    width: 100%;
+  }
+
+  body.admin-page .panel-header-row,
+  body.tour-sales-page .panel-header-row,
+  body.tour-sales-page .sales-list-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+body.admin-page .tour-admin-shell,
+body.tour-sales-page .tour-admin-shell {
+  margin-top: 98px;
+}
+
+body.admin-page .tour-admin-hero,
+body.tour-sales-page .tour-admin-hero {
+  min-height: 96px;
+  padding: 16px 20px;
+  border-radius: 22px;
+  gap: 16px;
+  align-items: center;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.24);
+}
+
+body.admin-page .tour-admin-hero h1,
+body.tour-sales-page .tour-admin-hero h1,
+.tour-admin-hero h1,
+.public-tour-hero h1 {
+  margin: 0;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.08;
+}
+
+body.admin-page .tour-admin-hero p,
+body.tour-sales-page .tour-admin-hero p,
+.tour-admin-hero p,
+.public-tour-hero p {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+body.admin-page .page-hero-actions,
+body.tour-sales-page .page-hero-actions,
+body.tour-sales-page .sales-hero-actions {
+  padding: 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 12px 28px rgba(0, 0, 0, 0.16);
+}
+
+body.admin-page .btn-page-refresh,
+body.admin-page .btn-page-link,
+body.tour-sales-page .btn-page-refresh,
+body.tour-sales-page .btn-page-link,
+body.tour-sales-page .btn-sales-refresh,
+body.tour-sales-page .btn-admin-link,
+.tour-actions .btn-primary,
+.tour-actions .btn-soft {
+  min-height: 42px;
+  min-width: 126px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+.public-tour-hero {
+  min-height: 150px;
+  padding: 18px 22px;
+  border-radius: 22px;
+}
+
+@media (max-width: 640px) {
+  body.admin-page .tour-admin-hero,
+  body.tour-sales-page .tour-admin-hero,
+  .public-tour-hero {
+    padding: 16px;
+    border-radius: 20px;
+  }
+}
+:root {
+  --travelwai-title-gap: 18px;
+  --travelwai-title-height: 116px;
+}
+
+body.admin-page .tour-admin-shell,
+body.tour-sales-page .tour-admin-shell,
+body.public-tour-page .tour-admin-shell,
+.tour-admin-shell {
+  width: min(1240px, calc(100% - 32px)) !important;
+  max-width: 1240px !important;
+  margin: var(--travelwai-title-gap) auto 48px !important;
+}
+
+body.admin-page .tour-admin-hero,
+body.tour-sales-page .tour-admin-hero,
+body.public-tour-page .tour-admin-hero,
+.tour-admin-hero,
+.public-tour-hero {
+  width: 100% !important;
+  min-height: var(--travelwai-title-height) !important;
+  padding: 20px 24px !important;
+  border-radius: 22px !important;
+  box-sizing: border-box !important;
+  align-items: center !important;
+}
+
+body.admin-page .dashboard-grid,
+body.tour-sales-page .dashboard-grid,
+.tabs,
+.management-panel + .management-panel {
+  margin-top: var(--travelwai-title-gap) !important;
+}
+
+body.admin-page .btn-add-tour,
+body.tour-sales-page .btn-add-tour,
+body.tour-sales-page .sales-list-header .btn-add-tour,
+body.tour-sales-page .sales-list-actions .btn-add-tour,
+body.admin-page .panel-header-row .btn-add-tour,
+body.admin-page .admin-tour-list-actions .btn-add-tour,
+body.tour-sales-page .sales-list-actions .btn-add-tour {
+  min-width: auto !important;
+  min-height: 38px !important;
+  padding: 0 14px !important;
+  border-radius: 999px !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.01em;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb) !important;
+  border: 1px solid rgba(125, 211, 252, 0.46) !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.20) !important;
+}
+
+body.admin-page .btn-add-tour:hover,
+body.tour-sales-page .btn-add-tour:hover,
+body.tour-sales-page .sales-list-header .btn-add-tour:hover,
+body.tour-sales-page .sales-list-actions .btn-add-tour:hover,
+body.admin-page .panel-header-row .btn-add-tour:hover,
+body.admin-page .admin-tour-list-actions .btn-add-tour:hover,
+body.tour-sales-page .sales-list-actions .btn-add-tour:hover {
+  transform: translateY(-1px) !important;
+  background: linear-gradient(135deg, #38bdf8, #2563eb) !important;
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.26) !important;
+}
+
+body.admin-page .btn-add-tour:active,
+body.tour-sales-page .btn-add-tour:active {
+  transform: translateY(0) !important;
+}
+
+body.tour-sales-page .sales-list-actions,
+body.admin-page .panel-header-row .tour-actions {
+  gap: 8px !important;
+}
+
+@media (max-width: 980px) {
+  body.admin-page .tour-admin-shell,
+  body.tour-sales-page .tour-admin-shell,
+  body.public-tour-page .tour-admin-shell,
+  .tour-admin-shell {
+    width: min(100% - 24px, 1240px) !important;
+    margin-top: 16px !important;
+  }
+
+  body.admin-page .tour-admin-hero,
+  body.tour-sales-page .tour-admin-hero,
+  body.public-tour-page .tour-admin-hero,
+  .tour-admin-hero,
+  .public-tour-hero {
+    min-height: 108px !important;
+    padding: 18px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  body.admin-page .tour-admin-shell,
+  body.tour-sales-page .tour-admin-shell,
+  body.public-tour-page .tour-admin-shell,
+  .tour-admin-shell {
+    width: calc(100% - 20px) !important;
+    margin-top: 14px !important;
+  }
+
+  body.admin-page .tour-admin-hero,
+  body.tour-sales-page .tour-admin-hero,
+  body.public-tour-page .tour-admin-hero,
+  .tour-admin-hero,
+  .public-tour-hero {
+    min-height: auto !important;
+    padding: 16px !important;
+  }
+
+  body.tour-sales-page .sales-list-header .btn-add-tour,
+  body.tour-sales-page .sales-list-actions .btn-add-tour,
+  body.admin-page .panel-header-row .btn-add-tour,
+  body.admin-page .admin-tour-list-actions .btn-add-tour,
+  body.tour-sales-page .sales-list-actions .btn-add-tour {
+    width: 100% !important;
+    min-height: 40px !important;
+  }
+}
+.tour-search-panel {
+  margin-top: var(--travelwai-title-gap, 18px);
+  padding: 14px;
+  border-radius: 24px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(16px);
+}
+
+.tour-search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 10px 8px 14px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.34);
+  border: 1px solid rgba(147, 197, 253, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.tour-search-icon {
+  display: none !important;
+}
+
+.tour-search-box input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  border: 0 !important;
+  outline: none !important;
+  background: transparent !important;
+  color: #f8fafc !important;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.tour-search-box input::placeholder {
+  color: #94a3b8;
+}
+
+.btn-clear-tour-search {
+  flex: 0 0 auto;
+  min-height: 34px !important;
+  min-width: auto !important;
+  padding: 0 13px !important;
+  border-radius: 999px !important;
+  font-size: 12px !important;
+  color: #dbeafe !important;
+  background: rgba(255, 255, 255, 0.10) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: none !important;
+}
+
+.sales-list-actions,
+.admin-tour-list-actions,
+.admin-account-list-actions,
+.admin-schedule-list-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tour-search-box-small {
+  width: min(360px, 44vw);
+  min-height: 40px;
+  padding: 7px 8px 7px 12px;
+}
+
+.tour-search-box-small input {
+  font-size: 14px;
+}
+
+.tour-search-box-small .btn-clear-tour-search {
+  min-height: 30px !important;
+  padding: 0 11px !important;
+}
+
+@media (max-width: 760px) {
+  .tour-search-box {
+    border-radius: 18px;
+    align-items: stretch;
+  }
+
+  .tour-search-box-small,
+  .sales-list-actions,
+  .admin-tour-list-actions,
+  .admin-account-list-actions,
+  .admin-schedule-list-actions {
+    width: 100%;
+  }
+
+  .tour-search-box input {
+    min-height: 34px;
+  }
+}
+
+body.admin-page .admin-account-list-actions,
+body.admin-page .admin-schedule-list-actions {
+  flex: 1 1 360px;
+}
+
+body.admin-page .admin-account-list-actions .tour-search-box-small,
+body.admin-page .admin-schedule-list-actions .tour-search-box-small {
+  width: min(420px, 46vw);
+}
+
+@media (max-width: 760px) {
+  body.admin-page .admin-account-list-actions .tour-search-box-small,
+  body.admin-page .admin-schedule-list-actions .tour-search-box-small {
+    width: 100%;
+  }
+}
+
+body.admin-page .panel-header-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 14px !important;
+}
+
+body.admin-page .panel-header-row > div:first-child {
+  flex: 0 0 auto !important;
+}
+
+body.admin-page .admin-panel-search-actions,
+body.admin-page .admin-account-list-actions,
+body.admin-page .admin-tour-list-actions,
+body.admin-page .admin-schedule-list-actions {
+  flex: 1 1 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  flex-wrap: nowrap !important;
+  margin-left: auto !important;
+}
+
+body.admin-page .admin-panel-search-actions .tour-search-box-small,
+body.admin-page .admin-account-list-actions .tour-search-box-small,
+body.admin-page .admin-tour-list-actions .tour-search-box-small,
+body.admin-page .admin-schedule-list-actions .tour-search-box-small {
+  width: 360px !important;
+  max-width: 46vw !important;
+  flex: 0 0 360px !important;
+}
+
+body.admin-page .admin-tour-list-actions .btn-add-tour,
+body.tour-sales-page .sales-list-actions .btn-add-tour {
+  order: 1 !important;
+  flex: 0 0 auto !important;
+  min-width: 112px !important;
+  min-height: 38px !important;
+  padding: 0 14px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb) !important;
+}
+
+body.admin-page .admin-account-list-actions .btn-change-avatar {
+  flex: 0 0 auto !important;
+  min-width: 132px !important;
+  min-height: 38px !important;
+  padding: 0 14px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb) !important;
+}
+
+body.admin-page .ai-avatar-card {
+  width: min(520px, 100%);
+}
+
+body.admin-page .ai-avatar-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+body.admin-page .ai-avatar-actions .btn-add-tour {
+  min-height: 44px;
+}
+
+body.admin-page .ai-avatar-section-title {
+  margin: 8px 0 10px;
+  font-weight: 800;
+  color: rgba(226, 232, 240, 0.94);
+}
+
+body.admin-page .ai-background-section-title {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+body.admin-page .ai-background-help {
+  display: block;
+  margin-top: 10px;
+  color: rgba(203, 213, 225, 0.78);
+}
+
+@media (max-width: 640px) {
+  body.admin-page .ai-avatar-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+body.admin-page .admin-tour-list-actions .tour-search-box,
+body.tour-sales-page .sales-list-actions .tour-search-box {
+  order: 2 !important;
+}
+
+.tour-table-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 260px;
+  max-width: 420px;
+  white-space: nowrap;
+}
+
+.tour-table-name strong {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.25;
+}
+
+.tour-table-name small {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #cbd5e1;
+  line-height: 1.25;
+}
+
+.nowrap-cell {
+  white-space: nowrap;
+  vertical-align: middle !important;
+}
+
+body.admin-page td,
+body.tour-sales-page td {
+  vertical-align: middle !important;
+}
+
+.public-tour-card {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.public-tour-image {
+  position: relative;
+  flex: 0 0 210px;
+  height: 210px;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.public-tour-image img {
+  position: static !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+
+.public-tour-body {
+  position: relative;
+  z-index: 1;
+  margin: 0 !important;
+  transform: none !important;
+  padding: 18px !important;
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.public-tour-body h3 {
+  margin: 0 0 8px !important;
+  min-height: auto !important;
+  line-height: 1.28 !important;
+  overflow-wrap: anywhere;
+  position: static !important;
+  transform: none !important;
+}
+
+.public-tour-body p {
+  min-height: 44px !important;
+  margin: 0 0 12px !important;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.public-tour-info-row,
+.public-tour-book-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: nowrap;
+  width: 100%;
+}
+
+.public-tour-info-row {
+  margin: 0 0 12px;
+  padding: 9px 10px;
+  border-radius: 16px;
+  background: rgba(37, 99, 235, 0.16);
+  border: 1px solid rgba(147, 197, 253, 0.20);
+  color: #dbeafe;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.public-tour-info-row span,
+.public-tour-book-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-tour-book-row {
+  padding-top: 2px;
+}
+
+.public-tour-book-row .tour-seat-line {
+  color: #cbd5e1;
+  font-weight: 800;
+}
+
+.public-tour-book-row .tour-price {
+  flex: 0 0 auto;
+  font-size: 1.18rem !important;
+  line-height: 1;
+}
+
+.public-tour-book-row .btn-primary {
+  flex: 0 0 auto;
+  min-height: 38px !important;
+  min-width: 92px !important;
+  padding: 0 14px !important;
+  border-radius: 999px !important;
+  font-size: 13px !important;
+}
+
+.public-tour-body .tour-meta {
+  display: none !important;
+}
+
+@media (max-width: 980px) {
+  body.admin-page .admin-panel-search-actions,
+  body.admin-page .admin-account-list-actions,
+  body.admin-page .admin-tour-list-actions,
+  body.admin-page .admin-schedule-list-actions {
+    flex-wrap: wrap !important;
+  }
+
+  body.admin-page .admin-panel-search-actions .tour-search-box-small,
+  body.admin-page .admin-account-list-actions .tour-search-box-small,
+  body.admin-page .admin-tour-list-actions .tour-search-box-small,
+  body.admin-page .admin-schedule-list-actions .tour-search-box-small {
+    width: min(360px, 100%) !important;
+    max-width: 100% !important;
+    flex: 1 1 260px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  body.admin-page .panel-header-row {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  body.admin-page .admin-panel-search-actions,
+  body.admin-page .admin-account-list-actions,
+  body.admin-page .admin-tour-list-actions,
+  body.admin-page .admin-schedule-list-actions,
+  body.tour-sales-page .sales-list-actions {
+    width: 100% !important;
+    justify-content: stretch !important;
+  }
+
+  body.admin-page .admin-panel-search-actions .tour-search-box-small,
+  body.admin-page .admin-account-list-actions .tour-search-box-small,
+  body.admin-page .admin-tour-list-actions .tour-search-box-small,
+  body.admin-page .admin-schedule-list-actions .tour-search-box-small,
+  body.tour-sales-page .sales-list-actions .tour-search-box-small {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+
+  body.admin-page .admin-tour-list-actions .btn-add-tour,
+  body.tour-sales-page .sales-list-actions .btn-add-tour {
+    width: 100% !important;
+  }
+
+  .public-tour-info-row,
+  .public-tour-book-row,
+  .tour-table-name {
+    flex-wrap: wrap;
+  }
+
+  .public-tour-book-row .btn-primary {
+    width: 100%;
+  }
+}
+
+.public-tour-grid {
+  align-items: stretch;
+}
+
+.public-tour-card {
+  height: 100%;
+}
+
+.public-tour-body {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+}
+
+.public-tour-body h3 {
+  min-height: 46px !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.public-tour-sales-line {
+  margin-top: -2px;
+  color: #bfdbfe;
+  font-size: .92rem;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.public-tour-body p {
+  min-height: 50px !important;
+}
+
+.public-tour-info-row {
+  margin-top: auto !important;
+}
+
+.public-tour-date-only {
+  justify-content: center !important;
+  text-align: center;
+  min-height: 46px;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.public-tour-date-only span {
+  flex: 1 1 auto;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.public-tour-book-row {
+  min-height: 52px;
+}
+
+@media (max-width: 760px) {
+  .public-tour-body h3,
+  .public-tour-body p {
+    min-height: auto !important;
+  }
+
+  .public-tour-date-only span {
+    white-space: normal !important;
+  }
+}
+
+.public-book-tour-details {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+  margin: 4px 0 18px;
+  padding: 14px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(37, 99, 235, 0.10));
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.public-book-tour-thumb {
+  min-height: 132px;
+  border-radius: 18px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.70), rgba(14, 165, 233, 0.45)), var(--twai-page-bg-image);
+  background-size: cover;
+  background-position: center;
+  color: #ffffff;
+  font-size: 38px;
+}
+
+.public-book-tour-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.public-book-tour-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  text-align: left !important;
+}
+
+.public-book-tour-content h3 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 1.18rem;
+  line-height: 1.28;
+  font-weight: 900;
+}
+
+.public-book-tour-content p {
+  margin: 0;
+  color: #dbeafe;
+  line-height: 1.48;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-align: left !important;
+}
+
+.public-book-tour-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.public-book-tour-meta span {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e0f2fe;
+  font-size: 12.5px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.public-book-tour-price {
+  color: #fde68a !important;
+}
+
+.public-tour-page .form-card {
+  width: min(900px, calc(100vw - 28px)) !important;
+}
+
+.public-tour-page .form-card h2 {
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .public-book-tour-details {
+    grid-template-columns: 1fr;
+  }
+
+  .public-book-tour-thumb {
+    min-height: 180px;
+  }
+
+  .public-book-tour-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+body.admin-page .account-lock-group {
+  margin: 0;
+}
+
+body.admin-page .account-lock-toggle {
+  min-height: 56px;
+  margin: 0 !important;
+  padding: 12px 14px;
+  border-radius: 18px;
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  color: #e5edf7 !important;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  user-select: none;
+}
+
+body.admin-page .account-lock-toggle input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.admin-page .account-lock-box {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(226, 232, 240, 0.12);
+  border: 2px solid rgba(203, 213, 225, 0.64);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+body.admin-page .account-lock-box::after {
+  content: "";
+  width: 10px;
+  height: 6px;
+  border-left: 3px solid #ffffff;
+  border-bottom: 3px solid #ffffff;
+  transform: rotate(-45deg) scale(0);
+  opacity: 0;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+body.admin-page .account-lock-toggle input[type="checkbox"]:checked + .account-lock-box {
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  border-color: rgba(254, 202, 202, 0.78);
+  box-shadow: 0 10px 22px rgba(239, 68, 68, 0.20);
+}
+
+body.admin-page .account-lock-toggle input[type="checkbox"]:checked + .account-lock-box::after {
+  transform: rotate(-45deg) scale(1);
+  opacity: 1;
+}
+
+body.admin-page .account-lock-toggle input[type="checkbox"]:focus-visible + .account-lock-box {
+  outline: 3px solid rgba(96, 165, 250, 0.36);
+  outline-offset: 2px;
+}
+
+body.admin-page .account-lock-text {
+  color: #e5edf7;
+  font-size: 0.98rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+body.admin-page .account-lock-toggle:has(input:disabled) {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.admin-tag-chips,
+.tag-checkbox-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-existing-tag-list {
+  min-height: 46px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.admin-existing-tag-list .admin-tag-chips {
+  width: 100%;
+}
+
+.admin-tag-chips span,
+.tag-checkbox-item span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #bfdbfe;
+  background: rgba(59, 130, 246, .16);
+  border: 1px solid rgba(147, 197, 253, .18);
+}
+
+.tag-checkbox-item {
+  cursor: pointer;
+}
+
+.tag-checkbox-item input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tag-checkbox-item input:checked + span {
+  color: white;
+  background: #2563eb;
+  border-color: rgba(147, 197, 253, .55);
+}
+
+.admin-status-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-status-name span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--admin-accent, #6366f1);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--admin-accent, #6366f1) 14%, transparent);
+}
+
+.admin-tag-chips span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-color: color-mix(in srgb, var(--admin-accent, #6366f1) 24%, #e2e8f0) !important;
+  color: color-mix(in srgb, var(--admin-accent, #6366f1) 76%, #111827) !important;
+  background: color-mix(in srgb, var(--admin-accent, #6366f1) 11%, #fff) !important;
+}
+
+.admin-tag-chips span::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--admin-accent, #6366f1);
+}
+
+.admin-tag-delete-list .admin-deletable-tag {
+  position: relative;
+  padding-right: 8px;
+}
+
+.admin-delete-tag-btn {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  margin-left: 2px;
+  padding: 0;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  font-size: 16px;
+  font-weight: 1000;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.88);
+  pointer-events: none;
+}
+
+.admin-deletable-tag:hover .admin-delete-tag-btn,
+.admin-delete-tag-btn:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+.admin-delete-tag-btn:hover {
+  color: #ffffff;
+  background: #ef4444;
+}
+
+@supports not (color: color-mix(in srgb, #000 50%, #fff)) {
+  .admin-tag-chips span {
+    border-color: rgba(99, 102, 241, 0.22) !important;
+    background: #fff !important;
+  }
+}
+
+.tag-checkbox-item span {
+  border-color: color-mix(in srgb, var(--admin-accent, #6366f1) 22%, #e2e8f0);
+  color: color-mix(in srgb, var(--admin-accent, #6366f1) 78%, #111827);
+  background: color-mix(in srgb, var(--admin-accent, #6366f1) 9%, #fff);
+}
+
+.public-tour-hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.tour-offer-btn {
+  min-width: 116px;
+  min-height: 42px;
+  height: 42px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: 0.1px;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  margin: 0;
+  box-shadow: 0 12px 26px rgba(239, 68, 68, 0.26);
+  transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+}
+
+.tour-offer-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.05);
+}
+
+.tour-offer-btn:active {
+  transform: translateY(0);
+}
+
+.tour-offer-modal {
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(10px);
+}
+
+.tour-offer-card {
+  width: min(760px, calc(100% - 28px));
+  border-radius: 28px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 30px 90px rgba(2, 6, 23, 0.52);
+  overflow: hidden;
+}
+
+.tour-offer-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 2px 0 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.tour-offer-modal-header h2 {
+  margin: 0;
+  font-size: 1.65rem;
+  letter-spacing: -0.02em;
+}
+
+.tour-offer-close {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.10);
+  color: #ffffff;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tour-offer-close:hover {
+  background: rgba(239, 68, 68, 0.22);
+}
+
+.tour-offer-progress-wrap {
+  margin: 20px 0;
+  padding: 18px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(245, 158, 11, 0.14));
+  border: 1px solid rgba(147, 197, 253, 0.18);
+}
+
+.tour-offer-progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.tour-offer-progress-info strong {
+  color: #fde68a;
+  font-size: 1.45rem;
+  font-weight: 950;
+}
+
+.tour-offer-progress-info span {
+  color: #dbeafe;
+  font-weight: 900;
+}
+
+.tour-offer-progress-bar {
+  height: 18px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.tour-offer-progress-bar span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #facc15, #f97316, #ef4444);
+  box-shadow: 0 0 22px rgba(249, 115, 22, 0.42);
+  transition: width 0.35s ease;
+}
+
+.tour-offer-invite-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.tour-offer-invite-form .form-group {
+  margin: 0;
+}
+
+.tour-offer-invite-form .btn-primary {
+  min-width: 132px;
+}
+
+.tour-offer-invite-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  max-height: 240px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.tour-offer-invite-item,
+.tour-offer-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: #e2e8f0;
+  font-weight: 800;
+}
+
+.tour-offer-invite-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tour-offer-invite-item strong {
+  flex: 0 0 auto;
+  color: #bfdbfe;
+  font-size: 13px;
+}
+
+.tour-offer-invite-item.accepted {
+  border-color: rgba(34, 197, 94, 0.34);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.tour-offer-invite-item.accepted strong {
+  color: #86efac;
+}
+
+.tour-price-discounted {
+  display: inline-flex !important;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  line-height: 1.05 !important;
+  overflow: visible !important;
+}
+
+.tour-price-discounted small {
+  color: #cbd5e1;
+  font-size: 11px;
+  text-decoration: line-through;
+  opacity: 0.82;
+}
+
+.tour-price-discounted strong {
+  color: #fde68a;
+  font-size: 1.12rem;
+}
+
+.tour-price-discounted em {
+  color: #86efac;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 950;
+}
+
+.order-total-discount {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  line-height: 1.08;
+}
+
+.order-total-discount small {
+  color: #cbd5e1;
+  font-size: 11px;
+  text-decoration: line-through;
+  opacity: 0.82;
+}
+
+.order-total-discount strong {
+  color: #fde68a;
+  font-size: 1rem;
+}
+
+.order-total-discount em {
+  color: #86efac;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+@media (max-width: 760px) {
+  .public-tour-hero {
+    align-items: flex-start;
+  }
+
+  .public-tour-hero-actions,
+  .tour-offer-btn {
+    width: 100%;
+  }
+
+  .tour-offer-invite-form {
+    grid-template-columns: 1fr;
+  }
+
+  .tour-offer-invite-form .btn-primary {
+    width: 100%;
+  }
+}
+
+.tour-offer-invite-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tour-offer-invite-main b,
+.tour-offer-invite-main small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tour-offer-invite-main b {
+  font-size: 14px;
+}
+
+.tour-offer-invite-main small {
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 800;
+}
+body.tour-sales-page .table-wrap.table-scroll-5,
+body.admin-page .table-wrap.table-scroll-5 {
+  max-height: 372px !important;
+  overflow-y: scroll !important;
+  overflow-x: auto !important;
+  display: block !important;
+  border-radius: 18px !important;
+  background: rgba(15, 23, 42, 0.96) !important;
+  isolation: isolate !important;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(147, 197, 253, 0.72) rgba(15, 23, 42, 0.76);
+}
+
+body.tour-sales-page .table-wrap.table-scroll-5 table,
+body.admin-page .table-wrap.table-scroll-5 table {
+  margin: 0 !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+body.tour-sales-page .table-wrap.table-scroll-5 thead,
+body.admin-page .table-wrap.table-scroll-5 thead {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+}
+
+body.tour-sales-page .table-wrap.table-scroll-5 thead tr,
+body.admin-page .table-wrap.table-scroll-5 thead tr,
+body.tour-sales-page .table-wrap.table-scroll-5 thead th,
+body.admin-page .table-wrap.table-scroll-5 thead th {
+  background: #172033 !important;
+  opacity: 1 !important;
+}
+
+body.tour-sales-page .table-wrap.table-scroll-5 thead th,
+body.admin-page .table-wrap.table-scroll-5 thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 30 !important;
+  color: #bfdbfe !important;
+  box-shadow: 0 1px 0 rgba(147, 197, 253, 0.18), 0 10px 18px rgba(2, 6, 23, 0.45) !important;
+  background-clip: padding-box !important;
+}
+
+body.tour-sales-page .table-wrap.table-scroll-5 tbody,
+body.admin-page .table-wrap.table-scroll-5 tbody {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+body.tour-sales-page .table-wrap.table-scroll-5 tbody tr,
+body.admin-page .table-wrap.table-scroll-5 tbody tr {
+  height: 64px !important;
+}
+
+body.tour-sales-page .table-wrap.table-scroll-5::-webkit-scrollbar,
+body.admin-page .table-wrap.table-scroll-5::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+}
+
+body.tour-sales-page .table-wrap.table-scroll-5::-webkit-scrollbar-track,
+body.admin-page .table-wrap.table-scroll-5::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.76) !important;
+  border-radius: 999px !important;
+}
+
+body.tour-sales-page .table-wrap.table-scroll-5::-webkit-scrollbar-thumb,
+body.admin-page .table-wrap.table-scroll-5::-webkit-scrollbar-thumb {
+  background: rgba(147, 197, 253, 0.72) !important;
+  border-radius: 999px !important;
+  border: 2px solid rgba(15, 23, 42, 0.76) !important;
+}
+
+body.tour-sales-page .table-wrap.table-scroll-5::-webkit-scrollbar-thumb:hover,
+body.admin-page .table-wrap.table-scroll-5::-webkit-scrollbar-thumb:hover {
+  background: rgba(191, 219, 254, 0.9) !important;
+}
+
+body.admin-page .admin-plan-status-list-actions,
+body.admin-page .admin-province-list-actions,
+body.tour-sales-page .order-list-actions {
+  flex: 1 1 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  flex-wrap: nowrap !important;
+  margin-left: auto !important;
+}
+
+body.admin-page .admin-plan-status-list-actions .tour-search-box-small,
+body.admin-page .admin-province-list-actions .tour-search-box-small,
+body.tour-sales-page .order-list-actions .tour-search-box-small {
+  width: 360px !important;
+  max-width: 46vw !important;
+  flex: 0 0 360px !important;
+}
+
+body.admin-page .tour-admin-hero,
+body.tour-sales-page .tour-admin-hero {
+  align-items: center;
+}
+
+body.admin-page .tour-admin-hero h1,
+body.tour-sales-page .tour-admin-hero h1 {
+  margin-bottom: 0;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  line-height: 1;
+}
+
+body.admin-page .btn-icon,
+body.admin-page .tour-search-icon,
+body.tour-sales-page .btn-icon,
+body.tour-sales-page .tour-search-icon {
+  display: none !important;
+}
+
+body.admin-page .admin-plan-status-list-actions {
+  gap: 8px;
+}
+
+body.admin-page .btn-admin-add-action {
+  min-height: 36px !important;
+  padding: 0 13px !important;
+  border-radius: 14px !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  background: linear-gradient(135deg, #0891b2, #2563eb) !important;
+  border: 1px solid rgba(125, 211, 252, 0.48) !important;
+  box-shadow: 0 10px 22px rgba(14, 165, 233, 0.20) !important;
+}
+
+body.admin-page .btn-admin-add-action:hover {
+  transform: translateY(-1px) !important;
+  background: linear-gradient(135deg, #38bdf8, #2563eb) !important;
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.26) !important;
+}
+
+body.admin-page #travelTagModal .form-card {
+  width: min(520px, 100%);
+}
+
+.tour-offer-btn .tour-offer-btn-icon,
+.tour-offer-btn svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tour-table-name {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 3px !important;
+  white-space: normal !important;
+}
+
+.tour-table-name strong {
+  max-width: 260px !important;
+}
+
+.tour-table-name small {
+  max-width: 260px !important;
+  color: #93c5fd !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.locked-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 13px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, .12);
+  border: 1px solid rgba(148, 163, 184, .22);
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.image-url-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.image-url-field input[type="text"],
+.image-url-field input:not([type]),
+.image-url-field textarea {
+  width: 100%;
+  padding-right: 56px !important;
+}
+
+.image-url-field-textarea {
+  align-items: stretch;
+}
+
+.image-url-field-textarea .image-upload-icon {
+  top: 12px;
+  transform: none;
+}
+
+.image-upload-icon {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(37, 99, 235, .95);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 900;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, .24);
+}
+
+.image-upload-icon:hover {
+  background: rgba(29, 78, 216, .98);
+}
+
+#tourSalesName[readonly] {
+  color: #dbeafe;
+  cursor: default;
+}
+
+@media (max-width: 980px) {
+  body.admin-page .admin-plan-status-list-actions,
+  body.admin-page .admin-province-list-actions,
+  body.tour-sales-page .order-list-actions {
+    flex-wrap: wrap !important;
+  }
+
+  body.admin-page .admin-plan-status-list-actions .tour-search-box-small,
+  body.admin-page .admin-province-list-actions .tour-search-box-small,
+  body.tour-sales-page .order-list-actions .tour-search-box-small {
+    width: min(360px, 100%) !important;
+    max-width: 100% !important;
+    flex: 1 1 260px !important;
+  }
+}
+
+@media (max-width: 760px) {
+  body.admin-page .admin-plan-status-list-actions,
+  body.admin-page .admin-province-list-actions,
+  body.tour-sales-page .order-list-actions {
+    width: 100% !important;
+    justify-content: stretch !important;
+  }
+
+  body.admin-page .admin-plan-status-list-actions .tour-search-box-small,
+  body.admin-page .admin-province-list-actions .tour-search-box-small,
+  body.tour-sales-page .order-list-actions .tour-search-box-small {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+  }
+}
+body.posts-page {
+  min-height: 100vh;
+  color: #f8fafc;
+  background: #07111f var(--twai-page-bg-image) center/cover fixed no-repeat;
+}
+
+body.posts-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(2, 6, 23, .92), rgba(15, 23, 42, .70)),
+    radial-gradient(circle at 18% 10%, rgba(37, 99, 235, .24), transparent 30%),
+    radial-gradient(circle at 82% 18%, rgba(14, 165, 233, .18), transparent 28%);
+}
+
+body.posts-page .posts-shell {
+  width: min(1240px, calc(100% - 32px));
+  margin: 116px auto 52px;
+}
+
+body.posts-page .posts-hero {
+  min-height: 168px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  padding: clamp(22px, 4vw, 34px);
+  border-radius: 30px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, .86), rgba(30, 64, 175, .34));
+  border: 1px solid rgba(255, 255, 255, .18);
+  box-shadow: 0 26px 74px rgba(0, 0, 0, .30);
+}
+
+body.posts-page .posts-hero .eyebrow {
+  color: #bfdbfe;
+}
+
+body.posts-page .posts-hero h1 {
+  margin: 8px 0 0;
+  color: #fff;
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1.05;
+  letter-spacing: 0;
+  text-shadow: 0 14px 38px rgba(0, 0, 0, .34);
+}
+
+body.posts-page .posts-hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+body.posts-page .post-month-pill,
+body.posts-page .post-add-pill {
+  min-height: 50px;
+  padding: 0 22px;
+  border: 1px solid rgba(134, 239, 172, .50);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 18px 38px rgba(22, 163, 74, .24);
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+}
+
+body.posts-page .post-month-pill:hover,
+body.posts-page .post-add-pill:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+  box-shadow: 0 22px 46px rgba(22, 163, 74, .30);
+}
+
+body.posts-page .tour-search-panel,
+body.posts-page .posts-month-panel {
+  margin-top: 22px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+body.posts-page .tour-search-panel {
+  margin-top: 24px;
+}
+
+body.posts-page .tour-search-box {
+  min-height: 56px;
+  border-radius: 20px;
+  background: rgba(15, 23, 42, .78);
+  border: 1px solid rgba(255, 255, 255, .14);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .22);
+  backdrop-filter: blur(16px);
+}
+
+body.posts-page .posts-month-panel .panel-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 16px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+body.posts-page .posts-month-panel .panel-header-row h2 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 1.28rem;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+body.posts-page .post-view-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+body.posts-page .post-view-toggle {
+  width: 46px;
+  height: 42px;
+  border: 1px solid rgba(147, 197, 253, .30);
+  border-radius: 14px;
+  background: rgba(37, 99, 235, .22);
+  color: #dbeafe;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform .18s ease, background .18s ease, border-color .18s ease;
+}
+
+body.posts-page .post-view-toggle svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+body.posts-page .post-view-toggle:hover,
+body.posts-page .post-view-toggle.active {
+  transform: translateY(-1px);
+  background: rgba(37, 99, 235, .34);
+  border-color: rgba(191, 219, 254, .46);
+}
+
+body.posts-page .posts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+body.posts-page .post-card {
+  position: relative;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, .88), rgba(30, 41, 59, .82));
+  border: 1px solid rgba(255, 255, 255, .14);
+  box-shadow: 0 22px 56px rgba(0, 0, 0, .25);
+  backdrop-filter: blur(14px);
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+
+body.posts-page .post-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(147, 197, 253, .42);
+  box-shadow: 0 28px 72px rgba(37, 99, 235, .18);
+}
+
+body.posts-page .post-card-image-grid,
+body.posts-page .post-detail-image-grid {
+  display: grid;
+  gap: 8px;
+}
+
+body.posts-page .post-card-image-grid {
+  height: 188px;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  margin: 0 0 16px;
+  padding: 0;
+  background: rgba(2, 6, 23, .32);
+}
+
+body.posts-page .post-card-image-grid.image-count-1 {
+  grid-template-columns: 1fr;
+}
+
+body.posts-page .post-card-image-grid.image-count-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.posts-page .post-card-image-grid.image-count-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+body.posts-page .post-card-image-grid.image-count-4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+body.posts-page .post-card-image-grid.image-count-5 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+body.posts-page .post-card-image-grid.image-count-5 .post-card-image {
+  grid-column: span 2;
+}
+
+body.posts-page .post-card-image-grid.image-count-5 .post-card-image:nth-child(4) {
+  grid-column: 2 / span 2;
+}
+
+body.posts-page .post-card-image-grid.image-count-5 .post-card-image:nth-child(5) {
+  grid-column: 4 / span 2;
+}
+
+body.posts-page .post-card-image,
+body.posts-page .post-detail-image {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(37, 99, 235, .38), rgba(15, 23, 42, .92));
+}
+
+body.posts-page .post-card-image {
+  min-height: 0;
+}
+
+body.posts-page .post-card-image img,
+body.posts-page .post-detail-image img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+body.posts-page .post-card-image span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 900;
+  background: rgba(2, 6, 23, .50);
+}
+
+body.posts-page .post-card-title-row,
+body.posts-page .post-card-meta,
+body.posts-page .post-card p,
+body.posts-page .post-card-footer {
+  margin-left: 18px;
+  margin-right: 18px;
+}
+
+body.posts-page .post-card-title-row {
+  display: block;
+  margin-bottom: 10px;
+}
+
+body.posts-page .post-card h3 {
+  min-width: 0;
+  margin: 0;
+  color: #f8fafc;
+  font-size: 1.18rem;
+  line-height: 1.28;
+  letter-spacing: 0;
+}
+
+body.posts-page .post-card-author-name {
+  margin-top: 6px;
+  color: #93c5fd;
+  font-size: .88rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+body.posts-page .post-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+body.posts-page .post-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: #dbeafe;
+  background: rgba(37, 99, 235, .18);
+  border: 1px solid rgba(147, 197, 253, .18);
+  font-size: .82rem;
+  font-weight: 800;
+}
+
+body.posts-page .post-card p {
+  display: -webkit-box;
+  flex: 1;
+  margin-bottom: 18px;
+  color: #cbd5e1;
+  font-size: .95rem;
+  line-height: 1.62;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+body.posts-page .post-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  margin-bottom: 18px;
+}
+
+body.posts-page .post-card-footer small {
+  min-width: 0;
+  color: #93c5fd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.posts-page .post-card-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body.posts-page .post-card-owner-actions {
+  margin-right: auto;
+  justify-content: flex-start;
+}
+
+body.posts-page .post-card-view-actions {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+body.posts-page .post-card-footer .btn-soft,
+body.posts-page .post-card-footer .btn-danger {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+}
+
+body.posts-page .empty-line {
+  width: 100%;
+  padding: 18px;
+  border-radius: 18px;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, .07);
+  border: 1px solid rgba(255, 255, 255, .10);
+}
+
+body.posts-page .post-detail-card,
+body.posts-page .public-post-card {
+  width: min(880px, calc(100vw - 28px));
+  max-height: min(88vh, 820px);
+  overflow-y: auto;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+body.posts-page .post-detail-card h2,
+body.posts-page .public-post-card h2 {
+  color: #f8fafc;
+}
+
+body.posts-page .post-detail-card p {
+  margin-top: 14px;
+  color: #dbeafe;
+  font-size: 1rem;
+  line-height: 1.78;
+  white-space: pre-line;
+}
+
+body.posts-page .post-detail-meta {
+  margin-top: 8px;
+  color: #93c5fd;
+  font-weight: 800;
+}
+
+body.posts-page .post-detail-image-grid {
+  margin-top: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+body.posts-page .post-detail-image {
+  min-height: 170px;
+  border-radius: 16px;
+}
+
+.content-ai-field {
+  position: relative;
+}
+
+.content-ai-field textarea {
+  padding-right: 64px !important;
+}
+
+.ai-content-button,
+.file-icon-button {
+  border: 0;
+  border-radius: 14px;
+  background: rgba(37, 99, 235, .95);
+  color: #fff;
+  font-weight: 900;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, .24);
+  transition: transform .18s ease, opacity .18s ease, background .18s ease;
+}
+
+.ai-content-button {
+  position: absolute;
+  right: 8px;
+  top: 12px;
+  width: 44px;
+  height: 38px;
+  font-size: 13px;
+  letter-spacing: .02em;
+}
+
+.file-icon-button {
+  width: 44px;
+  height: 42px;
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.ai-content-button:hover,
+.file-icon-button:hover {
+  transform: translateY(-1px);
+  background: rgba(29, 78, 216, .98);
+}
+
+.ai-content-button:disabled,
+.file-icon-button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.post-image-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.post-image-preview span {
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #dbeafe;
+  background: rgba(37, 99, 235, .18);
+  border: 1px solid rgba(147, 197, 253, .18);
+  font-size: .82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  body.posts-page .posts-hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 12px;
+  }
+
+  body.posts-page .tour-offer-btn,
+  body.posts-page .post-add-pill,
+  body.posts-page .post-month-pill {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+
+@media (max-width: 720px) {
+  body.posts-page .posts-shell {
+    width: min(100% - 18px, 1240px);
+    margin-top: 96px;
+  }
+
+  body.posts-page .posts-hero {
+    align-items: stretch;
+    flex-direction: column;
+    min-height: auto;
+    border-radius: 24px;
+  }
+
+  body.posts-page .posts-hero-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  body.posts-page .post-month-pill,
+  body.posts-page .post-add-pill {
+    width: 100%;
+  }
+
+  body.posts-page .post-view-toggle {
+    width: 42px;
+    height: 38px;
+  }
+
+  body.posts-page .post-view-actions {
+    justify-content: flex-start;
+  }
+
+  body.posts-page .posts-grid {
+    grid-template-columns: 1fr;
+  }
+
+body.posts-page .post-card-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body.posts-page .post-card-actions {
+    width: 100%;
+  }
+
+  body.posts-page .post-card-title-row {
+    display: block;
+  }
+
+  body.posts-page .post-card-footer .btn-soft,
+  body.posts-page .post-card-footer .btn-danger {
+    width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  body.posts-page .post-card-footer {
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  body.posts-page .post-card-actions {
+    width: auto;
+  }
+
+  body.posts-page .post-card-footer .btn-soft,
+  body.posts-page .post-card-footer .btn-danger {
+    width: auto;
+  }
+}
+
+body.posts-page .post-card-footer .post-card-icon-button,
+body.admin-page .admin-table-icon-button,
+body.tour-sales-page .tour-table-icon-button,
+body.admin-page .tour-table-icon-button {
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  flex: 0 0 40px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+body.posts-page .post-card-footer .post-card-icon-button svg,
+body.admin-page .admin-table-icon-button svg,
+body.tour-sales-page .tour-table-icon-button svg,
+body.admin-page .tour-table-icon-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+body.admin-page .inline-actions .admin-table-icon-button,
+body.tour-sales-page .inline-actions .tour-table-icon-button {
+  min-width: 40px !important;
+}
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+body.admin-page .admin-table-icon-button.btn-soft,
+body.tour-sales-page .tour-table-icon-button.btn-soft,
+body.admin-page .tour-table-icon-button.btn-soft,
+body.posts-page .post-card-icon-button.btn-soft,
+body.posts-page .post-edit-action-button.btn-soft {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #0ea5e9, #0284c7) !important;
+  border: 1px solid rgba(125, 211, 252, 0.60) !important;
+  box-shadow: 0 12px 26px rgba(14, 165, 233, 0.24) !important;
+}
+
+body.admin-page .admin-table-icon-button.btn-danger,
+body.tour-sales-page .tour-table-icon-button.btn-danger,
+body.admin-page .tour-table-icon-button.btn-danger,
+body.posts-page .post-card-icon-button.btn-danger,
+body.posts-page .post-delete-action-button.btn-danger {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  border: 1px solid rgba(252, 165, 165, 0.60) !important;
+  box-shadow: 0 12px 26px rgba(220, 38, 38, 0.24) !important;
+}
+
+body.admin-page .admin-table-icon-button.btn-primary,
+body.tour-sales-page .tour-table-icon-button.btn-primary,
+body.admin-page .tour-table-icon-button.btn-primary {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9) !important;
+  border: 1px solid rgba(147, 197, 253, 0.60) !important;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.24) !important;
+}
+
+body.admin-page .btn-admin-add-action,
+body.admin-page .btn-add-tour,
+body.tour-sales-page .btn-add-tour {
+  min-width: 156px;
+  min-height: 50px;
+  padding: 0 22px;
+  background: linear-gradient(135deg, #2563eb, #0ea5e9) !important;
+  border-color: rgba(147, 197, 253, 0.60) !important;
+  box-shadow: 0 18px 38px rgba(37, 99, 235, 0.24) !important;
+}
+
+body.admin-page .btn-clear-tour-search,
+body.tour-sales-page .btn-clear-tour-search {
+  min-width: 68px;
+}
+
