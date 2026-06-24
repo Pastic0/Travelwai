@@ -415,6 +415,7 @@ public sealed class AdminApiController : ApiControllerBase
         }
 
         await TransferAccountContentToAdminAsync(id, transferAdmin.Value.id, transferAdmin.Value.name);
+        var deletedOffers = await _offerService.DeleteOffersForDeletedAccountAsync(id, Text(account, "email"));
 
         await using var conn = await _dataSource.OpenConnectionAsync();
         await using var cmd = conn.CreateCommand();
@@ -423,7 +424,9 @@ public sealed class AdminApiController : ApiControllerBase
         await cmd.ExecuteNonQueryAsync();
 
         await _repo.DeleteAsync("users", id);
-        return Ok(new { success = true, message = "Đã xóa tài khoản, tour và bài viết đã chuyển sang Admin" });
+        return Ok(new { success = true, message = deletedOffers > 0
+            ? "Đã xóa tài khoản, ưu đãi liên quan đã xoá, tour và bài viết đã chuyển sang Admin"
+            : "Đã xóa tài khoản, tour và bài viết đã chuyển sang Admin" });
     }
 
     [HttpGet("schedules")]

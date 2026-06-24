@@ -94,7 +94,7 @@ public sealed class TourOfferService
             ["progress"] = active ? 1 : 0,
             ["message"] = active
                 ? "Bạn đang có ưu đãi 5% cho lần đặt tour tiếp theo."
-                : "Tạo 1 bài viết để nhận ưu đãi 5% cho lần đặt tour tiếp theo."
+                : "Tạo bài viết để nhận ưu đãi 5% cho lần đặt tour tiếp theo."
         };
     }
 
@@ -170,7 +170,7 @@ public sealed class TourOfferService
             {
                 ["success"] = true,
                 ["removed"] = true,
-                ["message"] = "Gmail này đã có tài khoản nên mã mời đã hết hạn và đã được xoá khỏi danh sách."
+                ["message"] = "Gmail đã được sử dụng."
             };
         }
 
@@ -297,6 +297,51 @@ public sealed class TourOfferService
         return deleted;
     }
 
+
+    public async Task<int> DeleteOffersForDeletedAccountAsync(string userId, string? email)
+    {
+        var deleted = 0;
+        var cleanUserId = (userId ?? string.Empty).Trim();
+        var normalizedEmail = NormalizeEmail(email);
+
+        var inviteIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var postOfferIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        static void AddIds(IEnumerable<Dictionary<string, object?>> rows, HashSet<string> ids)
+        {
+            foreach (var row in rows)
+            {
+                var id = Text(row, "id");
+                if (!string.IsNullOrWhiteSpace(id)) ids.Add(id);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(cleanUserId))
+        {
+            AddIds(await _repo.WhereEqualAsync(InviteCollection, "inviter_id", cleanUserId, limit: 500), inviteIds);
+            AddIds(await _repo.WhereEqualAsync(InviteCollection, "invited_user_id", cleanUserId, limit: 500), inviteIds);
+            AddIds(await _repo.WhereEqualAsync(PostOfferCollection, "user_id", cleanUserId, limit: 200), postOfferIds);
+        }
+
+        if (!string.IsNullOrWhiteSpace(normalizedEmail))
+        {
+            AddIds(await _repo.WhereEqualAsync(InviteCollection, "inviter_email", normalizedEmail, limit: 500), inviteIds);
+            AddIds(await _repo.WhereEqualAsync(InviteCollection, "invited_email", normalizedEmail, limit: 500), inviteIds);
+        }
+
+        foreach (var id in inviteIds)
+        {
+            if (await _repo.DeleteAsync(InviteCollection, id)) deleted++;
+        }
+
+        foreach (var id in postOfferIds)
+        {
+            if (await _repo.DeleteAsync(PostOfferCollection, id)) deleted++;
+        }
+
+        return deleted;
+    }
+
     private async Task CleanupExpiredPendingInvitesForInviterAsync(string userId)
     {
         if (string.IsNullOrWhiteSpace(userId)) return;
@@ -414,15 +459,13 @@ public sealed class TourOfferService
 
             Mã mời có hiệu lực trong {InviteExpirationMinutes} phút. Nếu quá thời gian này hoặc Gmail đã có tài khoản, mã sẽ hết hạn.
 
-            Khi bạn đăng ký bằng đúng Gmail được mời và đúng mã mời trong thời hạn trên, tiến trình ưu đãi của người mời sẽ được cập nhật.
-
             TravelwAI
             """;
 
         return ResendEmailSender.SendPlainEmailAsync(
             _emailOptions,
             toEmail,
-            "Lời mời tham gia TravelwAI để nhận ưu đãi tour",
+            "Bạn đã nhận được lời mời tham gia TravelwAI",
             body);
     }
 
