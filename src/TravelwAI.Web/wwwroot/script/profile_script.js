@@ -117,8 +117,8 @@ function setupProfilePictureUpload(originalSrc) {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      showProfileToast("Dung lượng ảnh phải nhỏ hơn 5MB.", "error");
+    if (file.size > 10 * 1024 * 1024) {
+      showProfileToast("Dung lượng ảnh phải nhỏ hơn 10MB.", "error");
       input.value = "";
       return;
     }

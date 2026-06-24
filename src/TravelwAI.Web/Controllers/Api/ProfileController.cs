@@ -50,7 +50,7 @@ public sealed class ProfileController : ApiControllerBase
         if (profilePic is null || profilePic.Length == 0) return BadRequest(new { success = false, detail = "Chưa chọn tệp" });
 
         var url = await _fileStorage.SaveImageAsync(profilePic, current.userId!, "profiles");
-        if (url is null) return BadRequest(new { success = false, detail = "Chỉ cho phép ảnh jpg, jpeg, png, gif và webp" });
+        if (url is null) return BadRequest(new { success = false, detail = "Chỉ cho phép ảnh JPG, PNG, GIF hoặc WEBP, tối đa 10MB." });
 
         await _chatService.CreateOrUpdateUserAsync(current.userId!, new Dictionary<string, object?> { ["profilePic"] = url });
         return Ok(new { success = true, message = "Đã tải ảnh đại diện", profilePic = url });

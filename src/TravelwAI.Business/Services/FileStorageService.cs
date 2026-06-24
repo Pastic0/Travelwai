@@ -19,7 +19,7 @@ public sealed class FileStorageService : IFileStorageService
 
     private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".webp"
+        ".jpg", ".jpeg", ".png", ".gif", ".webp"
     };
 
     private static readonly HashSet<string> AllowedAttachmentExtensions = new(StringComparer.OrdinalIgnoreCase)

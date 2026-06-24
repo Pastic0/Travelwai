@@ -2,6 +2,8 @@
   const API_BASE_URL = "/api";
   const AI_STORAGE_PREFIX = "travelwai-ai-chat-history";
   const AI_PENDING_PROMPT_KEY = "travelwai-ai-pending-prompt";
+  const SUPPORT_ADMIN_EMAIL = "2324802010387@student.tdmu.edu.vn";
+  const ADMIN_PENDING_MESSAGE_KEY = "travelwai-admin-pending-message";
   const AI_AVATAR_VERSION_KEY = "travelwaiAiAvatarVersion";
   const CONTACT_AI_HISTORY_LIMIT = 100;
   const CONTACT_AI_REPLY_LIMIT = 150;
@@ -16,7 +18,7 @@
     id: "travelwai-ai",
     displayName: "Quản lý TravelwAI",
     avatar: "travelwai-manager-avatar.webp",
-    welcome: "Xin chào, mình là Quản lý TravelwAI. Bạn có thể nhắn mình để mở trang, lập lịch trình, tìm tour, nhắn tin với người khác, đổi mật khẩu hoặc đăng xuất."
+    welcome: `Xin chào, bạn có thể nhắn trực tiếp với Admin TravelwAI qua Gmail ${SUPPORT_ADMIN_EMAIL}. Nhập nội dung rồi bấm Gửi, hệ thống sẽ mở cuộc trò chuyện với Admin.`
   };
 
   function getPanel() {
@@ -258,7 +260,7 @@
       { url: "/tours", reply: "Mình chuyển bạn đến trang Tour du lịch.", patterns: [/tour\s*du\s*lich/, /dat\s*tour/, /xem\s*tour/] },
       { url: "/tour-sales", reply: "Mình chuyển bạn đến trang Tài khoản.", patterns: [/tour\s*sales/, /ban\s*tour/, /don\s*ban\s*tour/, /sales/] },
       { url: "/admin", reply: "Mình chuyển bạn đến trang Admin.", patterns: [/admin/, /quan\s*tri/, /quan\s*ly\s*he\s*thong/] },
-      { url: "/messaging", reply: "Mình đang mở trang Nhắn tin.", patterns: [/tin\s*nhan/, /nhan\s*tin/, /messaging/, /chat/] },
+      { url: "/messaging?admin=1", reply: `Mình mở Tin nhắn với Admin ${SUPPORT_ADMIN_EMAIL}.`, patterns: [/tin\s*nhan/, /nhan\s*tin/, /messaging/, /chat/] },
       { url: "/profile", reply: "Mình chuyển bạn đến trang Hồ sơ.", patterns: [/ho\s*so/, /thong\s*tin\s*ca\s*nhan/, /tai\s*khoan/, /doi\s*ten/] },
       { url: "/notifications", reply: "Mình chuyển bạn đến trang Thông báo.", patterns: [/thong\s*bao/, /notification/] },
       { url: "/contact", reply: "Bạn đang ở chatbot Admin rồi. Cứ nhắn nội dung cần hỗ trợ tại đây nhé.", patterns: [/phan\s*hoi/, /lien\s*he/, /gop\s*y/, /ho\s*tro/] },
@@ -364,7 +366,7 @@
     if (button) {
       button.disabled = isSending;
       button.innerHTML = isSending ? '<span class="admin-ai-send-spinner" aria-hidden="true"></span>' : "Gửi";
-      button.title = isSending ? "AI đang trả lời" : "Gửi câu hỏi cho AI";
+      button.title = isSending ? "Đang mở Tin nhắn" : "Gửi tin nhắn cho Admin";
     }
     if (input) input.disabled = isSending;
   }
@@ -387,6 +389,14 @@
     return currentUser;
   }
 
+  function openAdminMessaging(message) {
+    const text = String(message || "").trim();
+    try {
+      if (text) localStorage.setItem(ADMIN_PENDING_MESSAGE_KEY, text);
+    } catch (_) {}
+    window.location.href = "/messaging?admin=1";
+  }
+
   async function sendAiMessage(event) {
     if (event) event.preventDefault();
     if (isSending) return;
@@ -394,79 +404,33 @@
     const input = document.getElementById("supportAdminAiInput");
     const text = (input?.value || "").trim();
     if (!text) {
-      setSupportStatus("Nhập câu hỏi trước khi gửi cho AI.", "error");
+      setSupportStatus("Nhập nội dung cần nhắn cho Admin trước.", "error");
       input?.focus();
       return;
     }
 
     const token = getToken();
-    if (token) {
-      await loadCurrentUser();
+    if (!token) {
+      setSupportStatus("Bạn cần đăng nhập để nhắn tin với Admin.", "error");
+      try { localStorage.setItem(ADMIN_PENDING_MESSAGE_KEY, text); } catch (_) {}
+      setTimeout(() => { window.location.href = "/login"; }, 800);
+      return;
     }
 
+    await loadCurrentUser();
     const storedBeforeSend = loadStoredMessages();
     const userMessage = {
-      id: `contact-ai-user-${Date.now()}`,
+      id: `contact-admin-user-${Date.now()}`,
       sender_id: getCurrentUserId() || "current-user",
       sender_info: currentUser || { username: getUserDisplayName(currentUser), email: localStorage.getItem("userEmail") || "" },
       content: text,
       time_sent: new Date().toISOString()
     };
-
-    const afterUser = [...storedBeforeSend, userMessage];
-    saveStoredMessages(afterUser);
+    saveStoredMessages([...storedBeforeSend, userMessage]);
     appendMessage(userMessage);
     if (input) input.value = "";
-    setSupportStatus("", "");
-
-    if (await handleManagerCommand(text)) return;
-
-    if (!token) {
-      appendLocalManagerReply("Bạn có thể nhắn tên trang để mình mở nhanh. Để dùng đầy đủ AI, lịch trình, tour và tin nhắn, bạn hãy đăng nhập trước.");
-      return;
-    }
-
-    try {
-      setSendingState(true);
-      const response = await fetch(`${API_BASE_URL}/ai/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          message: text,
-          history: buildHistoryForRequest(storedBeforeSend),
-          assistant: managerConfig.mode,
-          context: ""
-        })
-      });
-
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || result.success === false) {
-        throw new Error(result.detail || result.message || "Không thể gọi AI.");
-      }
-
-      let replyText = String(result.data?.reply || "").trim();
-      if (!replyText || /openrouter|kh[oô]ng\s*tr[aả]\s*v[eề]\s*n[oộ]i\s*dung|kh[oô]ng\s*c[oó]\s*ph[aả]n\s*h[oồ]i/i.test(replyText)) {
-        throw new Error("AI không có phản hồi rõ ràng.");
-      }
-      if (replyText.length > CONTACT_AI_REPLY_LIMIT + 30) {
-        replyText = replyText.slice(0, CONTACT_AI_REPLY_LIMIT + 30).replace(/\s+\S*$/, "").trim();
-      }
-
-      const latestMessages = loadStoredMessages();
-      const reply = buildManagerMessage(replyText);
-      saveStoredMessages([...latestMessages, reply]);
-      appendMessage(reply);
-    } catch (error) {
-      console.warn("Chatbot Admin không dùng được OpenRouter, chuyển sang trả lời nội bộ:", error);
-      setSupportStatus("", "");
-      appendLocalManagerReply("Mình chưa nhận diện được lệnh này. Bạn có thể nhắn: đăng nhập, đăng ký, bản đồ, lịch trình, kế hoạch, tour du lịch, bài viết, nhắn tin, đổi mật khẩu hoặc đăng xuất.");
-    } finally {
-      setSendingState(false);
-      input?.focus();
-    }
+    setSupportStatus(`Đang mở Tin nhắn với Admin ${SUPPORT_ADMIN_EMAIL}...`, "success");
+    openAdminMessaging(text);
   }
 
   async function initializePanelContent() {
@@ -483,7 +447,7 @@
     }
     const panel = getPanel();
     if (!panel) {
-      window.location.href = "/messaging?ai=travelwai";
+      window.location.href = "/messaging?admin=1";
       return;
     }
     panel.classList.add("open");

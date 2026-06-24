@@ -31,6 +31,8 @@ const GUIDE_AI_CONVERSATION_ID = "travelwinne-guide-ai-conversation";
 const AI_STORAGE_PREFIX = "travelwai-ai-chat-history";
 const AI_PENDING_PROMPT_KEY = "travelwai-ai-pending-prompt";
 const AI_AVATAR_VERSION_KEY = "travelwaiAiAvatarVersion";
+const SUPPORT_ADMIN_EMAIL = "2324802010387@student.tdmu.edu.vn";
+const ADMIN_PENDING_MESSAGE_KEY = "travelwai-admin-pending-message";
 
 function getAiAvatarVersion() {
   try {
@@ -219,7 +221,8 @@ async function initializeMessaging() {
     setupFriendSearchAutoHide();
 
     showLoading(false);
-    await handlePendingAiPrompt();
+    const handledDirectChat = await handlePendingDirectChat();
+    if (!handledDirectChat) await handlePendingAiPrompt();
   } catch (error) {
     console.error("Lỗi khởi tạo tin nhắn:", error);
     showLoading(false);
@@ -706,6 +709,75 @@ function buildAiContextForRequest(aiConfig, text) {
   if (pendingContext) return pendingContext;
   if (aiConfig.key === "guide") return buildGuideContextForMessage(text);
   return "";
+}
+
+function getDirectChatEmailFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const adminRequested = params.get("admin") === "1" || /^(admin|support)$/i.test(params.get("chat") || "");
+  const directEmail = params.get("email") || params.get("userEmail") || params.get("adminEmail") || params.get("to") || "";
+  return (adminRequested ? SUPPORT_ADMIN_EMAIL : directEmail).trim().toLowerCase();
+}
+
+function findUserByEmail(email) {
+  const targetEmail = String(email || "").trim().toLowerCase();
+  if (!targetEmail) return null;
+  return (all_users || []).find((user) => String(user?.email || "").trim().toLowerCase() === targetEmail) || null;
+}
+
+async function handlePendingDirectChat() {
+  const targetEmail = getDirectChatEmailFromQuery();
+  if (!targetEmail) return false;
+
+  try {
+    if (String(currentUser?.email || "").trim().toLowerCase() === targetEmail) {
+      try { localStorage.removeItem(ADMIN_PENDING_MESSAGE_KEY); } catch (_) {}
+      showMessagingToast("Bạn đang đăng nhập bằng tài khoản Admin này, không thể tự nhắn cho chính mình.", "info");
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return true;
+    }
+
+    let targetUser = findUserByEmail(targetEmail);
+    if (!targetUser) {
+      await get_all_users(true);
+      targetUser = findUserByEmail(targetEmail);
+    }
+
+    if (!targetUser) {
+      showError(`Không tìm thấy tài khoản Admin ${targetEmail}.`);
+      return true;
+    }
+
+    const conversation = await ensureConversationWithUser(targetUser);
+    await selectConversation(conversation);
+
+    let pendingMessage = "";
+    try {
+      pendingMessage = localStorage.getItem(ADMIN_PENDING_MESSAGE_KEY) || "";
+      localStorage.removeItem(ADMIN_PENDING_MESSAGE_KEY);
+    } catch (_) {}
+
+    const messageInput = document.getElementById("messageInput");
+    if (pendingMessage && messageInput) {
+      messageInput.value = pendingMessage;
+      try {
+        await waitForWebSocketOpen(5000);
+        await sendMessage();
+        showMessagingToast(`Đã gửi tin nhắn cho Admin ${targetEmail}.`, "success");
+      } catch (error) {
+        showMessagingToast("Đã mở cuộc trò chuyện với Admin. Bạn bấm Gửi để gửi nội dung đang nhập.", "info");
+        messageInput.focus();
+      }
+    } else {
+      showMessagingToast(`Đã mở tin nhắn với Admin ${targetEmail}.`, "success");
+    }
+
+    window.history.replaceState({}, document.title, window.location.pathname);
+  } catch (error) {
+    console.error("Không thể mở tin nhắn Admin:", error);
+    showError(error.message || "Không thể mở tin nhắn với Admin.");
+  }
+
+  return true;
 }
 
 async function handlePendingAiPrompt() {
