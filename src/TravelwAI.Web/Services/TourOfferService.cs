@@ -11,23 +11,31 @@ public sealed class TourOfferService
 {
     public const int MaxInvitesForDiscount = 5;
     public const int DiscountPerAcceptedInvite = 4;
+    public const int InviteExpirationMinutes = 3;
     public const string InviteCollection = "tour_offer_invites";
     public const string PostOfferCollection = "post_tour_offers";
     public const int PostOfferDiscountPercent = 5;
 
     private readonly IDataRepository _repo;
+    private readonly IAuthRepository _authRepository;
     private readonly EmailOptions _emailOptions;
     private readonly IConfiguration _configuration;
 
-    public TourOfferService(IDataRepository repo, IOptions<EmailOptions> emailOptions, IConfiguration configuration)
+    public TourOfferService(
+        IDataRepository repo,
+        IAuthRepository authRepository,
+        IOptions<EmailOptions> emailOptions,
+        IConfiguration configuration)
     {
         _repo = repo;
+        _authRepository = authRepository;
         _emailOptions = emailOptions.Value;
         _configuration = configuration;
     }
 
     public async Task<Dictionary<string, object?>> GetStatusAsync(string userId, string? userEmail)
     {
+        await CleanupExpiredPendingInvitesForInviterAsync(userId);
         var invites = await GetInvitesByInviterAsync(userId);
         var accepted = invites
             .Where(IsAcceptedInvite)
@@ -59,6 +67,7 @@ public sealed class TourOfferService
 
     public async Task<int> GetDiscountPercentAsync(string userId)
     {
+        await CleanupExpiredPendingInvitesForInviterAsync(userId);
         var invites = await GetInvitesByInviterAsync(userId);
         var acceptedCount = invites
             .Where(IsAcceptedInvite)
@@ -154,7 +163,20 @@ public sealed class TourOfferService
             return new Dictionary<string, object?> { ["success"] = false, ["message"] = "Không thể tự mời chính tài khoản của mình." };
         }
 
+        if (await _authRepository.EmailExistsAsync(normalizedInvitedEmail))
+        {
+            await DeletePendingInvitesForEmailAsync(normalizedInvitedEmail);
+            return new Dictionary<string, object?>
+            {
+                ["success"] = true,
+                ["removed"] = true,
+                ["message"] = "Gmail này đã có tài khoản nên mã mời đã hết hạn và đã được xoá khỏi danh sách."
+            };
+        }
+
         var emailInvites = await GetInvitesByInvitedEmailAsync(normalizedInvitedEmail);
+        await DeleteExpiredPendingInvitesAsync(emailInvites);
+        emailInvites = emailInvites.Where(x => !IsExpiredPendingInvite(x)).ToList();
         var existing = emailInvites.FirstOrDefault(x =>
             string.Equals(Text(x, "inviter_id"), inviterId, StringComparison.OrdinalIgnoreCase));
 
@@ -183,6 +205,7 @@ public sealed class TourOfferService
                 ["invite_code"] = inviteCode,
                 ["status"] = "Đã mời",
                 ["discount_percent"] = 0,
+                ["expires_at"] = now.AddMinutes(InviteExpirationMinutes),
                 ["created_at"] = now,
                 ["updated_at"] = now
             }, merge: false);
@@ -193,6 +216,9 @@ public sealed class TourOfferService
             {
                 ["token"] = token,
                 ["invite_code"] = inviteCode,
+                ["status"] = "Đã mời",
+                ["discount_percent"] = 0,
+                ["expires_at"] = now.AddMinutes(InviteExpirationMinutes),
                 ["updated_at"] = now
             });
         }
@@ -202,8 +228,8 @@ public sealed class TourOfferService
         var message = alreadyAccepted
             ? $"Gmail này đã đăng ký từ mã mời {inviteCode}."
             : string.IsNullOrWhiteSpace(emailError)
-                ? $"Đã gửi mã mời {inviteCode} đến Gmail."
-                : $"Đã tạo mã mời {inviteCode} nhưng chưa gửi được email. Lỗi: {emailError}";
+                ? $"Đã gửi mã mời {inviteCode} đến Gmail. Mã có hiệu lực trong {InviteExpirationMinutes} phút."
+                : $"Đã tạo mã mời {inviteCode} nhưng chưa gửi được email. Mã có hiệu lực trong {InviteExpirationMinutes} phút. Lỗi: {emailError}";
 
         return new Dictionary<string, object?>
         {
@@ -239,6 +265,12 @@ public sealed class TourOfferService
         var inviteId = Text(invite, "id");
         if (string.IsNullOrWhiteSpace(inviteId)) return;
 
+        if (IsExpiredPendingInvite(invite))
+        {
+            await _repo.DeleteAsync(InviteCollection, inviteId);
+            return;
+        }
+
         await _repo.UpdateAsync(InviteCollection, inviteId, new Dictionary<string, object?>
         {
             ["status"] = "Đã đăng ký",
@@ -247,6 +279,41 @@ public sealed class TourOfferService
             ["accepted_at"] = DateTime.UtcNow,
             ["updated_at"] = DateTime.UtcNow
         });
+    }
+
+    public async Task<int> DeletePendingInvitesForEmailAsync(string email)
+    {
+        var normalizedEmail = NormalizeEmail(email);
+        if (string.IsNullOrWhiteSpace(normalizedEmail)) return 0;
+
+        var invites = await GetInvitesByInvitedEmailAsync(normalizedEmail);
+        var deleted = 0;
+        foreach (var invite in invites.Where(x => !IsAcceptedInvite(x)))
+        {
+            var id = Text(invite, "id");
+            if (string.IsNullOrWhiteSpace(id)) continue;
+            if (await _repo.DeleteAsync(InviteCollection, id)) deleted++;
+        }
+        return deleted;
+    }
+
+    private async Task CleanupExpiredPendingInvitesForInviterAsync(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return;
+        var invites = await GetInvitesByInviterAsync(userId);
+        await DeleteExpiredPendingInvitesAsync(invites);
+    }
+
+    private async Task DeleteExpiredPendingInvitesAsync(IEnumerable<Dictionary<string, object?>> invites)
+    {
+        foreach (var invite in invites.Where(IsExpiredPendingInvite))
+        {
+            var id = Text(invite, "id");
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                await _repo.DeleteAsync(InviteCollection, id);
+            }
+        }
     }
 
     private async Task<Dictionary<string, object?>?> GetActivePostOfferAsync(string userId)
@@ -300,6 +367,7 @@ public sealed class TourOfferService
         ["status"] = IsAcceptedInvite(invite) ? "Đã đăng ký" : "Đã mời",
         ["discount_percent"] = IsAcceptedInvite(invite) ? DiscountPerAcceptedInvite : 0,
         ["created_at"] = invite.GetValueOrDefault("created_at"),
+        ["expires_at"] = invite.GetValueOrDefault("expires_at"),
         ["accepted_at"] = invite.GetValueOrDefault("accepted_at")
     };
 
@@ -344,7 +412,9 @@ public sealed class TourOfferService
             Bấm link bên dưới để đăng ký tài khoản:
             {inviteLink}
 
-            Khi bạn đăng ký bằng đúng Gmail được mời và đúng mã mời, tiến trình ưu đãi của người mời sẽ được cập nhật.
+            Mã mời có hiệu lực trong {InviteExpirationMinutes} phút. Nếu quá thời gian này hoặc Gmail đã có tài khoản, mã sẽ hết hạn.
+
+            Khi bạn đăng ký bằng đúng Gmail được mời và đúng mã mời trong thời hạn trên, tiến trình ưu đãi của người mời sẽ được cập nhật.
 
             TravelwAI
             """;
@@ -404,6 +474,18 @@ public sealed class TourOfferService
         .Trim()
         .Replace(" ", string.Empty)
         .ToUpperInvariant();
+
+    private static bool IsExpiredPendingInvite(Dictionary<string, object?> invite)
+    {
+        if (IsAcceptedInvite(invite)) return false;
+
+        var expiresAt = TryDate(invite.GetValueOrDefault("expires_at"));
+        if (expiresAt.HasValue) return expiresAt.Value <= DateTime.UtcNow;
+
+        var createdAt = TryDate(invite.GetValueOrDefault("created_at"))
+            ?? TryDate(invite.GetValueOrDefault("updated_at"));
+        return createdAt.HasValue && createdAt.Value.AddMinutes(InviteExpirationMinutes) <= DateTime.UtcNow;
+    }
 
     private static bool IsAcceptedInvite(Dictionary<string, object?> invite)
     {

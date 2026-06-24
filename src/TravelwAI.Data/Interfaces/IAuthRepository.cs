@@ -2,6 +2,7 @@ namespace TravelwAI.Data.Interfaces;
 
 public interface IAuthRepository
 {
+    Task<bool> EmailExistsAsync(string email);
     Task<Dictionary<string, object?>> SignUpAsync(string email, string password, string username);
     Task<Dictionary<string, object?>> SignInAsync(string email, string password);
     Task<Dictionary<string, object?>> VerifyTokenAsync(string idToken);

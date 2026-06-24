@@ -33,6 +33,18 @@ public sealed class SupabaseAuthRepository : IAuthRepository
         _emailOptions = emailOptions.Value;
     }
 
+    public async Task<bool> EmailExistsAsync(string email)
+    {
+        email = (email ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email)) return false;
+
+        await using var conn = await _dataSource.OpenConnectionAsync();
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "select 1 from app_users_auth where lower(email) = @email limit 1;";
+        cmd.Parameters.AddWithValue("email", email);
+        return await cmd.ExecuteScalarAsync() is not null;
+    }
+
     public async Task<Dictionary<string, object?>> SignUpAsync(string email, string password, string username)
     {
         email = email.Trim().ToLowerInvariant();

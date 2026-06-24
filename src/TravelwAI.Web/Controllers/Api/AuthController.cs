@@ -32,6 +32,13 @@ public sealed class AuthController : ControllerBase
             request.Password,
             request.Username?.Trim() ?? string.Empty);
 
+        if (result.GetValueOrDefault("success") is not true
+            && !string.IsNullOrWhiteSpace(request.OfferInvite)
+            && (result.GetValueOrDefault("message")?.ToString() ?? string.Empty).Contains("đã được đăng ký", StringComparison.OrdinalIgnoreCase))
+        {
+            await _tourOfferService.DeletePendingInvitesForEmailAsync(normalizedEmail);
+        }
+
         if (result.TryGetValue("success", out var success) && success is bool ok && ok
             && result.TryGetValue("localId", out var uidObj) && uidObj is string uid)
         {
