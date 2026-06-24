@@ -8,12 +8,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chi tiết điểm đến - TravelwAI</title>
-    <link rel="stylesheet" href="css/detail_style.css?v=2026-06-24-contact-ai-v2" />
+    <link rel="stylesheet" href="css/detail_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
     <link
       rel="stylesheet"
-      href="https:
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css"
     />
-  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-24-contact-ai-v2" />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-23-landing-tools-footer-dark-v4" />
   </head>
   <body>
     <div class="header">
@@ -23,7 +23,7 @@
     </div>
 
     <div class="container">
-
+      <!-- Khung thông tin tỉnh thành -->
       <div class="province-detail" data-server-rendered="@Model.HasData.ToString().ToLowerInvariant()">
         <div class="content-box">
                     <h1 class="province-name">@(Model.HasData ? Model.Name : "Chưa chọn tỉnh thành")</h1>
@@ -61,6 +61,7 @@
         </div>
       </div>
 
+      <!-- Khung hình ảnh -->
       <div class="gallery">
         <div class="main-image">
           <div class="content-box">
@@ -92,9 +93,10 @@
       </div>
     </div>
 
-    <script src="script/vietnam_provinces.js?v=2026-06-24-contact-ai-v2"></script>
-    <script src="script/detail_script.js?v=2026-06-24-contact-ai-v2"></script>
-      <script src="/script/theme_toggle.js?v=2026-06-24-mini-nav-v4"></script>
+
+    <script src="script/vietnam_provinces.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+    <script src="script/detail_script.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+      <script src="/script/theme_toggle.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
 </body>
 </html>
 

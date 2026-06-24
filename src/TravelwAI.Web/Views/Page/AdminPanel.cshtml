@@ -6,13 +6,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin TravelwAI</title>
-  <link rel="icon" href="/logo/travelwai-paper-plane.webp" type="image/webp" />
-  <link rel="preload" as="image" href="/main_site_image/travelwai-bg-light.webp" />
-  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-24-contact-ai-v2" />
-  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-24-contact-ai-v2" />
-  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-24-contact-ai-v2" />
-  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-24-contact-ai-v2" />
+    <title>Admin TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-paper-plane.png" type="image/png" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-23-landing-tools-footer-dark-v4" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-23-landing-tools-footer-dark-v4" />
+<link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-23-landing-tools-footer-dark-v4" />
 </head>
 <body class="tour-admin-page admin-page" data-page="admin">
   @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "tour-sales")
@@ -51,29 +50,41 @@
 
     <section class="management-panel admin-tab-panel" id="tab-accounts">
       <div class="panel-header-row">
-        <div><h2>Quản lý tài khoản</h2></div>
+        <div>
+          <h2>Quản lý tài khoản</h2>
+        </div>
         <div class="sales-list-actions admin-panel-search-actions admin-account-list-actions">
           <button class="btn-primary btn-add-tour btn-change-avatar" id="changeAiAvatarButton" type="button">Thay đổi avatar</button>
           <input id="aiAvatarFile" type="file" accept="image/*" hidden />
-          <input id="siteBackgroundFile" type="file" accept="image/*" hidden />
           <div class="tour-search-box tour-search-box-small">
             <input id="accountSearchInput" type="search" placeholder="Tìm tài khoản..." autocomplete="off" />
             <button class="btn-soft btn-clear-tour-search" id="clearAccountSearch" type="button">Xóa</button>
           </div>
         </div>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap table-scroll-5">
         <table>
-          <thead><tr><th>Tài khoản</th><th>Vai trò</th><th>Trạng thái</th><th>Ưu đãi</th><th>Ngày tạo</th><th>Thao tác</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Tài khoản</th>
+              <th>Vai trò</th>
+              <th>Trạng thái</th>
+              <th>Ưu đãi</th>
+              <th>Ngày tạo</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
           <tbody id="accountTableBody"><tr><td colspan="6" class="empty-line">Đang tải...</td></tr></tbody>
         </table>
       </div>
     </section>
 
     <section class="management-panel admin-tab-panel" id="tab-tours" style="display:none">
-      <div class="panel-header-row sales-list-header">
-        <div><h2>Quản lý tour</h2></div>
-        <div class="sales-list-actions">
+      <div class="panel-header-row">
+        <div>
+          <h2>Quản lý tour</h2>
+        </div>
+        <div class="sales-list-actions admin-panel-search-actions admin-tour-list-actions">
           <button class="btn-primary btn-add-tour" type="button" onclick="openTourModal()">Thêm tour</button>
           <div class="tour-search-box tour-search-box-small">
             <input id="tourSearchInput" type="search" placeholder="Tìm tour..." autocomplete="off" />
@@ -83,7 +94,11 @@
       </div>
       <div class="table-wrap table-scroll-5">
         <table>
-          <thead><tr><th>Tour</th><th>Điểm đến</th><th>Thời gian</th><th>Giá</th><th>Chỗ</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Tour</th><th>Điểm đến</th><th>Thời gian</th><th>Giá</th><th>Chỗ</th><th>Trạng thái</th><th>Thao tác</th>
+            </tr>
+          </thead>
           <tbody id="tourTableBody"><tr><td colspan="7" class="empty-line">Đang tải tour...</td></tr></tbody>
         </table>
       </div>
@@ -91,15 +106,21 @@
 
     <section class="management-panel admin-tab-panel" id="tab-schedules" style="display:none">
       <div class="panel-header-row">
-        <div><h2>Quản lý lịch trình</h2></div>
-        <div class="tour-search-box tour-search-box-small">
-          <input id="scheduleSearchInput" type="search" placeholder="Tìm lịch trình..." autocomplete="off" />
-          <button class="btn-soft btn-clear-tour-search" id="clearScheduleSearch" type="button">Xóa</button>
+        <div>
+          <h2>Quản lý lịch trình</h2>
+        </div>
+        <div class="sales-list-actions admin-panel-search-actions admin-schedule-list-actions">
+          <div class="tour-search-box tour-search-box-small">
+            <input id="scheduleSearchInput" type="search" placeholder="Tìm lịch trình..." autocomplete="off" />
+            <button class="btn-soft btn-clear-tour-search" id="clearScheduleSearch" type="button">Xóa</button>
+          </div>
         </div>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap table-scroll-5">
         <table>
-          <thead><tr><th>Tên lịch trình</th><th>Người tạo</th><th>Thời gian</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+          <thead>
+            <tr><th>Tên lịch trình</th><th>Người tạo</th><th>Thời gian</th><th>Trạng thái</th><th>Thao tác</th></tr>
+          </thead>
           <tbody id="scheduleTableBody"><tr><td colspan="5" class="empty-line">Đang tải lịch trình...</td></tr></tbody>
         </table>
       </div>
@@ -107,19 +128,23 @@
 
     <section class="management-panel admin-tab-panel" id="tab-plan-statuses" style="display:none">
       <div class="panel-header-row">
-        <div><h2>Quản lý trạng thái kế hoạch</h2></div>
-        <div class="sales-list-actions">
-          <button class="btn-primary btn-add-tour" type="button" onclick="openPlanStatusOptionModal()">Thêm trạng thái</button>
-          <button class="btn-soft btn-add-tour" type="button" onclick="openTravelTagModal()">Thêm tag</button>
+        <div>
+          <h2>Quản lý trạng thái kế hoạch</h2>
+                  </div>
+        <div class="sales-list-actions admin-panel-search-actions admin-plan-status-list-actions">
+          <button class="btn-primary btn-admin-add-action" type="button" onclick="openPlanStatusOptionModal()">Thêm trạng thái</button>
+          <button class="btn-primary btn-admin-add-action" type="button" onclick="openTravelTagModal()">Thêm tag</button>
           <div class="tour-search-box tour-search-box-small">
             <input id="planStatusSearchInput" type="search" placeholder="Tìm trạng thái..." autocomplete="off" />
             <button class="btn-soft btn-clear-tour-search" id="clearPlanStatusSearch" type="button">Xóa</button>
           </div>
         </div>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap table-scroll-5">
         <table>
-          <thead><tr><th>Trạng thái</th><th>Tag áp dụng</th><th>Cách khớp</th><th>Hiển thị</th><th>Thao tác</th></tr></thead>
+          <thead>
+            <tr><th>Trạng thái</th><th>Tag áp dụng</th><th>Cách khớp</th><th>Hiển thị</th><th>Thao tác</th></tr>
+          </thead>
           <tbody id="planStatusTableBody"><tr><td colspan="5" class="empty-line">Đang tải trạng thái...</td></tr></tbody>
         </table>
       </div>
@@ -127,15 +152,21 @@
 
     <section class="management-panel admin-tab-panel" id="tab-province-tags" style="display:none">
       <div class="panel-header-row">
-        <div><h2>Thông tin tỉnh thành và tag du lịch</h2></div>
-        <div class="tour-search-box tour-search-box-small">
-          <input id="provinceTagSearchInput" type="search" placeholder="Tìm tỉnh thành..." autocomplete="off" />
-          <button class="btn-soft btn-clear-tour-search" id="clearProvinceTagSearch" type="button">Xóa</button>
+        <div>
+          <h2>Thông tin tỉnh thành và tag du lịch</h2>
+                  </div>
+        <div class="sales-list-actions admin-panel-search-actions admin-province-list-actions">
+          <div class="tour-search-box tour-search-box-small">
+            <input id="provinceTagSearchInput" type="search" placeholder="Tìm tỉnh thành..." autocomplete="off" />
+            <button class="btn-soft btn-clear-tour-search" id="clearProvinceTagSearch" type="button">Xóa</button>
+          </div>
         </div>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap table-scroll-5">
         <table>
-          <thead><tr><th>Tỉnh/thành</th><th>Khu vực</th><th>Tag</th><th>Thao tác</th></tr></thead>
+          <thead>
+            <tr><th>Tỉnh/thành</th><th>Khu vực</th><th>Tag</th><th>Thao tác</th></tr>
+          </thead>
           <tbody id="provinceTagTableBody"><tr><td colspan="4" class="empty-line">Đang tải tỉnh thành...</td></tr></tbody>
         </table>
       </div>
@@ -143,18 +174,22 @@
 
     <section class="management-panel admin-tab-panel" id="tab-posts" style="display:none">
       <div class="panel-header-row">
-        <div><h2>Quản lý bài viết</h2></div>
-        <div class="sales-list-actions">
-          <button class="btn-primary btn-add-tour" type="button" onclick="openPostModal()">Thêm bài viết</button>
+        <div>
+          <h2>Quản lý bài viết</h2>
+        </div>
+        <div class="sales-list-actions admin-panel-search-actions admin-post-list-actions">
+          <button class="btn-primary btn-admin-add-action" type="button" onclick="openPostModal()">Thêm bài viết</button>
           <div class="tour-search-box tour-search-box-small">
             <input id="postSearchInput" type="search" placeholder="Tìm bài viết..." autocomplete="off" />
             <button class="btn-soft btn-clear-tour-search" id="clearAdminPostSearch" type="button">Xóa</button>
           </div>
         </div>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap table-scroll-5">
         <table>
-          <thead><tr><th>Bài viết</th><th>Tháng</th><th>Lễ hội</th><th>Tài khoản</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+          <thead>
+            <tr><th>Bài viết</th><th>Tháng</th><th>Lễ hội</th><th>Tài khoản</th><th>Trạng thái</th><th>Thao tác</th></tr>
+          </thead>
           <tbody id="postTableBody"><tr><td colspan="6" class="empty-line">Đang tải bài viết...</td></tr></tbody>
         </table>
       </div>
@@ -166,25 +201,35 @@
       <h2>Sửa tài khoản</h2>
       <input type="hidden" id="accountId" />
       <div class="form-grid">
-        <div class="form-group"><label>Email</label><input id="accountEmail" readonly /></div>
+        <div class="form-group"><label>Email</label><input id="accountEmail" disabled /></div>
         <div class="form-group"><label>Tên hiển thị</label><input id="accountUsername" /></div>
         <div class="form-group"><label>Vai trò</label><select id="accountRole"><option>User</option><option>Tour Sales</option><option>Admin</option></select></div>
-        <div class="form-group"><label>Ưu đãi</label><input id="accountOfferDiscount" readonly /></div>
-        <label class="check-row"><input id="accountLocked" type="checkbox" /> Khóa tài khoản</label>
+        <div class="form-group"><label>Ưu đãi</label><input id="accountOfferDiscount" disabled /></div>
+        <div class="form-group full account-lock-group">
+          <label class="account-lock-toggle" for="accountLocked">
+            <input id="accountLocked" type="checkbox" />
+            <span class="account-lock-box" aria-hidden="true"></span>
+            <span class="account-lock-text">Khóa tài khoản</span>
+          </label>
+        </div>
       </div>
-      <div class="modal-actions"><button class="btn-soft" type="button" onclick="closeAccountModal()">Đóng</button><button class="btn-primary" type="submit">Lưu tài khoản</button></div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closeAccountModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Lưu tài khoản</button>
+      </div>
     </form>
   </div>
 
   <div class="form-modal" id="aiAvatarModal">
-    <div class="form-card">
-      <h2>Thay đổi avatar và ảnh nền</h2>
-      <div class="form-grid">
-        <div class="form-group full"><label>Avatar AI</label><div class="modal-actions"><button class="btn-primary" type="button" onclick="chooseAiAvatar('travelwai')">Quản lý TravelwAI</button><button class="btn-soft" type="button" onclick="chooseAiAvatar('travelwinne')">Hướng dẫn viên Travelwinne</button></div></div>
-        <div class="form-group full"><label>Ảnh nền website</label><div class="modal-actions"><button class="btn-primary" type="button" onclick="chooseSiteBackground('light')">Nền sáng</button><button class="btn-soft" type="button" onclick="chooseSiteBackground('dark')">Nền tối</button></div></div>
+    <div class="form-card ai-avatar-card">
+      <h2>Thay đổi avatar AI</h2>
+      <div class="ai-avatar-actions">
+        <button class="btn-primary btn-add-tour" type="button" onclick="chooseAiAvatar('travelwai')">Quản lý TravelwAI</button>
+        <button class="btn-primary btn-add-tour" type="button" onclick="chooseAiAvatar('travelwinne')">Hướng dẫn viên Travelwinne</button>
       </div>
-      <p class="empty-line">Ảnh sẽ tự chuyển sang WebP.</p>
-      <div class="modal-actions"><button class="btn-soft" type="button" onclick="closeAiAvatarModal()">Đóng</button></div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closeAiAvatarModal()">Đóng</button>
+      </div>
     </div>
   </div>
 
@@ -193,8 +238,8 @@
       <h2 id="tourModalTitle">Thêm tour</h2>
       <input type="hidden" id="tourId" />
       <div class="form-grid">
-        <div class="form-group"><label>Tên tour</label><input id="tourName" required placeholder="VD: Tour Đà Lạt 3 ngày 2 đêm" /></div>
-        <div class="form-group"><label>Tài khoản</label><select id="tourSalesName"><option value="">Chọn tài khoản</option></select></div>
+        <div class="form-group"><label>Tên tour</label><input id="tourName" required /></div>
+        <div class="form-group"><label>Tài khoản</label><select id="tourSalesName" required><option value="">Chọn tài khoản</option></select></div>
         <div class="form-group"><label>Điểm đến</label><input id="tourDestination" /></div>
         <div class="form-group"><label>Thời lượng</label><input id="tourDuration" /></div>
         <div class="form-group"><label>Từ ngày</label><input id="tourStartDate" type="date" /></div>
@@ -203,10 +248,13 @@
         <div class="form-group"><label>Tổng chỗ</label><input id="tourSlots" type="number" min="0" /></div>
         <div class="form-group"><label>Đã bán</label><input id="tourSold" type="number" min="0" /></div>
         <div class="form-group"><label>Trạng thái</label><select id="tourStatus"><option>Đang bán</option><option>Tạm dừng</option><option>Đã bán</option></select></div>
-        <div class="form-group full"><label>Ảnh URL</label><div class="image-url-field"><input id="tourImage" placeholder="/main_site_image/back1.webp hoặc link ảnh" /><button class="image-upload-icon" id="tourImageUploadButton" type="button" title="Đính kèm tệp ảnh" aria-label="Đính kèm tệp ảnh">📎</button><input id="tourImageFile" type="file" accept="image/*" hidden /></div><small id="tourImageFileName"></small></div>
-        <div class="form-group full"><label>Mô tả</label><textarea id="tourDescription" rows="4"></textarea></div>
+        <div class="form-group full"><label>Ảnh URL</label><div class="image-url-field"><input id="tourImage" placeholder="/main_site_image/back1.png hoặc link ảnh" /><button class="image-upload-icon" id="tourImageUploadButton" type="button" title="Đính kèm tệp ảnh" aria-label="Đính kèm tệp ảnh">📎</button><input id="tourImageFile" type="file" accept="image/*" hidden /></div><small class="form-help" id="tourImageFileName"></small></div>
+        <div class="form-group full"><label>Mô tả</label><textarea id="tourDescription" rows="3"></textarea></div>
       </div>
-      <div class="modal-actions"><button class="btn-soft" type="button" onclick="closeTourModal()">Đóng</button><button class="btn-primary" type="submit">Lưu tour</button></div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closeTourModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Lưu tour</button>
+      </div>
     </form>
   </div>
 
@@ -216,15 +264,24 @@
       <input type="hidden" id="planStatusOptionOriginalKey" />
       <input type="hidden" id="planStatusOptionKey" />
       <div class="form-grid">
-        <div class="form-group"><label>Tên hiển thị</label><input id="planStatusOptionLabel" /></div>
+        <div class="form-group"><label>Tên hiển thị</label><input id="planStatusOptionLabel" placeholder="Đi biển" required /></div>
         <div class="form-group"><label>Hiển thị</label><select id="planStatusOptionEnabled"><option value="true">Hiện</option><option value="false">Ẩn</option></select></div>
-        <div class="form-group"><label>Thứ tự</label><input id="planStatusOptionOrder" type="number" /></div>
+        <div class="form-group"><label>Thứ tự</label><input id="planStatusOptionOrder" type="number" min="1" value="999" /></div>
         <div class="form-group"><label>Màu trạng thái</label><input id="planStatusOptionColor" type="color" value="#6366f1" /></div>
-        <div class="form-group full"><label>Tag áp dụng</label><div id="planStatusTagCheckboxes" class="admin-tag-checkboxes"></div></div>
-        <label class="check-row full"><input id="planStatusOptionMatchAll" type="checkbox" /> Bắt buộc khớp tất cả tag</label>
+        <div class="form-group full"><label>Tag áp dụng</label><div class="tag-checkbox-grid" id="planStatusTagCheckboxes"></div></div>
+        <div class="form-group full account-lock-group">
+          <label class="account-lock-toggle" for="planStatusOptionMatchAll">
+            <input id="planStatusOptionMatchAll" type="checkbox" />
+            <span class="account-lock-box" aria-hidden="true"></span>
+            <span class="account-lock-text">Bắt buộc khớp tất cả tag</span>
+          </label>
+        </div>
         <div class="form-group full"><label>Mô tả</label><textarea id="planStatusOptionDescription" rows="3"></textarea></div>
       </div>
-      <div class="modal-actions"><button class="btn-soft" type="button" onclick="closePlanStatusOptionModal()">Đóng</button><button class="btn-primary" type="submit">Lưu trạng thái</button></div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closePlanStatusOptionModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Lưu trạng thái</button>
+      </div>
     </form>
   </div>
 
@@ -232,11 +289,14 @@
     <form class="form-card" id="travelTagForm">
       <h2>Thêm tag du lịch</h2>
       <div class="form-grid">
-        <div class="form-group"><label>Tên tag</label><input id="travelTagName" /></div>
+        <div class="form-group"><label>Tên tag</label><input id="travelTagName" placeholder="Ví dụ: ẩm thực" required /></div>
         <div class="form-group"><label>Màu tag</label><input id="travelTagColor" type="color" value="#6366f1" /></div>
-        <div class="form-group full"><label>Tag hiện có</label><div id="travelTagExistingList"></div></div>
+        <div class="form-group full"><label>Tag hiện có</label><div class="admin-existing-tag-list" id="travelTagExistingList"></div></div>
       </div>
-      <div class="modal-actions"><button class="btn-soft" type="button" onclick="closeTravelTagModal()">Đóng</button><button class="btn-primary" type="submit">Lưu tag</button></div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closeTravelTagModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Lưu tag</button>
+      </div>
     </form>
   </div>
 
@@ -246,15 +306,20 @@
       <input type="hidden" id="provinceTagId" />
       <input type="hidden" id="provinceTagProvinceId" />
       <div class="form-grid">
-        <div class="form-group"><label>Tỉnh/thành</label><input id="provinceTagName" /></div>
+        <div class="form-group"><label>Tỉnh/thành</label><input id="provinceTagName" required /></div>
         <div class="form-group"><label>Khu vực</label><input id="provinceTagArea" /></div>
-        <div class="form-group full"><label>Vùng</label><input id="provinceTagRegion" /></div>
-        <div class="form-group full"><label>Tag du lịch</label><div id="provinceTagCheckboxes" class="admin-tag-checkboxes"></div></div>
-        <div class="form-group full"><label>Mô tả</label><textarea id="provinceTagDescription" rows="4"></textarea></div>
+        <div class="form-group"><label>Vùng</label><input id="provinceTagRegion" /></div>
+        <div class="form-group full"><label>Tag du lịch</label><div class="tag-checkbox-grid" id="provinceTagCheckboxes"></div></div>
+        <div class="form-group full"><label>Mô tả</label><textarea id="provinceTagDescription" rows="3"></textarea></div>
       </div>
-      <div class="modal-actions"><button class="btn-soft" type="button" onclick="closeProvinceTagModal()">Đóng</button><button class="btn-primary" type="submit">Lưu tỉnh thành</button></div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closeProvinceTagModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Lưu tỉnh thành</button>
+      </div>
     </form>
   </div>
+
+
 
   <div class="form-modal" id="postModal">
     <form class="form-card" id="postForm">
@@ -263,27 +328,31 @@
       <input type="hidden" id="postMonth" />
       <div class="form-grid">
         <div class="form-group"><label>Lễ hội/ngày lễ</label><input id="postFestival" placeholder="Nhập lễ hội/ngày lễ rồi bấm AI" /></div>
-        <div class="form-group"><label>Tiêu đề</label><input id="postTitle" /></div>
-        <div class="form-group"><label>Tài khoản</label><select id="postAuthor"><option value="">Chọn tài khoản</option></select></div>
+        <div class="form-group"><label>Tiêu đề</label><input id="postTitle" placeholder="AI sẽ tự tạo từ Lễ hội/ngày lễ" /></div>
+        <div class="form-group"><label>Tài khoản</label><select id="postAuthor" required><option value="">Chọn tài khoản</option></select></div>
         <div class="form-group"><label>Trạng thái</label><select id="postStatus"><option>Hiển thị</option><option>Ẩn</option></select></div>
-        <div class="form-group"><label>Tỉnh thành</label><input id="postProvince" /></div>
-        <div class="form-group full"><label>Từ khóa tour phù hợp</label><input id="postTourKeywords" /></div>
+        <div class="form-group"><label>Tỉnh thành</label><input id="postProvince" placeholder="Ví dụ: Huế, Hà Nội" /></div>
+        <div class="form-group full"><label>Từ khóa tour phù hợp</label><input id="postTourKeywords" placeholder="Ví dụ: Huế, Festival, di sản" /></div>
         <div class="form-group full"><label>Tóm tắt</label><textarea id="postSummary" rows="3"></textarea></div>
-        <div class="form-group full"><label>Nội dung</label><div class="content-ai-field"><textarea id="postContent" rows="5"></textarea><button class="ai-content-button" id="postAiButton" type="button" formnovalidate title="Tạo bằng AI" aria-label="Tạo bằng AI">✨</button></div></div>
-        <div class="form-group full"><label>Ảnh minh hoạ</label><div class="image-url-field image-url-field-textarea"><textarea id="postImageUrls" rows="2" placeholder="Mỗi dòng một URL ảnh"></textarea><button class="image-upload-icon" id="postImageUploadButton" type="button" title="Đính kèm tệp ảnh" aria-label="Đính kèm tệp ảnh">📎</button><input id="postImageFiles" type="file" accept="image/*" multiple hidden /></div><div id="postImagePreview" class="post-image-preview"></div><small>Có thể nhập URL ảnh hoặc đính kèm nhiều tệp bằng nút trong ô.</small></div>
+        <div class="form-group full"><label>Nội dung</label><div class="content-ai-field"><textarea id="postContent" rows="5"></textarea><button class="ai-content-button" id="postAiButton" type="button" formnovalidate title="Tạo tiêu đề, tóm tắt và nội dung văn hoá lịch sử thật từ lễ hội/ngày lễ" aria-label="Tạo tiêu đề, tóm tắt và nội dung văn hoá lịch sử bằng AI">✨</button></div></div>
+        <div class="form-group full"><label>Ảnh minh hoạ</label><div class="image-url-field image-url-field-textarea"><textarea id="postImageUrls" rows="2" placeholder="Mỗi dòng một URL ảnh"></textarea><button class="image-upload-icon" id="postImageUploadButton" type="button" title="Đính kèm tệp ảnh" aria-label="Đính kèm tệp ảnh">📎</button><input id="postImageFiles" type="file" accept="image/*" multiple hidden /></div><small class="form-help">Có thể nhập URL ảnh hoặc đính kèm nhiều tệp bằng nút trong ô.</small><div class="post-image-preview" id="postImagePreview"></div></div>
       </div>
-      <div class="modal-actions"><button class="btn-soft" type="button" onclick="closePostModal()">Đóng</button><button class="btn-primary" type="submit">Lưu bài viết</button></div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closePostModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Lưu bài viết</button>
+      </div>
     </form>
   </div>
 
   <div class="toast" id="tourToast"></div>
 
-  <script src="/script/accounts.js?v=2026-06-24-contact-ai-v2"></script>
-  <script src="/script/image_upload_optimizer.js?v=2026-06-24-contact-ai-v2"></script>
-  <script src="/script/tour_sales.js?v=2026-06-24-contact-ai-v2"></script>
-  <script src="/script/admin_panel.js?v=2026-06-24-contact-ai-v2"></script>
-  <script src="/script/travelwai_contact_panel.js?v=2026-06-24-contact-ai-v2"></script>
-  <script src="/script/travelwai_notification_panel.js?v=2026-06-24-contact-ai-v2"></script>
-  <script src="/script/theme_toggle.js?v=2026-06-24-mini-nav-v4"></script>
+  <script src="/script/accounts.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+  <script src="/script/tour_sales.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+  <script src="/script/admin_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+  <script src="/script/travelwai_contact_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+    <script src="/script/theme_toggle.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
 </body>
 </html>
+
+

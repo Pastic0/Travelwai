@@ -7,30 +7,57 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bài viết - TravelwAI</title>
-  <link rel="icon" href="/logo/travelwai-paper-plane.webp" type="image/webp" />
-  <link rel="preload" as="image" href="/main_site_image/travelwai-bg-light.webp" />
-  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-24-contact-ai-v2" />
-  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-24-contact-ai-v2" />
-  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-24-contact-ai-v2" />
-  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-24-contact-ai-v2" />
+  <link rel="icon" href="/logo/travelwai-paper-plane.png" type="image/png" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-23-landing-tools-footer-dark-v4" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-23-landing-tools-footer-dark-v4" />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-23-landing-tools-footer-dark-v4" />
 </head>
 <body class="tour-admin-page posts-page" data-page="posts">
   @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "posts")
 
   <main class="tour-admin-shell posts-shell">
     <section class="tour-admin-hero posts-hero">
-      <div><span class="eyebrow">Bài viết TravelwAI</span><h1>Bài viết</h1></div>
+      <div>
+        <span class="eyebrow">Bài viết TravelwAI</span>
+        <h1>Bài viết</h1>
+      </div>
       <div class="posts-hero-actions">
-        <button type="button" id="postTourOfferBtn" class="tour-offer-btn"><svg class="tour-offer-btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8"></path><path d="M2 8h20v4H2z"></path><path d="M12 8v13"></path><path d="M12 8H8.5A2.5 2.5 0 1 1 12 5.5V8z"></path><path d="M12 8h3.5A2.5 2.5 0 1 0 12 5.5V8z"></path></svg><span>Ưu đãi</span></button>
+        <button type="button" id="postTourOfferBtn" class="tour-offer-btn">
+          <svg class="tour-offer-btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8"></path>
+            <path d="M2 8h20v4H2z"></path>
+            <path d="M12 8v13"></path>
+            <path d="M12 8H8.5A2.5 2.5 0 1 1 12 5.5V8z"></path>
+            <path d="M12 8h3.5A2.5 2.5 0 1 0 12 5.5V8z"></path>
+          </svg>
+          <span>Ưu đãi</span>
+        </button>
         <button class="post-month-pill post-add-pill" id="openPublicPostModalButton" type="button">Thêm bài viết</button>
       </div>
     </section>
 
-    <section class="tour-search-panel public-tour-search-panel"><div class="tour-search-box"><input id="postSearchInput" type="search" placeholder="Tìm bài viết theo lễ hội, tỉnh thành, ngày lễ..." autocomplete="off" /><button class="btn-soft btn-clear-tour-search" id="clearPostSearch" type="button">Xóa</button></div></section>
+    <section class="tour-search-panel public-tour-search-panel">
+      <div class="tour-search-box">
+        <input id="postSearchInput" type="search" placeholder="Tìm bài viết theo lễ hội, tỉnh thành, ngày lễ..." autocomplete="off" />
+        <button class="btn-soft btn-clear-tour-search" id="clearPostSearch" type="button">Xóa</button>
+      </div>
+    </section>
 
     <section class="management-panel posts-month-panel">
-      <div class="panel-header-row"><div><h2>Bài viết nổi bật</h2></div><div class="post-view-actions"><button class="post-view-toggle post-my-toggle" id="myPostsFilterButton" type="button" title="Xem bài viết của tôi" aria-label="Xem bài viết của tôi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button></div></div>
-      <div class="posts-grid" id="postsGrid"><div class="empty-line">Đang tải bài viết...</div></div>
+      <div class="panel-header-row">
+        <div>
+          <h2>Bài viết nổi bật</h2>
+        </div>
+        <div class="post-view-actions">
+          <button class="post-view-toggle post-my-toggle" id="myPostsFilterButton" type="button" title="Xem bài viết của tôi" aria-label="Xem bài viết của tôi">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="posts-grid" id="postsGrid">
+        <div class="empty-line">Đang tải bài viết...</div>
+      </div>
     </section>
   </main>
 
@@ -40,7 +67,9 @@
       <div class="post-detail-meta" id="postDetailMeta"></div>
       <div class="post-detail-images" id="postDetailImages"></div>
       <p id="postDetailContent"></p>
-      <div class="modal-actions"><button class="btn-soft" type="button" onclick="closePostDetailModal()">Đóng</button></div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closePostDetailModal()">Đóng</button>
+      </div>
     </div>
   </div>
 
@@ -57,27 +86,43 @@
         <div class="form-group full"><label>Từ khóa tour phù hợp</label><input id="publicPostTourKeywords" placeholder="Ví dụ: Huế, Festival, di sản" /></div>
         <div class="form-group full"><label>Tóm tắt</label><textarea id="publicPostSummary" rows="3"></textarea></div>
         <div class="form-group full"><label>Nội dung</label><div class="content-ai-field"><textarea id="publicPostContent" rows="5" required></textarea><button class="ai-content-button" id="publicPostAiButton" type="button" formnovalidate title="Tạo tiêu đề, tóm tắt và nội dung khám phá văn hóa từ lễ hội/ngày lễ" aria-label="Tạo tiêu đề, tóm tắt và nội dung bằng AI">✨</button></div></div>
-        <div class="form-group full"><label>Ảnh URL</label><div class="image-url-field image-url-field-textarea"><textarea id="publicPostImageUrls" rows="2" placeholder="Mỗi dòng một URL ảnh"></textarea><button class="image-upload-icon" id="publicPostImageButton" type="button" title="Đính kèm tệp ảnh" aria-label="Đính kèm tệp ảnh">📎</button><input id="publicPostImages" type="file" accept="image/*" multiple hidden /></div><div id="publicPostImagePreview" class="post-image-preview"></div><small>Có thể nhập URL ảnh hoặc đính kèm nhiều tệp bằng nút trong ô.</small></div>
+        <div class="form-group full"><label>Ảnh URL</label><div class="image-url-field image-url-field-textarea"><textarea id="publicPostImageUrls" rows="2" placeholder="Mỗi dòng một URL ảnh"></textarea><button class="image-upload-icon" id="publicPostImageButton" type="button" title="Đính kèm tệp ảnh" aria-label="Đính kèm tệp ảnh">📎</button><input id="publicPostImages" type="file" accept="image/*" multiple hidden /></div><small class="form-help">Có thể nhập URL ảnh hoặc đính kèm nhiều tệp bằng nút trong ô.</small><div class="post-image-preview" id="publicPostImagePreview"></div></div>
       </div>
-      <div class="modal-actions"><button class="btn-soft" type="button" onclick="closePublicPostModal()">Đóng</button><button class="btn-primary" id="publicPostSubmitButton" type="submit">Lưu bài viết</button></div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closePublicPostModal()">Đóng</button>
+        <button class="btn-primary" id="publicPostSubmitButton" type="submit">Lưu bài viết</button>
+      </div>
     </form>
   </div>
 
   <div class="form-modal tour-offer-modal" id="postTourOfferModal">
     <div class="form-card tour-offer-card">
-      <div class="tour-offer-modal-header"><div><h2>Ưu đãi</h2></div><button type="button" class="tour-offer-close" onclick="closePostTourOfferModal()" aria-label="Đóng">&times;</button></div>
-      <div class="tour-offer-progress-wrap"><div class="tour-offer-progress-info"><strong id="postTourOfferDiscountText">Giảm 0%</strong><span id="postTourOfferProgressText">0/1 bài viết</span></div><div class="tour-offer-progress-bar"><span id="postTourOfferProgressFill"></span></div></div>
+      <div class="tour-offer-modal-header">
+        <div>
+          <h2>Ưu đãi</h2>
+        </div>
+        <button type="button" class="tour-offer-close" onclick="closePostTourOfferModal()" aria-label="Đóng">&times;</button>
+      </div>
+
+      <div class="tour-offer-progress-wrap">
+        <div class="tour-offer-progress-info">
+          <strong id="postTourOfferDiscountText">Giảm 0%</strong>
+          <span id="postTourOfferProgressText">0/1 bài viết</span>
+        </div>
+        <div class="tour-offer-progress-bar">
+          <span id="postTourOfferProgressFill"></span>
+        </div>
+      </div>
+
       <div class="tour-offer-invite-list" id="postTourOfferInfo"></div>
     </div>
   </div>
 
   <div class="toast" id="tourToast"></div>
-
-  <script src="/script/accounts.js?v=2026-06-24-contact-ai-v2"></script>
-  <script src="/script/image_upload_optimizer.js?v=2026-06-24-contact-ai-v2"></script>
-  <script src="/script/posts.js?v=2026-06-24-contact-ai-v2"></script>
-  <script src="/script/travelwai_contact_panel.js?v=2026-06-24-contact-ai-v2"></script>
-  <script src="/script/travelwai_notification_panel.js?v=2026-06-24-contact-ai-v2"></script>
-  <script src="/script/theme_toggle.js?v=2026-06-24-mini-nav-v4"></script>
+  <script src="/script/accounts.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+  <script src="/script/posts.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+  <script src="/script/travelwai_contact_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+    <script src="/script/theme_toggle.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
 </body>
 </html>
