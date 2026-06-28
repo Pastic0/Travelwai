@@ -631,6 +631,11 @@
     return true;
   }
 
+
+  function getMiniChatManagerFallbackReply() {
+    return "Chưa nhận diện được lệnh. Bạn có thể nhắn: đăng nhập, đăng ký, bản đồ, lịch trình, kế hoạch, bảng giá, giỏ hàng, thanh toán, tour du lịch, bài viết, nhắn tin, đổi mật khẩu hoặc đăng xuất.";
+  }
+
   function pushMiniChat(role, content) {
     if (!miniChatHistories[activeMiniChatKey]) miniChatHistories[activeMiniChatKey] = [];
     miniChatHistories[activeMiniChatKey].push({ role: role === "user" ? "user" : "assistant", content: content || "" });
@@ -651,6 +656,12 @@
     renderMiniChatMessages();
 
     if (tryHandleMiniChatManagerCommand(text)) {
+      renderMiniChatMessages();
+      return;
+    }
+
+    if (activeMiniChatKey === "travelwai") {
+      pushMiniChat("assistant", getMiniChatManagerFallbackReply());
       renderMiniChatMessages();
       return;
     }
@@ -692,7 +703,11 @@
         window.TravelwAIPricingPopup.showFreeAiPopup(error.message);
         return;
       }
-      pushMiniChat("assistant", error.message || "Không gửi được tin nhắn.");
+      const rawError = String(error.message || "");
+      const message = /429|quá tải|qua tai|giới hạn|gioi han|rate|limit|openrouter|model/i.test(rawError)
+        ? "Hiện chưa trả lời được. Bạn thử lại sau."
+        : (rawError || "Không gửi được tin nhắn.");
+      pushMiniChat("assistant", message);
     }).finally(function () {
       if (form) form.classList.remove("loading");
       renderMiniChatMessages();

@@ -344,16 +344,22 @@ function aggregateAdminAnalyticsRows(months, snakeKey, camelKey, take = 3, fixed
 }
 
 function formatAdminAnalyticsExample(item) {
-  if (!item || !item.label || !Number(item.count || 0)) return "chưa có dữ liệu";
+  if (!item || !item.label || !Number(item.count || 0)) return "";
   return `${item.label} (${Number(item.count || 0)} lượt)`;
 }
 
-function formatAdminAnalyticsExampleList(items) {
-  const list = (Array.isArray(items) ? items : []).filter(item => Number(item?.count || 0) > 0).slice(0, 3);
-  if (!list.length) return "chưa có dữ liệu";
-  const examples = list.map(formatAdminAnalyticsExample);
-  while (examples.length < 3) examples.push("chưa có dữ liệu");
-  return examples.map(escapeHtml).join("; ");
+function getAdminAnalyticsExampleList(items) {
+  return (Array.isArray(items) ? items : [])
+    .filter(item => Number(item?.count || 0) > 0)
+    .slice(0, 3)
+    .map(formatAdminAnalyticsExample)
+    .filter(Boolean);
+}
+
+function renderAdminAnalyticsInsight(title, text, items) {
+  const examples = getAdminAnalyticsExampleList(items);
+  if (!examples.length) return "";
+  return `<p><strong>${escapeHtml(title)}:</strong> ${escapeHtml(text)} <span>${examples.map(escapeHtml).join("; ")}.</span></p>`;
 }
 
 function showAdminAnalyticsAiSummary() {
@@ -364,40 +370,45 @@ function showAdminAnalyticsAiSummary() {
   const rows = [
     {
       title: "Tỉnh được tìm nhiều nhất",
-      text: "cho biết các tỉnh/thành được người dùng quan tâm nhiều khi mở chi tiết tỉnh hoặc hỏi AI.",
+      text: "dựa trên lượt mở chi tiết tỉnh, bấm Hỏi AI trong tỉnh và câu hỏi AI có nhắc đến tỉnh/thành. Ba mục dưới đây là các tỉnh có dữ liệu cao nhất trong năm.",
       items: aggregateAdminAnalyticsRows(months, "top_provinces", "topProvinces", 3)
     },
     {
       title: "Ngân sách phổ biến",
-      text: "cho biết khoảng ngân sách người dùng thường chọn khi lập kế hoạch hoặc đặt tour.",
+      text: "dựa trên ngân sách trong kế hoạch và đơn tour đã ghi nhận. Hệ thống chỉ hiển thị các khoảng có phát sinh lượt chọn.",
       items: aggregateAdminAnalyticsRows(months, "budget_ranges", "budgetRanges", 3, ADMIN_ANALYTICS_BUDGET_ORDER)
     },
     {
       title: "Loại tour đặt nhiều nhất",
-      text: "cho biết các tour có nhiều lượt đặt nhất trong dữ liệu đơn hàng.",
+      text: "dựa trên đơn tour có trong hệ thống. Nếu tour chưa có đơn thì mục này sẽ không tự tạo ví dụ.",
       items: aggregateAdminAnalyticsRows(months, "top_tours", "topTours", 3)
     },
     {
       title: "Du lịch theo nhóm",
-      text: "cho biết quy mô nhóm người dùng thường chọn khi đi du lịch.",
+      text: "dựa trên số người trong kế hoạch và đơn tour. Dữ liệu cho biết người dùng thường đi theo nhóm nhỏ, nhóm vừa hay nhóm đông.",
       items: aggregateAdminAnalyticsRows(months, "group_sizes", "groupSizes", 3, ADMIN_ANALYTICS_GROUP_ORDER)
     },
     {
       title: "Bài viết được xem nhiều nhất",
-      text: "cho biết bài viết được người dùng bấm xem nhiều nhất trên trang Bài viết.",
+      text: "dựa trên lượt bấm Xem bài viết. Ba mục dưới đây là các bài viết được xem nhiều nhất nếu đã có lượt xem.",
       items: aggregateAdminAnalyticsRows(months, "top_posts", "topPosts", 3)
     }
   ];
 
-  const hasData = rows.some(row => row.items.some(item => Number(item.count || 0) > 0));
+  const hasData = rows.some(row => getAdminAnalyticsExampleList(row.items).length > 0);
   if (!hasData) {
-    summary.textContent = "Chưa có dữ liệu để thống kê.";
+    summary.textContent = `Năm ${year} chưa có dữ liệu thống kê đủ để tạo nhận xét.`;
     return;
   }
 
+  const insightHtml = rows
+    .map(row => renderAdminAnalyticsInsight(row.title, row.text, row.items))
+    .filter(Boolean)
+    .join("");
+
   summary.innerHTML = `<div class="admin-analytics-ai-title">AI thống kê theo năm ${year}</div>
     <div class="admin-analytics-ai-text-list">
-      ${rows.map(row => `<p><strong>${escapeHtml(row.title)}:</strong> ${escapeHtml(row.text)} Ví dụ: ${formatAdminAnalyticsExampleList(row.items)}.</p>`).join("")}
+      ${insightHtml}
     </div>`;
 }
 

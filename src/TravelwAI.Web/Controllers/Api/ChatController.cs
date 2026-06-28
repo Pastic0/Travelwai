@@ -98,7 +98,7 @@ public sealed class ChatController : ApiControllerBase
         var apiKey = GetOpenRouterApiKey();
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            return StatusCode(500, new { success = false, detail = "Chưa cấu hình OpenRouter API key. Hãy đặt biến môi trường OpenRouter__ApiKey hoặc OPENROUTER_API_KEY trên Render." });
+            return StatusCode(500, new { success = false, detail = "Chưa cấu hình API key AI. Vui lòng kiểm tra cấu hình trên Render." });
         }
 
         var model = GetOpenRouterConfigValue("Model", "OPENROUTER_MODEL", "openrouter/free");
@@ -203,7 +203,7 @@ public sealed class ChatController : ApiControllerBase
             {
                 Console.WriteLine("===== OPENROUTER AI CHAT JSON PARSE ERROR =====");
                 Console.WriteLine(ex.Message);
-                return StatusCode(502, new { success = false, detail = "OpenRouter trả về dữ liệu không phải JSON hợp lệ.", raw = responseText });
+                return StatusCode(502, new { success = false, detail = "AI trả về dữ liệu không hợp lệ.", raw = responseText });
             }
 
             var answerPart = json?["choices"]?[0]?["message"]?["content"]?.ToString();
@@ -211,7 +211,7 @@ public sealed class ChatController : ApiControllerBase
 
             if (string.IsNullOrWhiteSpace(answerPart))
             {
-                return StatusCode(502, new { success = false, detail = "OpenRouter không trả về nội dung hợp lệ.", raw = responseText });
+                return StatusCode(502, new { success = false, detail = "AI chưa trả về nội dung hợp lệ.", raw = responseText });
             }
 
             if (fullAnswer.Length > 0)
@@ -447,7 +447,7 @@ public sealed class ChatController : ApiControllerBase
         var apiKey = GetOpenRouterApiKey();
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            return StatusCode(500, new { success = false, detail = "Chưa cấu hình OpenRouter API key. Hãy đặt biến môi trường OpenRouter__ApiKey hoặc OPENROUTER_API_KEY trên Render." });
+            return StatusCode(500, new { success = false, detail = "Chưa cấu hình API key AI. Vui lòng kiểm tra cấu hình trên Render." });
         }
 
         var model = GetOpenRouterConfigValue("Model", "OPENROUTER_MODEL", "openrouter/free");
@@ -523,14 +523,14 @@ public sealed class ChatController : ApiControllerBase
         {
             Console.WriteLine("===== OPENROUTER SCHEDULE PLAN JSON PARSE ERROR =====");
             Console.WriteLine(ex.Message);
-            return StatusCode(502, new { success = false, detail = "OpenRouter trả về dữ liệu lập lịch trình không phải JSON hợp lệ.", raw = responseText });
+            return StatusCode(502, new { success = false, detail = "AI trả về dữ liệu lập lịch trình không hợp lệ.", raw = responseText });
         }
 
         var answer = json?["choices"]?[0]?["message"]?["content"]?.ToString();
 
         if (string.IsNullOrWhiteSpace(answer))
         {
-            return StatusCode(502, new { success = false, detail = "OpenRouter không trả về nội dung lập lịch trình hợp lệ.", raw = responseText });
+            return StatusCode(502, new { success = false, detail = "AI chưa trả về nội dung lập lịch trình hợp lệ.", raw = responseText });
         }
 
         var aiResult = TryParseAiJsonObject(answer);
@@ -1417,20 +1417,20 @@ public sealed class ChatController : ApiControllerBase
 
         if (statusCode == 401)
         {
-            return "OpenRouter lỗi xác thực API key. Hãy kiểm tra lại biến môi trường OpenRouter__ApiKey hoặc OPENROUTER_API_KEY trên Render.";
+            return "AI chưa được cấu hình đúng. Vui lòng kiểm tra cấu hình API key.";
         }
 
         if (statusCode == 429 || message.Contains("rate", StringComparison.OrdinalIgnoreCase) || message.Contains("limit", StringComparison.OrdinalIgnoreCase))
         {
-            return "AI đang quá tải hoặc bị giới hạn lượt gọi, vui lòng thử lại sau hoặc đổi model OpenRouter.";
+            return "Hiện chưa trả lời được. Bạn thử lại sau.";
         }
 
         if (statusCode == 404 || message.Contains("unavailable", StringComparison.OrdinalIgnoreCase) || message.Contains("not found", StringComparison.OrdinalIgnoreCase))
         {
-            return "Model AI hiện không khả dụng. Hãy đổi OpenRouter:Model sang openrouter/free hoặc một model free còn hoạt động.";
+            return "Model AI hiện không khả dụng. Vui lòng kiểm tra lại cấu hình model.";
         }
 
-        return "OpenRouter lỗi: " + message;
+        return "Hiện chưa trả lời được. Bạn thử lại sau.";
     }
 
     [HttpGet("conversations")]

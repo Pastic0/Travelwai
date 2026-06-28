@@ -1040,6 +1040,7 @@ public sealed class AdminApiController : ApiControllerBase
             if (fixedOrder is not null)
             {
                 return query
+                    .Where(HasMetricCount)
                     .OrderByDescending(AnalyticsMetricCount)
                     .ThenBy(item => Array.IndexOf(fixedOrder, AnalyticsMetricLabel(item)))
                     .Take(take)
@@ -1057,6 +1058,7 @@ public sealed class AdminApiController : ApiControllerBase
         static string JoinExamples(List<Dictionary<string, object?>> metrics)
         {
             var examples = metrics
+                .Where(HasMetricCount)
                 .Take(3)
                 .Select(item =>
                 {
@@ -1068,7 +1070,14 @@ public sealed class AdminApiController : ApiControllerBase
                 })
                 .Where(text => !string.IsNullOrWhiteSpace(text))
                 .ToList();
-            return examples.Count == 0 ? "chưa có dữ liệu" : string.Join(", ", examples);
+            return examples.Count == 0 ? string.Empty : string.Join(", ", examples);
+        }
+
+        static void AddInsight(List<string> lines, string title, string note, List<Dictionary<string, object?>> metrics)
+        {
+            var examples = JoinExamples(metrics);
+            if (string.IsNullOrWhiteSpace(examples)) return;
+            lines.Add($"{title}: {note} {examples}.");
         }
 
         var topProvinces = AggregateDetails(yearMonths, "top_provinces", "topProvinces", 3);
@@ -1076,8 +1085,17 @@ public sealed class AdminApiController : ApiControllerBase
         var topTours = AggregateDetails(yearMonths, "top_tours", "topTours", 3);
         var groupSizes = AggregateDetails(yearMonths, "group_sizes", "groupSizes", 3, new[] { "1 đến 2 người", "3 đến 5 người", "5 đến 10 người" });
         var topPosts = AggregateDetails(yearMonths, "top_posts", "topPosts", 3);
+        var lines = new List<string>();
 
-        return $"Trong năm {yearStart.Year}, thống kê theo từng tháng cho thấy: tỉnh được tìm nhiều nhất gồm {JoinExamples(topProvinces)}. Ngân sách phổ biến gồm {JoinExamples(budgetRanges)}. Loại tour đặt nhiều nhất gồm {JoinExamples(topTours)}. Du lịch theo nhóm phổ biến gồm {JoinExamples(groupSizes)}. Bài viết được xem nhiều nhất gồm {JoinExamples(topPosts)}.";
+        AddInsight(lines, "Tỉnh được tìm nhiều nhất", "dựa trên lượt mở chi tiết tỉnh, bấm Hỏi AI và câu hỏi AI có nhắc đến tỉnh/thành:", topProvinces);
+        AddInsight(lines, "Ngân sách phổ biến", "dựa trên kế hoạch và đơn tour:", budgetRanges);
+        AddInsight(lines, "Loại tour đặt nhiều nhất", "dựa trên đơn tour:", topTours);
+        AddInsight(lines, "Du lịch theo nhóm", "dựa trên số người trong kế hoạch và đơn tour:", groupSizes);
+        AddInsight(lines, "Bài viết được xem nhiều nhất", "dựa trên lượt bấm Xem bài viết:", topPosts);
+
+        return lines.Count == 0
+            ? $"Năm {yearStart.Year} chưa có dữ liệu thống kê đủ để tạo nhận xét."
+            : $"Trong năm {yearStart.Year}, thống kê chỉ dựa trên dữ liệu đã ghi nhận trong hệ thống. " + string.Join(" ", lines);
     }
 
     private static Dictionary<string, object?> Metric(string label, int count, Dictionary<string, object?>? extra = null)

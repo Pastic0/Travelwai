@@ -18,7 +18,7 @@ let aiMessageSending = false;
 let outgoingFriendRequestKeys = new Set();
 let pendingAiContextByAssistant = {};
 const API_BASE_URL = "/api";
-const CLIENT_CACHE_VERSION = "2026-06-28-project-logic-audit-v28";
+const CLIENT_CACHE_VERSION = "2026-06-28-chatbot-local-manager-v32";
 const USERS_CACHE_TTL_MS = 5 * 60 * 1000;
 const FRIEND_CACHE_TTL_MS = 30 * 1000;
 const CONVERSATION_CACHE_TTL_MS = 15 * 1000;
@@ -2033,6 +2033,11 @@ function appendLocalAiAssistantReply(text, configValue = currentConversation || 
   return aiMessage;
 }
 
+
+function getTravelwaiManagerFallbackReply() {
+  return "Chưa nhận diện được lệnh. Bạn có thể nhắn: đăng nhập, đăng ký, bản đồ, lịch trình, kế hoạch, bảng giá, giỏ hàng, thanh toán, tour du lịch, bài viết, nhắn tin, đổi mật khẩu hoặc đăng xuất.";
+}
+
 function getLastTravelwaiManagerReplyText() {
   const messages = loadStoredAiMessages("travelwai");
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -2408,6 +2413,11 @@ async function sendAiMessage(options = {}) {
     return;
   }
 
+  if (aiKey === "travelwai") {
+    appendLocalAiAssistantReply(getTravelwaiManagerFallbackReply(), "travelwai");
+    return;
+  }
+
   try {
     setAiSendButtonLoading(true);
     const aiContext = buildAiContextForRequest(aiConfig, typedContent);
@@ -2459,15 +2469,15 @@ async function sendAiMessage(options = {}) {
   } catch (error) {
     console.error("Lỗi hỏi AI:", error);
     const errorMessage = String(error.message || "Không thể gọi AI. Vui lòng thử lại.");
-    const friendlyMessage = errorMessage.includes("429")
-      ? "AI đang quá tải hoặc bị giới hạn lượt gọi, vui lòng thử lại sau."
+    const friendlyMessage = /429|quá tải|qua tai|giới hạn|gioi han|rate|limit|openrouter|model/i.test(errorMessage)
+      ? "Hiện chưa trả lời được. Bạn thử lại sau."
       : errorMessage;
     if (/free|nâng cấp|nang cap|upgrade_required|free_ai_quota_exceeded/i.test(errorMessage) && window.TravelwAIPricingPopup?.showFreeAiPopup) {
       window.TravelwAIPricingPopup.showFreeAiPopup(errorMessage);
       return;
     }
     if (aiKey === "travelwai") {
-      appendLocalAiAssistantReply("Chưa nhận diện được lệnh. Bạn có thể nhắn: đăng nhập, đăng ký, bản đồ, lịch trình, kế hoạch, tour du lịch, bài viết, nhắn tin, đổi mật khẩu hoặc đăng xuất.", "travelwai");
+      appendLocalAiAssistantReply(getTravelwaiManagerFallbackReply(), "travelwai");
     } else if (options.background) {
       showMessagingToast(friendlyMessage, "error");
     } else {
