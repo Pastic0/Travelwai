@@ -20,6 +20,7 @@ public sealed class AdminApiController : ApiControllerBase
     private const string PlanTravelTagsCollection = "plan_travel_tags";
     private const string SalesLevelSettingsCollection = "sales_level_settings";
     private const string ProvinceSearchEventsCollection = "province_search_events";
+    private const string PostViewEventsCollection = "post_view_events";
     private const string SalesLevelSettingsDocumentId = "default";
     private const long MaxAvatarBytes = 10 * 1024 * 1024;
     private readonly IDataRepository _repo;
@@ -96,15 +97,16 @@ public sealed class AdminApiController : ApiControllerBase
         var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         var yearStart = new DateTime(now.Year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var provinceViews = await _repo.GetAllAsync(ProvinceSearchEventsCollection, limit: 3000);
+        var postViews = await _repo.GetAllAsync(PostViewEventsCollection, limit: 3000);
         var plans = await _repo.GetAllAsync("plans", limit: 3000);
         var orders = await _repo.GetAllAsync("tour_orders", limit: 3000);
         var tours = await _repo.GetAllAsync("tours", limit: 1000);
-        var monthStats = BuildAdminAnalyticsSnapshot(monthStart, monthStart.AddMonths(1), $"Tháng {monthStart.Month}/{monthStart.Year}", provinceViews, plans, orders, tours);
+        var monthStats = BuildAdminAnalyticsSnapshot(monthStart, monthStart.AddMonths(1), $"Tháng {monthStart.Month}/{monthStart.Year}", provinceViews, postViews, plans, orders, tours);
         var yearMonths = new List<Dictionary<string, object?>>();
         for (var month = 1; month <= 12; month++)
         {
             var start = new DateTime(now.Year, month, 1, 0, 0, 0, DateTimeKind.Utc);
-            yearMonths.Add(BuildAdminAnalyticsSnapshot(start, start.AddMonths(1), $"Tháng {month}", provinceViews, plans, orders, tours));
+            yearMonths.Add(BuildAdminAnalyticsSnapshot(start, start.AddMonths(1), $"Tháng {month}", provinceViews, postViews, plans, orders, tours));
         }
         var aiSummary = BuildAdminAnalyticsSummary(monthStats, yearMonths, monthStart, yearStart);
 
@@ -907,6 +909,7 @@ public sealed class AdminApiController : ApiControllerBase
         DateTime end,
         string label,
         List<Dictionary<string, object?>> provinceViews,
+        List<Dictionary<string, object?>> postViews,
         List<Dictionary<string, object?>> plans,
         List<Dictionary<string, object?>> orders,
         List<Dictionary<string, object?>> tours)
@@ -916,6 +919,9 @@ public sealed class AdminApiController : ApiControllerBase
             .ToList();
         var plansInRange = plans
             .Where(item => IsInAnalyticsRange(AdminAnalyticsDate(item, "created_at", "createdAt", "start_date", "startDate"), start, end))
+            .ToList();
+        var postViewsInRange = postViews
+            .Where(item => IsInAnalyticsRange(AdminAnalyticsDate(item, "created_at", "createdAt", "updated_at", "updatedAt"), start, end))
             .ToList();
         var ordersInRange = orders
             .Where(item => IsInAnalyticsRange(AdminAnalyticsDate(item, "created_at", "createdAt", "tour_start_date", "tourStartDate"), start, end))
@@ -948,10 +954,14 @@ public sealed class AdminApiController : ApiControllerBase
                 .Select(GroupSizeBucket)
                 .Where(text => !string.IsNullOrWhiteSpace(text)));
 
+        var topPosts = TopMetrics(postViewsInRange
+            .Select(item => TextAny(item, "post_title", "postTitle", "title", "name")), 5);
+
         var topProvince = FirstMetricOrEmpty(topProvinces);
         var budgetRange = FirstMetricOrEmpty(budgetRanges.Where(HasMetricCount));
         var topTour = FirstMetricOrEmpty(topTours);
         var groupSize = FirstMetricOrEmpty(groupSizes.Where(HasMetricCount));
+        var topPost = FirstMetricOrEmpty(topPosts);
 
         var details = new Dictionary<string, object?>
         {
@@ -962,7 +972,9 @@ public sealed class AdminApiController : ApiControllerBase
             ["top_tours"] = topTours,
             ["topTours"] = topTours,
             ["group_sizes"] = groupSizes,
-            ["groupSizes"] = groupSizes
+            ["groupSizes"] = groupSizes,
+            ["top_posts"] = topPosts,
+            ["topPosts"] = topPosts
         };
 
         return new Dictionary<string, object?>
@@ -977,11 +989,15 @@ public sealed class AdminApiController : ApiControllerBase
             ["topTour"] = topTour,
             ["group_size"] = groupSize,
             ["groupSize"] = groupSize,
+            ["top_post"] = topPost,
+            ["topPost"] = topPost,
             ["details"] = details,
             ["total_orders"] = ordersInRange.Count,
             ["totalOrders"] = ordersInRange.Count,
             ["total_province_views"] = viewsInRange.Count,
-            ["totalProvinceViews"] = viewsInRange.Count
+            ["totalProvinceViews"] = viewsInRange.Count,
+            ["total_post_views"] = postViewsInRange.Count,
+            ["totalPostViews"] = postViewsInRange.Count
         };
     }
 
@@ -1059,8 +1075,9 @@ public sealed class AdminApiController : ApiControllerBase
         var budgetRanges = AggregateDetails(yearMonths, "budget_ranges", "budgetRanges", 3, new[] { "1.000.000 - 3.000.000", "3.000.000 - 5.000.000", "5.000.000 - 10.000.000" });
         var topTours = AggregateDetails(yearMonths, "top_tours", "topTours", 3);
         var groupSizes = AggregateDetails(yearMonths, "group_sizes", "groupSizes", 3, new[] { "1 đến 2 người", "3 đến 5 người", "5 đến 10 người" });
+        var topPosts = AggregateDetails(yearMonths, "top_posts", "topPosts", 3);
 
-        return $"Trong năm {yearStart.Year}, thống kê theo từng tháng cho thấy: tỉnh được tìm nhiều nhất gồm {JoinExamples(topProvinces)}. Ngân sách phổ biến gồm {JoinExamples(budgetRanges)}. Loại tour đặt nhiều nhất gồm {JoinExamples(topTours)}. Nhóm người dùng phổ biến gồm {JoinExamples(groupSizes)}.";
+        return $"Trong năm {yearStart.Year}, thống kê theo từng tháng cho thấy: tỉnh được tìm nhiều nhất gồm {JoinExamples(topProvinces)}. Ngân sách phổ biến gồm {JoinExamples(budgetRanges)}. Loại tour đặt nhiều nhất gồm {JoinExamples(topTours)}. Du lịch theo nhóm phổ biến gồm {JoinExamples(groupSizes)}. Bài viết được xem nhiều nhất gồm {JoinExamples(topPosts)}.";
     }
 
     private static Dictionary<string, object?> Metric(string label, int count, Dictionary<string, object?>? extra = null)

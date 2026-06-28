@@ -12,6 +12,7 @@ namespace TravelwAI.Web.Controllers.Api;
 public sealed class PostsApiController : ApiControllerBase
 {
     private const string PostsCollection = "travel_posts";
+    private const string PostViewEventsCollection = "post_view_events";
     private const string SeedVersion = "2026-06-28-free-chatbot-quota-v13";
     private const int SeedPostLimit = 10;
     private static readonly string[] PostListFields =
@@ -65,6 +66,43 @@ public sealed class PostsApiController : ApiControllerBase
         if (post is null || IsDeletedPost(post) || (!isAdmin && !IsActivePost(post) && !IsPostOwner(post, current.userId!))) return NotFound(new { success = false, message = "Không tìm thấy bài viết" });
         await AttachPostAuthorNamesAsync(new List<Dictionary<string, object?>> { post });
         return Ok(new { success = true, data = post });
+    }
+
+    [HttpPost("posts/{id}/view")]
+    public async Task<IActionResult> TrackPostView(string id)
+    {
+        var current = await CurrentUserAsync();
+        if (!current.ok) return current.error!;
+        await EnsureSeedPostsAsync();
+        var post = await _repo.GetByIdAsync(PostsCollection, id);
+        var isAdmin = IsAdminUser(current.authUser);
+        if (post is null || IsDeletedPost(post) || (!isAdmin && !IsActivePost(post) && !IsPostOwner(post, current.userId!)))
+        {
+            return NotFound(new { success = false, message = "Không tìm thấy bài viết" });
+        }
+
+        var title = Text(post, "title").Trim();
+        if (string.IsNullOrWhiteSpace(title)) title = "Bài viết";
+        try
+        {
+            await _repo.AddAsync(PostViewEventsCollection, new Dictionary<string, object?>
+            {
+                ["post_id"] = id,
+                ["postId"] = id,
+                ["post_title"] = title,
+                ["postTitle"] = title,
+                ["user_id"] = current.userId ?? string.Empty,
+                ["userId"] = current.userId ?? string.Empty,
+                ["source"] = "post-detail",
+                ["created_at"] = DateTime.UtcNow,
+                ["updated_at"] = DateTime.UtcNow
+            });
+        }
+        catch
+        {
+        }
+
+        return Ok(new { success = true, message = "Đã ghi nhận lượt xem bài viết" });
     }
 
     [HttpPost("posts/images")]

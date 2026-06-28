@@ -427,10 +427,18 @@ async function fetchFullPublicPost(id) {
   return post;
 }
 
+async function trackPostView(id) {
+  try {
+    await authenticatedFetch(`/api/posts/${encodeURIComponent(id)}/view`, { method: "POST" });
+  } catch (_) {
+  }
+}
+
 async function openPostDetailModal(id) {
   let post = travelwaiPosts.find(item => String(getValue(item, "id")) === String(id));
   try {
     post = await fetchFullPublicPost(id);
+    trackPostView(id);
   } catch (error) {
     showToast(error.message || "Không tải được bài viết.");
     if (!post) return;

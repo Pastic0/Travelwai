@@ -184,6 +184,7 @@ function renderAdminAnalyticsSnapshot(prefix, stats) {
   setText(`analytics${prefix}BudgetRange`, formatAnalyticsMetric(stats.budget_range || stats.budgetRange));
   setText(`analytics${prefix}TopTour`, formatAnalyticsMetric(stats.top_tour || stats.topTour));
   setText(`analytics${prefix}GroupSize`, formatAnalyticsMetric(stats.group_size || stats.groupSize));
+  setText(`analytics${prefix}TopPost`, formatAnalyticsMetric(stats.top_post || stats.topPost));
 }
 
 function renderAdminAnalyticsYearMonths(months) {
@@ -192,7 +193,7 @@ function renderAdminAnalyticsYearMonths(months) {
   const list = Array.isArray(months) ? months : [];
   adminAnalyticsYearMonths = list;
   if (!list.length) {
-    body.innerHTML = `<tr><td colspan="5" class="empty-line">Chưa có dữ liệu thống kê.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" class="empty-line">Chưa có dữ liệu thống kê.</td></tr>`;
     return;
   }
   body.innerHTML = list.map((item, index) => {
@@ -204,6 +205,7 @@ function renderAdminAnalyticsYearMonths(months) {
       ${cell("budget", item.budget_range || item.budgetRange)}
       ${cell("tour", item.top_tour || item.topTour)}
       ${cell("group", item.group_size || item.groupSize)}
+      ${cell("post", item.top_post || item.topPost)}
     </tr>`;
   }).join("");
 }
@@ -236,8 +238,14 @@ function getAdminAnalyticsDetails(kind, stats) {
       rows: details.top_tours || details.topTours || []
     };
   }
+  if (kind === "post") {
+    return {
+      title: "5 bài viết được xem nhiều nhất",
+      rows: details.top_posts || details.topPosts || []
+    };
+  }
   return {
-    title: "Nhóm người dùng",
+    title: "Du lịch theo nhóm",
     rows: details.group_sizes || details.groupSizes || []
   };
 }
@@ -335,31 +343,49 @@ function aggregateAdminAnalyticsRows(months, snakeKey, camelKey, take = 3, fixed
   return rows.slice(0, take);
 }
 
-function renderAdminAnalyticsAiCell(item) {
-  if (!item || !item.label || !Number(item.count || 0)) return `<td class="empty-line">Chưa có dữ liệu</td>`;
-  return `<td><strong>${escapeHtml(item.label)}</strong><span>${Number(item.count || 0)} lượt</span></td>`;
+function formatAdminAnalyticsExample(item) {
+  if (!item || !item.label || !Number(item.count || 0)) return "chưa có dữ liệu";
+  return `${item.label} (${Number(item.count || 0)} lượt)`;
+}
+
+function formatAdminAnalyticsExampleList(items) {
+  const list = (Array.isArray(items) ? items : []).filter(item => Number(item?.count || 0) > 0).slice(0, 3);
+  if (!list.length) return "chưa có dữ liệu";
+  const examples = list.map(formatAdminAnalyticsExample);
+  while (examples.length < 3) examples.push("chưa có dữ liệu");
+  return examples.map(escapeHtml).join("; ");
 }
 
 function showAdminAnalyticsAiSummary() {
   const summary = document.getElementById("adminAnalyticsSummary");
   if (!summary) return;
   const months = adminAnalyticsData?.year_months || adminAnalyticsData?.yearMonths || [];
+  const year = new Date().getFullYear();
   const rows = [
     {
       title: "Tỉnh được tìm nhiều nhất",
+      text: "cho biết các tỉnh/thành được người dùng quan tâm nhiều khi mở chi tiết tỉnh hoặc hỏi AI.",
       items: aggregateAdminAnalyticsRows(months, "top_provinces", "topProvinces", 3)
     },
     {
       title: "Ngân sách phổ biến",
+      text: "cho biết khoảng ngân sách người dùng thường chọn khi lập kế hoạch hoặc đặt tour.",
       items: aggregateAdminAnalyticsRows(months, "budget_ranges", "budgetRanges", 3, ADMIN_ANALYTICS_BUDGET_ORDER)
     },
     {
       title: "Loại tour đặt nhiều nhất",
+      text: "cho biết các tour có nhiều lượt đặt nhất trong dữ liệu đơn hàng.",
       items: aggregateAdminAnalyticsRows(months, "top_tours", "topTours", 3)
     },
     {
-      title: "Nhóm người dùng",
+      title: "Du lịch theo nhóm",
+      text: "cho biết quy mô nhóm người dùng thường chọn khi đi du lịch.",
       items: aggregateAdminAnalyticsRows(months, "group_sizes", "groupSizes", 3, ADMIN_ANALYTICS_GROUP_ORDER)
+    },
+    {
+      title: "Bài viết được xem nhiều nhất",
+      text: "cho biết bài viết được người dùng bấm xem nhiều nhất trên trang Bài viết.",
+      items: aggregateAdminAnalyticsRows(months, "top_posts", "topPosts", 3)
     }
   ];
 
@@ -369,17 +395,11 @@ function showAdminAnalyticsAiSummary() {
     return;
   }
 
-  summary.innerHTML = `<div class="admin-analytics-ai-title">AI thống kê theo năm</div>
-    <div class="admin-analytics-ai-table-wrap">
-      <table class="admin-analytics-ai-table">
-        <thead><tr><th>Hạng mục</th><th>Ví dụ 1</th><th>Ví dụ 2</th><th>Ví dụ 3</th></tr></thead>
-        <tbody>
-          ${rows.map(row => `<tr><td><strong>${escapeHtml(row.title)}</strong></td>${[0, 1, 2].map(index => renderAdminAnalyticsAiCell(row.items[index])).join("")}</tr>`).join("")}
-        </tbody>
-      </table>
+  summary.innerHTML = `<div class="admin-analytics-ai-title">AI thống kê theo năm ${year}</div>
+    <div class="admin-analytics-ai-text-list">
+      ${rows.map(row => `<p><strong>${escapeHtml(row.title)}:</strong> ${escapeHtml(row.text)} Ví dụ: ${formatAdminAnalyticsExampleList(row.items)}.</p>`).join("")}
     </div>`;
 }
-
 
 async function loadAccounts() {
   const body = document.getElementById("accountTableBody");

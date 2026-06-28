@@ -547,13 +547,6 @@ public sealed class CommerceApiController : ApiControllerBase
         if (string.Equals(currentRole, "Admin", StringComparison.OrdinalIgnoreCase)) return (false, "Admin không cần mua gói.");
         if (currentRole is "Sales" or "Business") return (false, "Gói Sales và Business không mua trực tiếp trong thanh toán.");
 
-        var orders = await _repo.WhereEqualAsync(PlanOrdersCollection, "buyer_id", userId, limit: 100);
-        var activeOrders = orders.Where(IsActivePlanRecord).ToList();
-        var activeSoldOrders = activeOrders.Where(order => string.Equals(Text(order, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase)).ToList();
-        if (string.Equals(currentRole, role, StringComparison.OrdinalIgnoreCase) || activeOrders.Count > 0 || activeSoldOrders.Count > 0)
-        {
-            return (true, string.Empty);
-        }
         return (true, string.Empty);
     }
 

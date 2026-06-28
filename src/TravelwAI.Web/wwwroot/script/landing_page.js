@@ -304,7 +304,7 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     }
 
-    fetch("/vietnam.svg?v=2026-06-28-admin-analytics-budget-number-v25")
+    fetch("/vietnam.svg?v=2026-06-28-project-logic-audit-v28")
       .then(function (response) {
         if (!response.ok) throw new Error("Không tải được bản đồ Việt Nam");
         return response.text();
