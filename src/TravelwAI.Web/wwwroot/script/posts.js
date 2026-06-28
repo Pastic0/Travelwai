@@ -8,6 +8,27 @@ try { localStorage.removeItem("travelwaiPostDisplayMode"); } catch (_) {}
 let postOwnerFilterMode = localStorage.getItem("travelwaiPostOwnerFilter") === "mine" ? "mine" : "all";
 let postTourOfferStatus = { has_offer: false, discount_percent: 0, progress: 0, target: 1, message: "" };
 
+function normalizeAccountRoleForPosts(value) {
+  const role = String(value || localStorage.getItem("userRole") || "Free").trim().toLowerCase();
+  if (role === "user") return "free";
+  if (role === "company") return "business";
+  if (role === "tour sales" || role === "toursales") return "sales";
+  return role || "free";
+}
+
+function currentPostAccountRole() {
+  return normalizeAccountRoleForPosts(currentPostUser?.role || currentPostUser?.userRole || localStorage.getItem("userRole"));
+}
+
+function canUsePostAi() {
+  return currentPostAccountRole() !== "free";
+}
+
+function canUsePostOffer() {
+  const role = currentPostAccountRole();
+  return role !== "free" && role !== "vip";
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -54,13 +75,18 @@ async function readJson(response) {
 
 function showToast(message) {
   const toast = document.getElementById("tourToast");
-  if (!toast) return alert(message);
+  if (!toast) return window.TravelwAIToast(message);
   toast.textContent = message;
   toast.classList.add("show");
   setTimeout(() => toast.classList.remove("show"), 2600);
 }
 
 async function loadPostTourOfferStatus(silent = false) {
+  if (!canUsePostOffer()) {
+    postTourOfferStatus = { has_offer: false, discount_percent: 0, progress: 0, target: 1, message: "Gói Free và VIP chưa dùng được ưu đãi bài viết." };
+    renderPostTourOfferStatus();
+    return;
+  }
   try {
     const result = await readJson(await authenticatedFetch("/api/tour-offers/post-status"));
     postTourOfferStatus = {
@@ -92,11 +118,12 @@ function renderPostTourOfferStatus() {
   if (fill) fill.style.width = `${percent}%`;
   if (info) {
     const active = Boolean(postTourOfferStatus.has_offer);
+    const blocked = !canUsePostOffer();
     info.innerHTML = `
       <div class="tour-offer-invite-item ${active ? 'accepted' : ''}">
         <span class="tour-offer-invite-main">
-          <b>${active ? 'Ưu đãi đang có' : 'Chưa có ưu đãi'}</b>
-          <small>${escapeHtml(postTourOfferStatus.message || (active ? 'Lần đặt tour tiếp theo được giảm 5%.' : 'Tạo 1 bài viết để nhận ưu đãi.'))}</small>
+          <b>${blocked ? 'Chưa dùng được ưu đãi' : (active ? 'Ưu đãi đang có' : 'Chưa có ưu đãi')}</b>
+          <small>${escapeHtml(postTourOfferStatus.message || (active ? 'Đơn tour tiếp theo được giảm 5%.' : 'Tạo bài viết để nhận ưu đãi.'))}</small>
         </span>
         <strong>${active ? '-5%' : '0%'}</strong>
       </div>`;
@@ -353,8 +380,8 @@ function renderPosts() {
   if (!posts.length) {
     grid.classList.remove("posts-all-view");
     const emptyText = postOwnerFilterMode === "mine"
-      ? "Bạn chưa có bài viết nào phù hợp."
-      : (postSearchQuery ? "Không tìm thấy bài viết phù hợp." : "Chưa có bài viết nổi bật.");
+      ? "Bạn chưa có bài viết nào."
+      : (postSearchQuery ? "Không tìm thấy bài viết." : "Chưa có bài viết nổi bật.");
     grid.innerHTML = `<div class="empty-line">${emptyText}</div>`;
     return;
   }
@@ -366,8 +393,18 @@ async function loadCurrentPostUser() {
   try {
     const result = await readJson(await authenticatedFetch("/api/profile"));
     currentPostUser = result.user || result.data || null;
+    if (currentPostUser?.role || currentPostUser?.userRole) localStorage.setItem("userRole", currentPostUser.role || currentPostUser.userRole);
   } catch (_) {
     currentPostUser = null;
+  }
+  applyPostAccountLimits();
+}
+
+function applyPostAccountLimits() {
+  const aiButton = document.getElementById("publicPostAiButton");
+  if (aiButton) {
+    aiButton.disabled = false;
+    aiButton.title = canUsePostAi() ? "Tạo tiêu đề, tóm tắt và nội dung từ lễ hội/ngày lễ" : "Tài khoản Free chưa dùng được AI tạo bài viết";
   }
 }
 
@@ -472,6 +509,11 @@ function renderPublicPostPreview() {
 }
 
 async function generatePublicPostContentFromFestival() {
+  if (!canUsePostAi()) {
+    if (window.TravelwAIPricingPopup?.showFreeAiPopup) window.TravelwAIPricingPopup.showFreeAiPopup();
+    else showToast("Tài khoản Free chưa dùng được AI tạo bài viết.");
+    return;
+  }
   const titleInput = document.getElementById("publicPostTitle");
   const festivalInput = document.getElementById("publicPostFestival");
   const festival = festivalInput?.value.trim() || "";
@@ -501,7 +543,7 @@ async function generatePublicPostContentFromFestival() {
     const data = result.data || result;
     const content = stripPostSourceLines(data.content || "");
     const summary = stripPostSourceLines(data.summary || "");
-    if (!content) throw new Error("Không tìm thấy nội dung thật phù hợp.");
+    if (!content) throw new Error("Không tìm thấy nội dung phù hợp.");
 
     if (titleInput && data.title) titleInput.value = data.title;
 
@@ -520,7 +562,7 @@ async function generatePublicPostContentFromFestival() {
     const month = Number(data.month || 0);
     if (monthSelect && month >= 1 && month <= 12) monthSelect.value = String(month);
 
-    showToast(result.message || "Đã điền nội dung khám phá văn hoá lịch sử.");
+    showToast(result.message || "Đã điền nội dung bài viết.");
   } catch (error) {
     showToast(error.message || "Không tạo được nội dung từ Lễ hội/ngày lễ này.");
   } finally {
@@ -658,7 +700,7 @@ async function deletePublicPost(id) {
     showToast("Chỉ Admin hoặc người tạo mới được xóa bài viết này.");
     return;
   }
-  if (!confirm("Xóa bài viết này?")) return;
+  if (!await window.TravelwAIConfirm("Xóa bài viết này?")) return;
   try {
     const result = await readJson(await authenticatedFetch(`/api/posts/${encodeURIComponent(id)}`, { method: "DELETE" }));
     showToast(result.message || "Đã xóa bài viết");

@@ -410,7 +410,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 document.addEventListener("DOMContentLoaded", async function () {
   try {
-    const response = await fetch("vietnam.svg?v=2026-06-20-clean-current-v1");
+    const response = await fetch("vietnam.svg?v=2026-06-28-admin-analytics-budget-number-v25");
     const svgContent = await response.text();
 
     const mapContainer = document.querySelector(".map-container");
@@ -545,6 +545,7 @@ function initializeMap() {
     const detailPanelWasOpen = Boolean(document.querySelector(".province-detail-panel"));
 
     showProvinceLoadingPanel(provinceName);
+    trackProvinceInterest34(provinceName, "province-map-open");
 
     getProvinceInfo(provinceName)
       .then((provinceInfo) => {
@@ -1147,7 +1148,7 @@ function showInfoPanel(provinceInfo) {
 
   const readMoreBtn = infoPanel.querySelector(".read-more-btn");
   readMoreBtn.addEventListener("click", function () {
-
+    trackProvinceInterest34(provinceInfo.province_name || provinceInfo.name, "province-detail-panel");
     create_province_detail_Panel(provinceInfo);
   });
 
@@ -1160,6 +1161,7 @@ function showInfoPanel(provinceInfo) {
   const askAiBtn = infoPanel.querySelector(".ask-ai-province-btn");
   if (askAiBtn) {
     askAiBtn.addEventListener("click", function () {
+      trackProvinceInterest34(provinceInfo.province_name || provinceInfo.name, "province-ai-button");
       askAiAboutProvince(provinceInfo);
     });
   }
@@ -1295,6 +1297,24 @@ function create_province_detail_Panel(provinceInfo) {
   });
 }
 
+const trackedProvinceInterest34 = new Set();
+
+function trackProvinceInterest34(provinceName, source = "province-map-open") {
+  const name = (provinceName || "").toString().trim();
+  if (!name) return;
+  const key = `${source}|${name.toLowerCase()}`;
+  if (trackedProvinceInterest34.has(key)) return;
+  trackedProvinceInterest34.add(key);
+
+  fetch("/api/analytics/province-view", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provinceName: name, source }),
+    credentials: "same-origin",
+    keepalive: true
+  }).catch(() => {});
+}
+
 async function getProvinceInfo(provinceName) {
   const localInfo = getProvinceLocalInfo34(provinceName);
   if (localInfo) {
@@ -1372,7 +1392,7 @@ function showMemoryPanel(provinceInfo) {
               <div class="upload-placeholder" onclick="document.getElementById('memoryPhoto').click()">
                 <div class="upload-icon">📷</div>
                 <p>Bấm để chọn ảnh</p>
-                <span class="upload-hint">Có thể chọn nhiều ảnh, mỗi ảnh tối đa 10MB</span>
+                <span class="upload-hint">Chọn nhiều ảnh, mỗi ảnh tối đa 10MB</span>
               </div>
               <div class="photo-preview-grid" id="photoPreviewGrid" style="display: none;"></div>
             </div>
@@ -1417,12 +1437,12 @@ function handlePhotoUpload(event) {
 
   for (const file of files) {
     if (file.size > 10 * 1024 * 1024) {
-      alert(`Ảnh ${file.name} phải nhỏ hơn 10MB`);
+      window.TravelwAIToast(`Ảnh ${file.name} phải nhỏ hơn 10MB`);
       continue;
     }
 
     if (!file.type.startsWith("image/")) {
-      alert(`File ${file.name} không phải định dạng ảnh`);
+      window.TravelwAIToast(`File ${file.name} không phải định dạng ảnh`);
       continue;
     }
 
@@ -1478,13 +1498,13 @@ async function handleMemorySubmission(provinceInfo) {
   let memoryPhotos = selectedMemoryPhotos.slice();
 
   if (!memoryName) {
-    alert("Vui lòng nhập tên kỷ niệm");
+    window.TravelwAIToast("Vui lòng nhập tên kỷ niệm");
     document.getElementById("memoryName").focus();
     return;
   }
 
   if (!memoryDescription) {
-    alert("Vui lòng nhập mô tả");
+    window.TravelwAIToast("Vui lòng nhập mô tả");
     document.getElementById("memoryDescription").focus();
     return;
   }
@@ -1517,7 +1537,7 @@ async function handleMemorySubmission(provinceInfo) {
 
   const token = getTravelwAIAuthToken();
   if (!token) {
-    alert("Vui lòng đăng nhập để lưu kỷ niệm");
+    window.TravelwAIToast("Vui lòng đăng nhập để lưu kỷ niệm");
     window.location.href = "/login";
 
     saveBtn.textContent = originalText;
@@ -2528,7 +2548,7 @@ function renderMemoryJournalModal(modal, memories, errorMessage = "") {
 
       return `
         <article class="memory-card memory-journal-card memory-item" data-memory-id="${escapeHtml(memoryId)}" data-memory-province="${escapeHtml(province)}" data-memory-collection="${escapeHtml(memoryCollection)}">
-          ${photoHtml || `<div class="memory-image-placeholder"><span class="placeholder-icon">📌</span><span>Không có ảnh</span></div>`}
+          ${photoHtml || `<div class="memory-image-placeholder"><span class="placeholder-icon">•</span><span>Không có ảnh</span></div>`}
           <div class="memory-details">
             <div class="memory-card-header">
               <h4>${escapeHtml(title)}</h4>
@@ -2648,11 +2668,11 @@ async function deleteMemoryFromMap(memoryId, provinceName, button, event) {
     showNotification("Không tìm thấy mã kỷ niệm", "error");
     return false;
   }
-  if (!confirm("Xóa kỷ niệm này?")) return false;
+  if (!await window.TravelwAIConfirm("Xóa kỷ niệm này?")) return false;
 
   const token = getTravelwAIAuthToken();
   if (!token) {
-    alert("Vui lòng đăng nhập để xóa kỷ niệm");
+    window.TravelwAIToast("Vui lòng đăng nhập để xóa kỷ niệm");
     window.location.href = "/login";
     return false;
   }
@@ -2798,7 +2818,7 @@ function renderShareUserResultsInPanel(users) {
   });
   if (usersListContainer.children.length === 0 && users.length > 0) {
     usersListContainer.innerHTML =
-      '<div style="padding: 8px; text-align: center; color: #555;">Tất cả người dùng phù hợp đã được thêm hoặc chọn.</div>';
+      '<div style="padding: 8px; text-align: center; color: #555;">Tất cả người dùng đã được thêm hoặc chọn.</div>';
   }
   usersListContainer.style.display =
     usersListContainer.children.length > 0 ? "block" : "none";
@@ -2917,7 +2937,7 @@ function addEmailToSharedList() {
   if (selectedUser) {
     const selectedEmail = getShareUserEmail(selectedUser);
     if (!selectedEmail) {
-      alert("Tài khoản này chưa có email để chia sẻ.");
+      window.TravelwAIToast("Tài khoản này chưa có email để chia sẻ.");
       return;
     }
     if (!isShareTargetAlreadyAdded(selectedEmail)) {
@@ -2930,7 +2950,7 @@ function addEmailToSharedList() {
   } else {
     const emailValue = rawValue.replace(/.*\(([^)]+@[^)]+)\).*/, "$1").trim();
     if (!emailValue.includes("@") || !emailValue.includes(".")) {
-      alert("Vui lòng nhập đúng email hoặc tên bạn bè trong danh sách gợi ý.");
+      window.TravelwAIToast("Vui lòng nhập đúng email hoặc tên bạn bè trong danh sách gợi ý.");
       return;
     }
     if (!isShareTargetAlreadyAdded(emailValue)) {

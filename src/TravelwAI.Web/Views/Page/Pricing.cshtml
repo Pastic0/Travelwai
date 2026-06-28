@@ -1,0 +1,103 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bảng giá - TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-paper-plane.png" type="image/png" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+</head>
+<body class="tour-admin-page pricing-page" data-page="pricing">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "pricing")
+
+  <main class="tour-admin-shell">
+    <section class="tour-admin-hero">
+      <div>
+        <span class="eyebrow">Tài khoản TravelwAI</span>
+        <h1>Bảng giá</h1>
+      </div>
+      <div class="tour-actions page-hero-actions">
+        <a class="btn-soft btn-page-link" href="/cart" style="text-decoration:none">Giỏ hàng</a>
+      </div>
+    </section>
+
+    <section class="management-panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Gói tài khoản</th>
+              <th>AI tạo bài viết</th>
+              <th>Lập lịch trình</th>
+              <th>Ưu đãi bài viết</th>
+              <th>Chatbot AI</th>
+              <th>Trạng thái</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Free</strong><br><small>0đ</small></td>
+              <td>Không</td>
+              <td>Không</td>
+              <td>Không</td>
+              <td>Không dùng AI</td>
+              <td>Dùng thử</td>
+              <td><a class="btn-soft cart-action-link" href="/home?plan=free" data-auth-required="true" data-auth-return="/home?plan=free">Bắt đầu</a></td>
+            </tr>
+            <tr>
+              <td><strong>VIP</strong><br><small>59.000đ / tháng</small></td>
+              <td>Có</td>
+              <td>Có</td>
+              <td>Không</td>
+              <td>10 câu / 5 phút</td>
+              <td>Cơ bản</td>
+              <td><a class="btn-primary cart-action-link" href="/checkout?plan=VIP" data-auth-required="true" data-auth-return="/checkout?plan=VIP">Mua gói</a></td>
+            </tr>
+            <tr>
+              <td><strong>Premium</strong><br><small>129.000đ / tháng</small></td>
+              <td>Có</td>
+              <td>Có</td>
+              <td>Có</td>
+              <td>Không giới hạn</td>
+              <td>Đầy đủ</td>
+              <td><a class="btn-primary cart-action-link" href="/checkout?plan=Premium" data-auth-required="true" data-auth-return="/checkout?plan=Premium">Mua gói</a></td>
+            </tr>
+            <tr>
+              <td><strong>Sales</strong><br><small>Thu phí đăng ký</small></td>
+              <td>Có</td>
+              <td>Có</td>
+              <td>Theo đăng ký</td>
+              <td>Theo đăng ký</td>
+              <td>Đối tác bán tour</td>
+              <td><button class="btn-primary cart-action-link" type="button" data-auth-required="true" data-auth-return="/pricing?businessApplication=Sales" data-business-application-plan="Sales">Đăng ký</button></td>
+            </tr>
+            <tr>
+              <td><strong>Business</strong><br><small>Thu phí đăng ký</small></td>
+              <td>Có</td>
+              <td>Có</td>
+              <td>Theo đăng ký</td>
+              <td>Theo đăng ký</td>
+              <td>Đối tác doanh nghiệp</td>
+              <td><button class="btn-primary cart-action-link" type="button" data-auth-required="true" data-auth-return="/pricing?businessApplication=Business" data-business-application-plan="Business">Đăng ký</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="tourToast"></div>
+  <script src="/script/accounts.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/travelwai_contact_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/theme_toggle.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+</body>
+</html>

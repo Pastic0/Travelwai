@@ -83,10 +83,10 @@ public sealed class EmailNotificationService
             Tạm tính: {FormatVnd(originalTotal)}
             Ưu đãi: {FormatPercent(discountPercent)} (-{FormatVnd(discountAmount)})
             Tổng tiền: {FormatVnd(total)}
-            Trạng thái: Khách đặt, đang chờ Tour Sales xác nhận
+            Trạng thái: Chờ Sales xác nhận
             Hạn xác nhận: {expiresAtUtc.ToLocalTime():HH:mm dd/MM/yyyy}
 
-            Sau khi Tour Sales xác nhận bán, hệ thống sẽ tạo lịch trình tour cho bạn.
+            Sau khi Sales xác nhận, hệ thống sẽ tạo lịch trình tour.
 
             TravelwAI
             """);
@@ -111,7 +111,7 @@ public sealed class EmailNotificationService
             $"""
             Xin chào {name},
 
-            Tour của bạn đã được xác nhận bán thành công trên TravelwAI.
+            Tour của bạn đã được xác nhận.
 
             Mã đơn: {orderId}
             Tour: {tour}
@@ -119,7 +119,7 @@ public sealed class EmailNotificationService
             Tổng tiền: {FormatVnd(total)}{scheduleText}
             Thời gian xác nhận: {DateTime.Now:HH:mm dd/MM/yyyy}
 
-            Lịch trình tour đã được tạo tự động trong tài khoản TravelwAI của bạn.
+            Lịch trình tour đã được tạo trong tài khoản TravelwAI.
 
             TravelwAI
             """);
@@ -139,10 +139,55 @@ public sealed class EmailNotificationService
             Email nhận tin: {email}
             Thời gian: {DateTime.Now:HH:mm dd/MM/yyyy}
 
-            TravelwAI sẽ gửi đến bạn các thông tin nổi bật về du lịch, văn hoá, lịch sử, tour trải nghiệm và những cập nhật mới của nền tảng.
+            TravelwAI sẽ gửi thông tin du lịch, văn hoá, lịch sử, tour và cập nhật mới.
 
             TravelwAI
             """);
+    }
+
+
+
+    public Task<string?> SendBusinessApplicationToAdminAsync(Dictionary<string, object?> application)
+    {
+        const string adminEmail = "2324802010387@student.tdmu.edu.vn";
+        string Text(params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (application.TryGetValue(key, out var value) && value is not null)
+                {
+                    var text = value.ToString();
+                    if (!string.IsNullOrWhiteSpace(text)) return text.Trim();
+                }
+            }
+            return string.Empty;
+        }
+
+        var role = Text("plan_role", "planRole");
+        var subject = $"Biểu mẫu đăng ký {role} - TravelwAI";
+        var body = $"""
+        Admin TravelwAI nhận được biểu mẫu đăng ký {role}.
+
+        Thông tin doanh nghiệp
+        Tên công ty / cá nhân kinh doanh: {Text("company_name", "companyName")}
+        Loại hình: {Text("business_type", "businessType")}
+        Mã số thuế / CMND: {Text("tax_code", "taxCode")}
+        Địa chỉ văn phòng: {Text("office_address", "officeAddress")}
+        Tỉnh / Thành phố: {Text("province")}
+        Website / Fanpage: {Text("website")}
+
+        Người phụ trách
+        Họ và tên: {Text("contact_name", "contactName")}
+        Chức vụ: {Text("position")}
+        Số điện thoại: {Text("phone")}
+        Email: {Text("email")}
+
+        Tài khoản gửi biểu mẫu: {Text("user_email", "userEmail")}
+        Thời gian: {DateTime.Now:HH:mm dd/MM/yyyy}
+
+        Xem và duyệt trong Manage.
+        """;
+        return TrySendPlainEmailAsync(adminEmail, subject, body);
     }
 
     private async Task<string?> TrySendPlainEmailAsync(string toEmail, string subject, string body)

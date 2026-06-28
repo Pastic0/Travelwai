@@ -37,7 +37,7 @@
     <a id="roleDashboardIcon" href="/admin" class="icon role-dashboard-icon" hidden style="display:none" aria-label="Trang quản trị">
       <img src="/logo/dashboard-icon-white.svg" alt="Quản trị" />
     </a>
-    <a href="/contact" class="icon phone @(activeNav == "contact" ? "current active" : null)" aria-current="@(activeNav == "contact" ? "page" : null)" data-contact-panel-trigger>
+    <a href="/messaging?admin=1" class="icon phone @(activeNav == "contact" ? "current active" : null)" aria-current="@(activeNav == "contact" ? "page" : null)" data-contact-panel-trigger>
       <img src="logo/phone-icon-white.webp" alt="Điện thoại" />
     </a>
     <a href="/notifications" id="notificationIconContainer" class="notification-icon-container icon @(activeNav == "notifications" ? "current active" : null)" aria-current="@(activeNav == "notifications" ? "page" : null)" data-notification-panel-trigger onclick="return openNotificationPanel(event)" aria-label="Thông báo">
@@ -81,18 +81,29 @@
       return;
     }
 
-    if (normalized === 'tour sales' || normalized === 'toursales') {
+    if (normalized === 'sales' || normalized === 'tour sales' || normalized === 'toursales') {
       button.href = '/tour-sales';
-      button.title = 'Trang Tài khoản';
-      button.setAttribute('aria-label', 'Trang Tài khoản');
+      button.title = 'Trang Sales';
+      button.setAttribute('aria-label', 'Trang Sales');
+      button.hidden = false;
+      button.style.setProperty('display', 'inline-flex', 'important');
+      return;
+    }
+
+
+    if (normalized === 'business' || normalized === 'company') {
+      button.href = '/business';
+      button.title = 'Trang Business';
+      button.setAttribute('aria-label', 'Trang Business');
       button.hidden = false;
       button.style.setProperty('display', 'inline-flex', 'important');
     }
+
   }
 
   async function syncRoleDashboardIcon() {
     const token = localStorage.getItem('idToken') || readCookie('TravelwAIAuth');
-    showRoleButton('User');
+    showRoleButton('Free');
 
     if (!token) {
       localStorage.removeItem('userRole');
@@ -107,11 +118,11 @@
       });
       const result = await response.json().catch(function () { return {}; });
       const role = result && result.user ? result.user.role : '';
-      localStorage.setItem('userRole', role || 'User');
-      showRoleButton(role || 'User');
+      localStorage.setItem('userRole', role || 'Free');
+      showRoleButton(role || 'Free');
     } catch (_) {
       localStorage.removeItem('userRole');
-      showRoleButton('User');
+      showRoleButton('Free');
     }
   }
 
@@ -147,7 +158,7 @@
       <img class="admin-ai-header-avatar" src="/logo/travelwai-manager-avatar.webp" alt="Quản lý TravelwAI" />
       <div>
         <h3>Quản lý TravelwAI</h3>
-        <p>Nhắn tin trực tiếp với Admin: 2324802010387@student.tdmu.edu.vn</p>
+        <p>Nhắn tin trong hội thoại Admin</p>
       </div>
     </div>
     <button class="close-panel-btn" type="button" data-close-contact-panel aria-label="Đóng chatbot">&times;</button>
@@ -160,10 +171,10 @@
       <button type="button" data-admin-ai-suggestion="Tôi cần hỗ trợ tour">Tour</button>
     </div>
     <form class="admin-ai-input-form" id="supportAdminAiForm">
-      <input id="supportAdminAiInput" maxlength="1200" autocomplete="off" placeholder="Nhập nội dung cần nhắn cho Admin..." />
+      <input id="supportAdminAiInput" maxlength="1200" autocomplete="off" placeholder="Nhập nội dung cần nhắn cho Admin chính..." />
       <button class="admin-ai-send-btn" type="submit">Gửi</button>
     </form>
     <div class="support-admin-status" id="supportAdminStatus" hidden></div>
-    <a class="support-admin-open-btn admin-ai-open-full" href="/messaging?admin=1">Nhắn tin Admin</a>
+    <a class="support-admin-open-btn admin-ai-open-full" href="/messaging?admin=1">Mở hội thoại</a>
   </div>
 </aside>

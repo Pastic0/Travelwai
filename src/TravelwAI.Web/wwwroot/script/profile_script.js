@@ -1,3 +1,4 @@
+let profilePlanCountdownTimer = null;
 document.addEventListener("DOMContentLoaded", async function () {
   if (!isAuthenticated()) {
     window.location.href = "/login";
@@ -35,6 +36,12 @@ document.addEventListener("DOMContentLoaded", async function () {
         setText("profileDisplayName", username);
         setText("profileHeroName", username);
         setText("profileEmailText", email);
+        const planRole = user.plan_role || user.planRole || user.role || user.userRole || "Free";
+        const planExpiresAt = user.plan_expires_at || user.planExpiresAt || "";
+        const nextPlanRole = user.next_plan_role || user.nextPlanRole || "";
+        const nextPlanStart = user.next_plan_started_at || user.nextPlanStartedAt || "";
+        setText("profilePlanRole", planRole || "Free");
+        startProfilePlanCountdown(planExpiresAt, nextPlanRole, nextPlanStart);
 
         if (user.profilePic && profilePicture) {
           originalProfilePicSrc = `${user.profilePic}`;
@@ -52,6 +59,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     setText("profileDisplayName", "Lỗi tải dữ liệu");
     setText("profileHeroName", "TravelwAI");
     setText("profileEmailText", fallbackEmail);
+    setText("profilePlanRole", "Không tải được");
+    setText("profilePlanExpiresAt", "Không tải được");
     showProfileToast("Không thể tải đầy đủ hồ sơ người dùng.", "error");
   }
 
@@ -71,7 +80,7 @@ function setText(id, value) {
 function showProfileToast(message, type) {
   const toast = document.getElementById("profileToast");
   if (!toast) {
-    alert(message);
+    window.TravelwAIToast(message);
     return;
   }
 
@@ -84,6 +93,50 @@ function showProfileToast(message, type) {
     toast.hidden = true;
     toast.classList.remove("error");
   }, 2600);
+}
+
+function normalizeProfilePlanRole(value) {
+  const role = String(value || "Free").trim();
+  return role || "Free";
+}
+
+function formatProfileDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatProfileCountdown(value) {
+  if (!value) return "Không có thời hạn";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Không có thời hạn";
+  const ms = date.getTime() - Date.now();
+  if (ms <= 0) return "Đã hết hạn";
+  const totalSeconds = Math.floor(ms / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = String(Math.floor((totalSeconds % 86400) / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${days} ngày ${hours}:${minutes}:${seconds}`;
+}
+
+function startProfilePlanCountdown(expiresAt, nextRole, nextStart) {
+  clearInterval(profilePlanCountdownTimer);
+  const render = () => {
+    let text = "Không có thời hạn";
+    if (expiresAt) {
+      const endText = formatProfileDateTime(expiresAt);
+      text = `${formatProfileCountdown(expiresAt)}${endText ? ` · Hết hạn ${endText}` : ""}`;
+    }
+    if (nextRole && nextStart) {
+      const nextText = formatProfileDateTime(nextStart);
+      text += `${text ? " · " : ""}Tiếp theo: ${normalizeProfilePlanRole(nextRole)}${nextText ? ` từ ${nextText}` : ""}`;
+    }
+    setText("profilePlanExpiresAt", text);
+  };
+  render();
+  if (expiresAt) profilePlanCountdownTimer = setInterval(render, 1000);
 }
 
 function formatProfileDate(value) {

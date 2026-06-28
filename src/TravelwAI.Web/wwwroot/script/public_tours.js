@@ -18,7 +18,7 @@ function escapeHtml(value) {
 
 function showToast(message) {
   const toast = document.getElementById("tourToast");
-  if (!toast) return alert(message);
+  if (!toast) return window.TravelwAIToast(message);
   toast.textContent = message;
   toast.classList.add("show");
   setTimeout(() => toast.classList.remove("show"), 2600);
@@ -27,7 +27,7 @@ function showToast(message) {
 async function readJson(response) {
   if (!response) throw new Error("Không có phản hồi từ máy chủ");
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.success === false) throw new Error(data.message || data.detail || "Thao tác thất bại");
+  if (!response.ok || data.success === false) throw new Error(data.message || data.detail || "Không thực hiện được");
   return data;
 }
 
@@ -76,7 +76,7 @@ function normalizeSearchText(value) {
 }
 
 function getPublicTourSalesName(tour) {
-  return getValue(tour, "tour_sales_name", "tourSalesName", "sales_name", "salesName", "seller_name", "sellerName") || "Tour Sales TravelwAI";
+  return getValue(tour, "tour_sales_name", "tourSalesName", "sales_name", "salesName", "seller_name", "sellerName") || "Sales TravelwAI";
 }
 
 function getPublicTourSalesLine(tour) {
@@ -106,7 +106,7 @@ function filteredPublicTours() {
 }
 
 function currentTourDiscountPercent() {
-  return Math.max(0, Math.min(25, Number(tourOfferStatus?.discount_percent || 0)));
+  return Math.max(0, Math.min(100, Number(tourOfferStatus?.discount_percent || 0)));
 }
 
 function discountedTourPrice(price) {
@@ -140,7 +140,7 @@ function renderPublicTours() {
   }
 
   if (!tours.length) {
-    grid.innerHTML = '<div class="management-panel">Không tìm thấy tour phù hợp.</div>';
+    grid.innerHTML = '<div class="management-panel">Không tìm thấy tour.</div>';
     return;
   }
 
@@ -153,7 +153,7 @@ function renderPublicTours() {
     const disabled = slots > 0 && available <= 0;
     return `
       <article class="public-tour-card">
-        <div class="public-tour-image">${image ? `<img loading="lazy" decoding="async" src="${escapeHtml(image)}" alt="${escapeHtml(t.name || 'Tour')}" />` : '✈️'}</div>
+        <div class="public-tour-image">${image ? `<img loading="lazy" decoding="async" src="${escapeHtml(image)}" alt="${escapeHtml(t.name || 'Tour')}" />` : '•'}</div>
         <div class="public-tour-body">
           <h3>${escapeHtml(t.name || 'Tour du lịch')}</h3>
           <div class="public-tour-sales-line">${escapeHtml(getPublicTourSalesLine(t))}</div>
@@ -218,7 +218,7 @@ function renderPublicBookTourDetails(tour) {
 
   box.innerHTML = `
     <div class="public-book-tour-thumb">
-      ${image ? `<img loading="lazy" decoding="async" src="${escapeHtml(image)}" alt="${escapeHtml(tour?.name || 'Tour du lịch')}" />` : '✈️'}
+      ${image ? `<img loading="lazy" decoding="async" src="${escapeHtml(image)}" alt="${escapeHtml(tour?.name || 'Tour du lịch')}" />` : '•'}
     </div>
     <div class="public-book-tour-content">
       <h3>${escapeHtml(tour?.name || 'Tour du lịch')}</h3>
@@ -252,20 +252,21 @@ async function submitPublicBooking(event) {
   event.preventDefault();
   const id = document.getElementById("bookTourId").value;
   const payload = {
+    tourId: id,
     customerName: document.getElementById("bookName").value.trim(),
     customerEmail: document.getElementById("bookEmail").value.trim(),
     quantity: Number(document.getElementById("bookQuantity").value || 1)
   };
   try {
-    const response = await authenticatedFetch(`/api/tours/${encodeURIComponent(id)}/book`, {
+    const response = await authenticatedFetch("/api/commerce/cart/tour", {
       method: "POST",
       body: JSON.stringify(payload)
     });
     const result = await readJson(response);
-    showToast(result.message || "Đặt tour thành công");
+    showToast(result.message || "Đã thêm tour vào giỏ hàng");
     closePublicBookModal();
-    await loadTourOfferStatus(true);
-    await loadPublicTours();
+    const checkoutUrl = result.checkout_url || result.checkoutUrl || (result.cart_id || result.cartId ? `/checkout?cartId=${encodeURIComponent(result.cart_id || result.cartId)}` : "/cart");
+    window.location.href = checkoutUrl;
   } catch (error) {
     showToast(error.message);
   }

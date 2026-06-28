@@ -225,6 +225,7 @@
     return items;
   }
 
+
   function iconFor(type) {
     if (type === "schedule") return "📅";
     if (type === "friend") return "👥";

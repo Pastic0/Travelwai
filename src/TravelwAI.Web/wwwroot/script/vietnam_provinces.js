@@ -3329,7 +3329,7 @@ function buildProvinceDescription34(item) {
     ? ` Diện tích khoảng ${item.natural_area_km2} km², dân số khoảng ${item.population} người.`
     : "";
   const capitalText = item.name === "Thành phố Hà Nội" ? " Đây là Thủ đô của Việt Nam." : "";
-  return `${item.name} thuộc khu vực ${item.area}, vùng ${item.region}.${capitalText}${statsText} Đây là điểm đến phù hợp để khám phá cảnh quan, văn hóa địa phương, ẩm thực và lưu lại kỷ niệm chuyến đi.`;
+  return `${item.name} thuộc khu vực ${item.area}, vùng ${item.region}.${capitalText}${statsText} Đây là điểm đến để khám phá cảnh quan, văn hóa địa phương, ẩm thực và lưu lại kỷ niệm chuyến đi.`;
 }
 
 function getLocalProvinceInfo(provinceName, date = new Date()) {

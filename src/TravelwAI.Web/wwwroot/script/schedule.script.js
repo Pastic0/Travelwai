@@ -10,6 +10,35 @@ let sharedEmails = [];
 let visibleSchedules = [];
 let aiScheduleMessages = [];
 
+function normalizeScheduleAccountRole(value) {
+  const role = String(value || localStorage.getItem("userRole") || "Free").trim().toLowerCase();
+  if (role === "user") return "free";
+  if (role === "company") return "business";
+  if (role === "tour sales" || role === "toursales") return "sales";
+  return role || "free";
+}
+
+function canUseScheduleCreate() {
+  return normalizeScheduleAccountRole() !== "free";
+}
+
+function showScheduleAccountLimit() {
+  if (window.TravelwAIPricingPopup?.showFreeAiPopup) {
+    window.TravelwAIPricingPopup.open("Tài khoản Free chưa dùng được lịch trình. Vui lòng nâng cấp gói.");
+    return;
+  }
+  showError("Tài khoản Free chưa dùng được lịch trình.");
+}
+
+async function syncScheduleAccountRole() {
+  try {
+    const response = await authenticatedFetch(`${API_BASE}/profile`);
+    const result = await response.json().catch(() => ({}));
+    const user = result.user || result.data || null;
+    if (user?.role || user?.userRole) localStorage.setItem("userRole", user.role || user.userRole);
+  } catch (_) {}
+}
+
 document.addEventListener("DOMContentLoaded", async function () {
 
   if (typeof isAuthenticated !== "function") {
@@ -23,6 +52,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     return;
   }
 
+  await syncScheduleAccountRole();
   initializeSchedulePage();
   get_user_friendList()
     .then((friends) => {
@@ -88,17 +118,17 @@ async function searchUsersForSharingInPanel() {
       !Array.isArray(user_friendList.data)
     ) {
       console.warn(
-        "[Lịch trình] Danh sách bạn bè chưa sẵn sàng hoặc không đúng định dạng."
+        "[Lịch trình] Danh sách bạn bè chưa sẵn sàng."
       );
       showNoResults(
-        "Danh sách bạn bè đang tải hoặc chưa sẵn sàng. Vui lòng thử lại sau."
+        "Danh sách bạn bè đang tải. Vui lòng thử lại sau."
       );
       return;
     }
 
     if (user_friendList.data.length === 0) {
       showNoResults(
-        "Bạn chưa có bạn bè để chia sẻ. Hãy thêm bạn trong mục Tin nhắn."
+        "Chưa có bạn bè để chia sẻ. Hãy thêm bạn trong Tin nhắn."
       );
       return;
     }
@@ -115,7 +145,7 @@ async function searchUsersForSharingInPanel() {
     if (filteredFriends.length > 0) {
       displaySearchResults(filteredFriends);
     } else {
-      showNoResults("Không tìm thấy bạn bè phù hợp.");
+      showNoResults("Không tìm thấy bạn bè.");
     }
   }, 300);
 }
@@ -129,9 +159,11 @@ function setupEventListeners() {
 
   const createScheduleBtn = document.getElementById("createScheduleBtn");
   if (createScheduleBtn) createScheduleBtn.onclick = openCreateModal;
+  if (!canUseScheduleCreate() && createScheduleBtn) createScheduleBtn.title = "Tài khoản Free chưa dùng được lịch trình";
 
   const aiCreateScheduleBtn = document.getElementById("aiCreateScheduleBtn");
   if (aiCreateScheduleBtn) aiCreateScheduleBtn.onclick = openAiCreateModal;
+  if (!canUseScheduleCreate() && aiCreateScheduleBtn) aiCreateScheduleBtn.title = "Tài khoản Free chưa dùng được lịch trình";
 
   const askScheduleAiBtn = document.getElementById("askScheduleAiBtn");
   if (askScheduleAiBtn) askScheduleAiBtn.addEventListener("click", sendScheduleAiPrompt);
@@ -364,6 +396,10 @@ function showEmptyState() {
 }
 
 function openCreateModal() {
+  if (!canUseScheduleCreate()) {
+    showScheduleAccountLimit();
+    return;
+  }
   editingScheduleId = null;
   document.getElementById("modalTitle").textContent = "Tạo lịch trình mới";
   document.getElementById("saveScheduleBtn").textContent = "Tạo lịch trình";
@@ -420,6 +456,10 @@ function collectCurrentScheduleContext() {
 }
 
 async function sendScheduleAiPrompt() {
+  if (!canUseScheduleCreate()) {
+    showScheduleAccountLimit();
+    return;
+  }
   const input = document.getElementById("scheduleAiPrompt");
   const button = document.getElementById("askScheduleAiBtn");
   const message = input?.value?.trim() || "";
@@ -475,14 +515,14 @@ async function sendScheduleAiPrompt() {
 
     if (data.patch) {
       applyScheduleAiPatch(data.patch);
-      addScheduleAiMessage("assistant", data.reply || "Mình đã chỉnh đúng phần bạn yêu cầu. Bạn kiểm tra lại rồi bấm Tạo lịch trình để lưu.");
+      addScheduleAiMessage("assistant", data.reply || "Đã chỉnh phần bạn yêu cầu. Kiểm tra rồi bấm Tạo lịch trình để lưu.");
       showSuccess("AI đã chỉnh lịch trình theo yêu cầu.");
       return;
     }
 
     if (data.schedule) {
       applyAiScheduleDraft(data.schedule);
-      addScheduleAiMessage("assistant", data.reply || "Mình đã tạo bản nháp lịch trình và điền vào form. Bạn kiểm tra lại rồi bấm Tạo lịch trình để lưu.");
+      addScheduleAiMessage("assistant", data.reply || "Đã tạo bản nháp lịch trình. Kiểm tra rồi bấm Tạo lịch trình để lưu.");
       showSuccess("AI đã điền lịch trình vào form.");
       return;
     }
@@ -932,6 +972,10 @@ function displayScheduleDetail(schedule, isOwner = true) {
 
 async function handleScheduleSubmit(event) {
   event.preventDefault();
+  if (!canUseScheduleCreate()) {
+    showScheduleAccountLimit();
+    return;
+  }
 
   const formattedDays = [];
   const scheduleStartDateValue = document.getElementById("startDate").value;
@@ -1069,7 +1113,7 @@ async function handleScheduleSubmit(event) {
 
 async function deleteSchedule(scheduleId, title) {
   if (
-    !confirm(
+    !await window.TravelwAIConfirm(
       `Bạn có chắc muốn xóa "${title}" không? Hành động này không thể hoàn tác.`
     )
   ) {
@@ -1405,10 +1449,10 @@ function handleEmailSearch() {
       !Array.isArray(user_friendList.data)
     ) {
       console.warn(
-        "[Lịch trình] Danh sách bạn bè chưa sẵn sàng hoặc không đúng định dạng."
+        "[Lịch trình] Danh sách bạn bè chưa sẵn sàng."
       );
       showNoResults(
-        "Danh sách bạn bè đang tải hoặc chưa sẵn sàng. Vui lòng thử lại sau."
+        "Danh sách bạn bè đang tải. Vui lòng thử lại sau."
       );
       return;
     }
@@ -1429,7 +1473,7 @@ function handleEmailSearch() {
     if (filteredFriends.length > 0) {
       displaySearchResults(filteredFriends);
     } else {
-      showNoResults("Không tìm thấy bạn bè phù hợp.");
+      showNoResults("Không tìm thấy bạn bè.");
     }
   }, 300);
 }
@@ -1439,7 +1483,7 @@ function displaySearchResults(users) {
   searchResultsContainer.innerHTML = "";
 
   if (!users || users.length === 0) {
-    showNoResults("Không tìm thấy bạn bè phù hợp.");
+    showNoResults("Không tìm thấy bạn bè.");
     return;
   }
 

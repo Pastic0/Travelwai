@@ -149,8 +149,8 @@ public sealed class PublicToursApiController : ApiControllerBase
         {
             success = true,
             message = string.IsNullOrWhiteSpace(emailError)
-                ? "Đặt tour thành công. Email xác nhận đã được gửi. Tour Sales cần xác nhận bán trong 3 phút, sau đó lịch trình mới được tạo."
-                : "Đặt tour thành công. Tour Sales cần xác nhận bán trong 3 phút, sau đó lịch trình mới được tạo.",
+                ? "Đặt tour thành công. Email xác nhận đã được gửi. Sales cần xác nhận bán trong 3 phút, sau đó lịch trình mới được tạo."
+                : "Đặt tour thành công. Sales cần xác nhận bán trong 3 phút, sau đó lịch trình mới được tạo.",
             order_id = safeOrderId,
             emailSent = string.IsNullOrWhiteSpace(emailError),
             emailWarning = emailError

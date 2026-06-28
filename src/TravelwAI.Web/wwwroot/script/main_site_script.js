@@ -1,12 +1,12 @@
 document.addEventListener("DOMContentLoaded", function () {
   if (typeof isAuthenticated !== "function") {
     console.error("Chưa tải được chức năng xác thực. Đang chuyển về trang đăng nhập.");
-    window.location.href = "/login";
+    window.location.href = typeof buildLoginUrl === "function" ? buildLoginUrl("/home") : "/login?returnUrl=%2Fhome";
     return;
   }
 
   if (!isAuthenticated()) {
-    window.location.href = "/login";
+    window.location.href = typeof buildLoginUrl === "function" ? buildLoginUrl("/home") : "/login?returnUrl=%2Fhome";
     return;
   }
 

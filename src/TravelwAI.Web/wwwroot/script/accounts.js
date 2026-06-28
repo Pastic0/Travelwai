@@ -1,5 +1,102 @@
 
 const AUTH_API_BASE = "/api";
+const SUPPORT_ADMIN_PENDING_MESSAGE_KEY = "travelwai-admin-pending-message";
+
+const TRAVELWAI_RETURN_URL_KEY = "travelwai-post-login-return-url";
+
+function readTravelwAICookie(name) {
+  const value = `; ${document.cookie || ""}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return decodeURIComponent(parts.pop().split(";").shift() || "");
+  return "";
+}
+
+function normalizeLocalReturnUrl(value, fallback = "/home") {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (url.origin !== window.location.origin) return fallback;
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    if (!next.startsWith("/") || next.startsWith("//")) return fallback;
+    if (/^\/(login|signup|forgot-password|reset-password)(\/|\?|#|$)/i.test(next)) return fallback;
+    return next;
+  } catch (_) {
+    if (raw.startsWith("/") && !raw.startsWith("//") && !/^\/(login|signup|forgot-password|reset-password)(\/|\?|#|$)/i.test(raw)) {
+      return raw;
+    }
+    return fallback;
+  }
+}
+
+function getCurrentReturnUrl() {
+  return normalizeLocalReturnUrl(`${window.location.pathname}${window.location.search}${window.location.hash}`, "/home");
+}
+
+function getLoginReturnUrl(fallback = "/home") {
+  const params = new URLSearchParams(window.location.search);
+  const queryReturnUrl = params.get("returnUrl") || params.get("redirect") || "";
+  const storedReturnUrl = sessionStorage.getItem(TRAVELWAI_RETURN_URL_KEY) || "";
+  return normalizeLocalReturnUrl(queryReturnUrl || storedReturnUrl, fallback);
+}
+
+function buildLoginUrl(returnUrl) {
+  const next = normalizeLocalReturnUrl(returnUrl || getCurrentReturnUrl(), "/home");
+  return `/login?returnUrl=${encodeURIComponent(next)}`;
+}
+
+function redirectToLogin(returnUrl) {
+  const next = normalizeLocalReturnUrl(returnUrl || getCurrentReturnUrl(), "/home");
+  sessionStorage.setItem(TRAVELWAI_RETURN_URL_KEY, next);
+  window.location.href = buildLoginUrl(next);
+}
+
+function getPostLoginRedirectUrl() {
+  const next = getLoginReturnUrl("/home");
+  sessionStorage.removeItem(TRAVELWAI_RETURN_URL_KEY);
+  return next;
+}
+
+function hasTravelwAIAuthToken() {
+  return Boolean(localStorage.getItem("idToken") || sessionStorage.getItem("idToken") || readTravelwAICookie("TravelwAIAuth"));
+}
+
+
+function clearSupportAdminLocalConversationCache() {
+  try { localStorage.removeItem(SUPPORT_ADMIN_PENDING_MESSAGE_KEY); } catch (_) {}
+  try {
+    Object.keys(localStorage).forEach((key) => {
+      if (/^travelwai:[^:]+:[^:]+:(conversations|messages:)/.test(key)) {
+        localStorage.removeItem(key);
+      }
+    });
+  } catch (_) {}
+}
+
+async function cleanupSupportAdminConversationBeforeLogout(options = {}) {
+  const token = localStorage.getItem("idToken") || sessionStorage.getItem("idToken");
+  clearSupportAdminLocalConversationCache();
+  if (!token) return false;
+
+  const request = fetch(`${AUTH_API_BASE}/support/admin-conversation`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    keepalive: true,
+  }).catch(() => false);
+
+  if (options.awaitRequest) {
+    await request;
+  }
+  return true;
+}
+
+window.clearTravelwAIAdminSupportOnLogout = cleanupSupportAdminConversationBeforeLogout;
+
+function isTravelwAIFreeRole(role) {
+  const value = String(role || "Free").trim().toLowerCase();
+  return value === "free" || value === "user" || value === "";
+}
 
 function saveTokens(idToken, refreshToken, email, expiresIn, username, role, isLocked) {
   if (idToken) localStorage.setItem("idToken", idToken);
@@ -37,18 +134,25 @@ function clearLocalAuthData() {
   document.cookie = "TravelwAIRefresh=; path=/; max-age=0; SameSite=Lax";
 }
 
-function clearAuthData() {
+function clearAuthData(options = {}) {
+  if (!options.skipSupportCleanup) {
+    cleanupSupportAdminConversationBeforeLogout({ awaitRequest: false });
+  }
   clearLocalAuthData();
   fetch(`${AUTH_API_BASE}/logout`, { method: "POST", credentials: "same-origin" }).catch(() => {});
 }
 
 function isAuthenticated() {
-  const idToken = localStorage.getItem("idToken");
-  const expiration = localStorage.getItem("tokenExpiration");
+  const idToken = localStorage.getItem("idToken") || sessionStorage.getItem("idToken") || readTravelwAICookie("TravelwAIAuth");
+  const expiration = localStorage.getItem("tokenExpiration") || sessionStorage.getItem("tokenExpiration");
 
-  if (!idToken || !expiration) {
+  if (!idToken) {
     clearAuthData();
     return false;
+  }
+
+  if (!expiration) {
+    return true;
   }
 
   const expirationNumber = parseInt(expiration, 10);
@@ -90,12 +194,16 @@ async function refreshTokenIfNeeded(options = {}) {
         result.email || localStorage.getItem("userEmail"),
         result.expiresIn,
         result.username || result.displayName || localStorage.getItem("username"),
-        result.role || localStorage.getItem("userRole") || "User",
+        result.role || localStorage.getItem("userRole") || "Free",
         result.is_locked || result.isLocked || false
       );
 
       if (options.redirectOnSuccess && window.location.pathname === "/login") {
-        window.location.href = "/home";
+        const postLoginUrl = getPostLoginRedirectUrl();
+        if (isTravelwAIFreeRole(result.role || "Free")) {
+          sessionStorage.setItem("travelwaiOpenPricingAfterLogin", "1");
+        }
+        window.location.href = postLoginUrl;
       }
       return true;
     } else {
@@ -109,16 +217,17 @@ async function refreshTokenIfNeeded(options = {}) {
   }
 }
 
-function requireAuth() {
+function requireAuth(returnUrl) {
   if (!isAuthenticated()) {
-    window.location.href = "/login";
+    redirectToLogin(returnUrl || getCurrentReturnUrl());
     return false;
   }
   return true;
 }
 
 async function logout() {
-  clearAuthData();
+  await cleanupSupportAdminConversationBeforeLogout({ awaitRequest: true });
+  clearAuthData({ skipSupportCleanup: true });
   try {
     await fetch(`${AUTH_API_BASE}/logout`, { method: "POST", credentials: "same-origin" });
   } catch (_) {}
@@ -150,17 +259,21 @@ async function handleLogin(event) {
         result.email,
         result.expiresIn,
         result.username || result.displayName,
-        result.role || "User",
+        result.role || "Free",
         result.is_locked || result.isLocked || false
       );
 
-      window.location.href = "/home";
+      const postLoginUrl = getPostLoginRedirectUrl();
+      if (isTravelwAIFreeRole(result.role || "Free")) {
+        sessionStorage.setItem("travelwaiOpenPricingAfterLogin", "1");
+      }
+      window.location.href = postLoginUrl;
     } else {
-      alert(result.message || "Đăng nhập thất bại");
+      window.TravelwAIToast(result.message || "Đăng nhập thất bại");
     }
   } catch (error) {
     console.error("Lỗi đăng nhập:", error);
-    alert("Lỗi mạng. Vui lòng thử lại.");
+    window.TravelwAIToast("Lỗi mạng. Vui lòng thử lại.");
   }
 }
 
@@ -176,7 +289,7 @@ async function handleSignUp(event) {
   const confirmPassword = document.getElementById("confirm-password").value;
 
   if (password !== confirmPassword) {
-    alert("Mật khẩu xác nhận không khớp");
+    window.TravelwAIToast("Mật khẩu xác nhận không khớp");
     return;
   }
 
@@ -194,18 +307,18 @@ async function handleSignUp(event) {
       clearLocalAuthData();
       window.location.replace("/login");
     } else {
-      alert(result.message || "Đăng ký thất bại");
+      window.TravelwAIToast(result.message || "Đăng ký thất bại");
     }
   } catch (error) {
     console.error("Lỗi đăng ký:", error);
-    alert("Lỗi mạng. Vui lòng thử lại.");
+    window.TravelwAIToast("Lỗi mạng. Vui lòng thử lại.");
   }
 }
 
 function setAuthMessage(message, type = "info") {
   const messageEl = document.getElementById("authMessage");
   if (!messageEl) {
-    if (type === "error") alert(message);
+    if (type === "error") window.TravelwAIToast(message);
     return;
   }
 
@@ -256,7 +369,7 @@ async function handleForgotPassword(event) {
     document.getElementById("verifyResetOtpForm")?.removeAttribute("hidden");
     document.getElementById("resetOtp")?.focus();
 
-    const message = result.message || "Mã OTP đã được gửi đến email của bạn. Có thể bấm lại nút Gửi mã OTP nếu cần gửi lại mã.";
+    const message = result.message || "Mã OTP đã được gửi đến email. Bấm Gửi mã OTP nếu cần gửi lại.";
     setAuthMessage(message, result.emailSent === false ? "warning" : "success");
   } catch (error) {
     console.error("Lỗi gửi OTP đổi mật khẩu:", error);
@@ -373,10 +486,10 @@ async function handleResetPassword(event) {
 }
 
 async function authenticatedFetch(url, options = {}) {
-  const idToken = localStorage.getItem("idToken");
+  const idToken = localStorage.getItem("idToken") || sessionStorage.getItem("idToken") || readTravelwAICookie("TravelwAIAuth");
 
   if (!idToken) {
-    window.location.href = "/login";
+    redirectToLogin(getCurrentReturnUrl());
     return null;
   }
 
@@ -403,7 +516,7 @@ async function authenticatedFetch(url, options = {}) {
         headers["Authorization"] = `Bearer ${newToken}`;
         return fetch(url, { ...options, headers });
       } else {
-        window.location.href = "/login";
+        redirectToLogin(getCurrentReturnUrl());
         return null;
       }
     }

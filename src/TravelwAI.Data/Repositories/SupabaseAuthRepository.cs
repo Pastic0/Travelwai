@@ -99,7 +99,7 @@ public sealed class SupabaseAuthRepository : IAuthRepository
                     @password_salt,
                     @refresh_token_hash,
                     @refresh_token_expires_at,
-                    'User',
+                    'Free',
                     false,
                     false,
                     @created_at,
@@ -120,7 +120,7 @@ public sealed class SupabaseAuthRepository : IAuthRepository
             await cmd.ExecuteNonQueryAsync();
         }
 
-        return SuccessTokenResult(userId, email, username, createdAt, refreshToken, "User", false, false, "User registered successfully");
+        return SuccessTokenResult(userId, email, username, createdAt, refreshToken, "Free", false, false, "User registered successfully");
     }
 
     public async Task<Dictionary<string, object?>> SignInAsync(string email, string password)
@@ -551,9 +551,18 @@ public sealed class SupabaseAuthRepository : IAuthRepository
         };
     }
 
+    private static string NormalizeStoredRole(string? role)
+    {
+        var value = (role ?? string.Empty).Trim();
+        if (string.Equals(value, "User", StringComparison.OrdinalIgnoreCase)) return "Free";
+        if (string.Equals(value, "Company", StringComparison.OrdinalIgnoreCase)) return "Business";
+        return string.IsNullOrWhiteSpace(value) ? "Free" : value;
+    }
+
     private Dictionary<string, object?> SuccessTokenResult(string userId, string email, string username, DateTime createdAt, string refreshToken, string role, bool isLocked, bool isProtected, string message)
     {
         var expiresIn = Math.Max(5, _options.AccessTokenMinutes) * 60;
+        role = NormalizeStoredRole(role);
         var idToken = CreateToken(userId, email, username, role, TimeSpan.FromSeconds(expiresIn));
 
         return new Dictionary<string, object?>

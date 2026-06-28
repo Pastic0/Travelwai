@@ -1,0 +1,88 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manage - TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-paper-plane.png" type="image/png" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+</head>
+<body class="tour-admin-page manage-page" data-page="manage">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "manage")
+
+  <main class="tour-admin-shell">
+    <section class="tour-admin-hero">
+      <div>
+        <span class="eyebrow">Quản lý gói tài khoản</span>
+        <h1>Manage</h1>
+      </div>
+      <div class="tour-actions page-hero-actions sales-hero-actions management-page-switcher" data-admin-page-switcher>
+        <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/admin" style="display:none;text-decoration:none">Admin</a>
+        <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/tour-sales" style="display:none;text-decoration:none">Sales</a>
+        <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/business" style="display:none;text-decoration:none">Business</a>
+        <a class="btn-soft btn-page-link admin-role-page-link management-page-link is-current" href="/manage" style="display:none;text-decoration:none" aria-current="page">Manage</a>
+      </div>
+    </section>
+
+    <section class="dashboard-grid" id="manageStats">
+      <article class="stat-card"><span>Tài khoản</span><strong id="manageStatAccounts">0</strong></article>
+      <article class="stat-card"><span>Đơn gói</span><strong id="manageStatOrders">0</strong></article>
+      <article class="stat-card"><span>Chờ bán</span><strong id="manageStatPending">0</strong></article>
+      <article class="stat-card"><span>Biểu mẫu</span><strong id="manageStatApplications">0</strong></article>
+    </section>
+
+    <section class="management-panel">
+      <div class="panel-header-row sales-list-header">
+        <div><h2>Tài khoản và gói hiện tại</h2></div>
+        <div class="sales-list-actions"><div class="tour-search-box tour-search-box-small"><input id="manageAccountSearch" type="search" placeholder="Tìm tài khoản..." autocomplete="off" /><button class="btn-soft btn-clear-tour-search" id="clearManageAccountSearch" type="button">Xóa</button></div></div>
+      </div>
+      <div class="table-wrap table-scroll-5">
+        <table>
+          <thead><tr><th>Tài khoản</th><th>Email</th><th>Gói</th><th>Hạn gói</th><th>Trạng thái</th><th>Ngày tạo</th></tr></thead>
+          <tbody id="manageAccountTableBody"><tr><td colspan="6" class="empty-line">Đang tải tài khoản...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="management-panel" style="margin-top:20px">
+      <div class="panel-header-row sales-list-header">
+        <div><h2>Đơn hàng gói tài khoản</h2></div>
+        <div class="sales-list-actions"><div class="tour-search-box tour-search-box-small"><input id="manageOrderSearch" type="search" placeholder="Tìm đơn hàng..." autocomplete="off" /><button class="btn-soft btn-clear-tour-search" id="clearManageOrderSearch" type="button">Xóa</button></div></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Người mua</th><th>Gói mua</th><th>Tổng tiền</th><th>Thời hạn</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+          <tbody id="manageOrderTableBody"><tr><td colspan="6" class="empty-line">Đang tải đơn hàng...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="management-panel" style="margin-top:20px">
+      <div class="panel-header-row sales-list-header">
+        <div><h2>Biểu mẫu Sales / Business</h2></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Người gửi</th><th>Gói</th><th>Doanh nghiệp</th><th>Liên hệ</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+          <tbody id="manageApplicationTableBody"><tr><td colspan="6" class="empty-line">Đang tải biểu mẫu...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="tourToast"></div>
+  <script src="/script/accounts.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/management_nav.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/manage.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/travelwai_contact_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/theme_toggle.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+</body>
+</html>

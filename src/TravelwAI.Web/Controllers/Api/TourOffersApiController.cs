@@ -29,6 +29,19 @@ public sealed class TourOffersApiController : ApiControllerBase
     {
         var current = await CurrentUserAsync();
         if (!current.ok) return current.error!;
+        if (!CanUsePostOffer(current.authUser))
+        {
+            return Ok(new
+            {
+                success = true,
+                has_offer = false,
+                post_offer_active = false,
+                discount_percent = 0,
+                progress = 0,
+                target = 1,
+                message = "Gói Free và VIP chưa dùng được ưu đãi bài viết."
+            });
+        }
 
         return Ok(await _offerService.GetPostOfferStatusAsync(current.userId!));
     }

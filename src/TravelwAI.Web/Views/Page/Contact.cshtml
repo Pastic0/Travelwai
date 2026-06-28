@@ -8,14 +8,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Liên hệ - TravelwAI</title>
     <link rel="icon" href="/logo/travelwai-paper-plane.png" type="image/png" />
-    <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <link rel="stylesheet" href="css/schedule_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <link rel="stylesheet" href="css/contact.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <script src="script/accounts.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+    <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <link rel="stylesheet" href="css/schedule_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <link rel="stylesheet" href="css/contact.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <script src="script/accounts.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
   </head>
   <body class="schedule-page contact-page">
+    @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
     @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "contact")
 
     <main class="schedule-shell contact-shell">
@@ -25,8 +26,8 @@
           <h1>Liên hệ</h1>
         </div>
         <div class="schedule-hero-actions contact-hero-actions">
-          <button type="button" class="create-btn" data-contact-panel-trigger><span>+</span> Gửi phản hồi</button>
-          <a href="/messaging" class="create-btn contact-secondary-btn"><span>💬</span> Mở tin nhắn</a>
+          <a href="/messaging?admin=1" class="create-btn"><span>💬</span> Gửi phản hồi</a>
+          <a href="/messaging?admin=1" class="create-btn contact-secondary-btn"><span>💬</span> Mở tin nhắn</a>
         </div>
       </section>
 
@@ -36,15 +37,15 @@
             <h2>Hỗ trợ</h2>
           </div>
           <div class="schedule-tools contact-tools">
-            <button type="button" class="create-btn" data-contact-panel-trigger><span>+</span> Phản hồi</button>
+            <a href="/messaging?admin=1" class="create-btn"><span>💬</span> Phản hồi</a>
           </div>
         </div>
 
         <div class="contact-support-grid">
-          <button type="button" class="contact-support-card" data-contact-panel-trigger>
+          <a class="contact-support-card" href="/messaging?admin=1">
             <strong>Gửi Admin</strong>
-          </button>
-          <a class="contact-support-card" href="/messaging">
+          </a>
+          <a class="contact-support-card" href="/messaging?admin=1">
             <strong>Tin nhắn</strong>
           </a>
           <a class="contact-support-card" href="/home">
@@ -54,10 +55,10 @@
       </section>
     </main>
 
-    <script src="/script/travelwai_contact_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-    <script src="/script/travelwai_notification_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-    <script src="/script/notification-badge-loader.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-      <script src="/script/theme_toggle.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+    <script src="/script/travelwai_contact_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+    <script src="/script/travelwai_notification_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+    <script src="/script/notification-badge-loader.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+      <script src="/script/theme_toggle.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
 </body>
 </html>
 

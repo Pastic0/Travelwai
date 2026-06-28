@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +18,9 @@ public sealed class AdminApiController : ApiControllerBase
     private const string PlanStatusOptionsCollection = "plan_status_options";
     private const string ProvinceTravelTagsCollection = "province_travel_tags";
     private const string PlanTravelTagsCollection = "plan_travel_tags";
+    private const string SalesLevelSettingsCollection = "sales_level_settings";
+    private const string ProvinceSearchEventsCollection = "province_search_events";
+    private const string SalesLevelSettingsDocumentId = "default";
     private const long MaxAvatarBytes = 10 * 1024 * 1024;
     private readonly IDataRepository _repo;
     private readonly NpgsqlDataSource _dataSource;
@@ -51,7 +56,7 @@ public sealed class AdminApiController : ApiControllerBase
             {
                 accounts = accounts.Count,
                 lockedAccounts = accounts.Count(a => IsTruthy(a.GetValueOrDefault("is_locked"))),
-                tourSalesAccounts = accounts.Count(a => IsRole(a.GetValueOrDefault("role"), "Tour Sales")),
+                tourSalesAccounts = accounts.Count(a => IsSalesRole(a.GetValueOrDefault("role")) || IsBusinessRole(a.GetValueOrDefault("role"))),
                 tours = tours.Count,
                 activeTours = tours.Count(t => string.Equals(Text(t, "status"), "Đang bán", StringComparison.OrdinalIgnoreCase) && !(GetInt(t, "slots") > 0 && GetInt(t, "sold") >= GetInt(t, "slots"))),
                 tourOrders = orders.Count,
@@ -59,10 +64,64 @@ public sealed class AdminApiController : ApiControllerBase
                 planStatuses = statusOptions.Count,
                 provinces = provinceTags.Count,
                 posts = posts.Count(p => !IsDeletedPost(p)),
-                revenue = orders.Sum(GetOrderTotal)
+                revenue = orders
+                    .Where(o => string.Equals(Text(o, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase))
+                    .Sum(GetOrderNetRevenue),
+                grossRevenue = orders
+                    .Where(o => string.Equals(Text(o, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase))
+                    .Sum(GetOrderOriginalTotal),
+                discountDeducted = orders
+                    .Where(o => string.Equals(Text(o, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase))
+                    .Sum(GetOrderDiscountAmount),
+                commissionDeducted = orders
+                    .Where(o => string.Equals(Text(o, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase))
+                    .Sum(GetOrderCommissionAmount),
+                serviceFee = orders
+                    .Where(o => string.Equals(Text(o, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase))
+                    .Sum(GetOrderServiceAmount),
+                service_fee = orders
+                    .Where(o => string.Equals(Text(o, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase))
+                    .Sum(GetOrderServiceAmount)
             }
         });
     }
+
+    [HttpGet("analytics")]
+    public async Task<IActionResult> Analytics()
+    {
+        var access = await RequireAdminAsync();
+        if (!access.ok) return access.error!;
+
+        var now = DateTime.UtcNow;
+        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var yearStart = new DateTime(now.Year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var provinceViews = await _repo.GetAllAsync(ProvinceSearchEventsCollection, limit: 3000);
+        var plans = await _repo.GetAllAsync("plans", limit: 3000);
+        var orders = await _repo.GetAllAsync("tour_orders", limit: 3000);
+        var tours = await _repo.GetAllAsync("tours", limit: 1000);
+        var monthStats = BuildAdminAnalyticsSnapshot(monthStart, monthStart.AddMonths(1), $"Tháng {monthStart.Month}/{monthStart.Year}", provinceViews, plans, orders, tours);
+        var yearMonths = new List<Dictionary<string, object?>>();
+        for (var month = 1; month <= 12; month++)
+        {
+            var start = new DateTime(now.Year, month, 1, 0, 0, 0, DateTimeKind.Utc);
+            yearMonths.Add(BuildAdminAnalyticsSnapshot(start, start.AddMonths(1), $"Tháng {month}", provinceViews, plans, orders, tours));
+        }
+        var aiSummary = BuildAdminAnalyticsSummary(monthStats, yearMonths, monthStart, yearStart);
+
+        return Ok(new
+        {
+            success = true,
+            data = new
+            {
+                month = monthStats,
+                year_months = yearMonths,
+                yearMonths = yearMonths,
+                ai_summary = aiSummary,
+                aiSummary = aiSummary
+            }
+        });
+    }
+
 
     [HttpGet("accounts")]
     public async Task<IActionResult> Accounts()
@@ -71,6 +130,7 @@ public sealed class AdminApiController : ApiControllerBase
         if (!access.ok) return access.error!;
 
         var accounts = await ReadAccountsAsync();
+        await EnsureAccountRolePrefixesAsync(accounts);
         await AttachOfferDiscountsAsync(accounts);
         return Ok(new { success = true, data = accounts });
     }
@@ -154,6 +214,48 @@ public sealed class AdminApiController : ApiControllerBase
         return UpdateAiAvatar("travelwinne", avatar);
     }
 
+    [HttpGet("sales-level-settings")]
+    public async Task<IActionResult> GetSalesLevelSettings()
+    {
+        var access = await RequireAdminAsync();
+        if (!access.ok) return access.error!;
+
+        var settings = await GetSalesLevelSettingsAsync();
+        return Ok(new
+        {
+            success = true,
+            data = settings.Select(ToSalesLevelResponse).ToList()
+        });
+    }
+
+    [HttpPut("sales-level-settings")]
+    public async Task<IActionResult> UpdateSalesLevelSettings([FromBody] AdminSalesLevelSettingsRequest request)
+    {
+        var access = await RequireAdminAsync();
+        if (!access.ok) return access.error!;
+
+        var incoming = request.Levels ?? new List<AdminSalesLevelSettingRequest>();
+        var levels = NormalizeSalesLevelSettings(incoming.Select(item => new SalesLevelSetting(
+            ClampSalesLevel(item.Level),
+            NormalizePercent(item.CommissionPercent ?? DefaultSalesLevelSetting(ClampSalesLevel(item.Level)).CommissionPercent, DefaultSalesLevelSetting(ClampSalesLevel(item.Level)).CommissionPercent),
+            NormalizePercent(item.OfferDiscountPercent ?? DefaultSalesLevelSetting(ClampSalesLevel(item.Level)).OfferDiscountPercent),
+            NormalizePercent(item.ServicePercent ?? DefaultSalesLevelSetting(ClampSalesLevel(item.Level)).ServicePercent)
+        )));
+
+        await _repo.SetAsync(SalesLevelSettingsCollection, SalesLevelSettingsDocumentId, new Dictionary<string, object?>
+        {
+            ["levels"] = levels.Select(ToSalesLevelDictionary).ToList(),
+            ["updated_at"] = DateTime.UtcNow
+        }, merge: false);
+
+        return Ok(new
+        {
+            success = true,
+            message = "Đã lưu ưu đãi từng cấp",
+            data = levels.Select(ToSalesLevelResponse).ToList()
+        });
+    }
+
     [HttpPut("accounts/{id}")]
     public async Task<IActionResult> UpdateAccount(string id, [FromBody] AdminAccountUpdateRequest request)
     {
@@ -165,16 +267,48 @@ public sealed class AdminApiController : ApiControllerBase
 
         var email = Text(account, "email").ToLowerInvariant();
         var isProtectedAdmin = IsProtectedAdmin(account);
-        var username = string.IsNullOrWhiteSpace(request.Username) ? Text(account, "username") : request.Username.Trim();
         var role = NormalizeRole(string.IsNullOrWhiteSpace(request.Role) ? Text(account, "role") : request.Role);
+        var baseUsername = StripRolePrefix(string.IsNullOrWhiteSpace(request.Username) ? Text(account, "username") : request.Username.Trim());
+        var username = BuildRoleUsername(role ?? "Free", baseUsername);
         var isLocked = request.IsLocked ?? IsTruthy(account.GetValueOrDefault("is_locked"));
+        var levelSettings = await GetSalesLevelSettingsAsync();
+        var requestedCommissionLevel = ClampSalesLevel(request.CommissionLevel ?? request.SalesLevel ?? TryInt(account.GetValueOrDefault("commission_level")) ?? TryInt(account.GetValueOrDefault("commissionLevel")) ?? TryInt(account.GetValueOrDefault("sales_level")) ?? TryInt(account.GetValueOrDefault("salesLevel")) ?? 1);
+        var requestedOfferLevel = ClampSalesLevel(request.OfferLevel ?? TryInt(account.GetValueOrDefault("offer_level")) ?? TryInt(account.GetValueOrDefault("offerLevel")) ?? requestedCommissionLevel);
+        var requestedServiceLevel = ClampSalesLevel(request.ServiceLevel ?? TryInt(account.GetValueOrDefault("service_level")) ?? TryInt(account.GetValueOrDefault("serviceLevel")) ?? 1);
+        var selectedCommissionSetting = GetSalesLevelSetting(levelSettings, requestedCommissionLevel);
+        var selectedOfferSetting = GetSalesLevelSetting(levelSettings, requestedOfferLevel);
+        var selectedServiceSetting = GetSalesLevelSetting(levelSettings, requestedServiceLevel);
+        var offerDiscountPercent = NormalizePercent(request.OfferDiscountPercent ?? selectedOfferSetting.OfferDiscountPercent);
+        var servicePercent = NormalizePercent(request.ServicePercent ?? selectedServiceSetting.ServicePercent);
+        var commissionPercent = NormalizePercent(request.CommissionPercent ?? selectedCommissionSetting.CommissionPercent, selectedCommissionSetting.CommissionPercent);
+        var commissionManualOverride = true;
 
-        if (role is null) return BadRequest(new { success = false, message = "Vai trò không hợp lệ. Chỉ dùng User, Admin hoặc Tour Sales." });
+        if (role is null) return BadRequest(new { success = false, message = "Vai trò không hợp lệ. Chỉ dùng Free, VIP, Premium, Admin, Sales hoặc Business." });
+
+        if (role == "Sales")
+        {
+            servicePercent = 0m;
+        }
+        else
+        {
+            commissionPercent = 0m;
+            commissionManualOverride = false;
+        }
+
+        if (role != "Business")
+        {
+            servicePercent = 0m;
+        }
 
         if (isProtectedAdmin)
         {
             role = "Admin";
             isLocked = false;
+            username = BuildRoleUsername("Admin", StripRolePrefix(username));
+            offerDiscountPercent = 0m;
+            servicePercent = 0m;
+            commissionPercent = 0m;
+            commissionManualOverride = false;
         }
         else if (role == "Admin")
         {
@@ -214,6 +348,30 @@ public sealed class AdminApiController : ApiControllerBase
             ["username"] = username,
             ["displayName"] = username,
             ["role"] = role,
+            ["offer_discount_percent"] = offerDiscountPercent,
+            ["offerDiscountPercent"] = offerDiscountPercent,
+            ["admin_offer_discount_percent"] = offerDiscountPercent,
+            ["adminOfferDiscountPercent"] = offerDiscountPercent,
+            ["admin_offer_override"] = true,
+            ["adminOfferOverride"] = true,
+            ["commission_percent"] = commissionPercent,
+            ["commissionPercent"] = commissionPercent,
+            ["commission_manual_override"] = commissionManualOverride,
+            ["commissionManualOverride"] = commissionManualOverride,
+            ["sales_level"] = requestedCommissionLevel,
+            ["salesLevel"] = requestedCommissionLevel,
+            ["commission_level"] = requestedCommissionLevel,
+            ["commissionLevel"] = requestedCommissionLevel,
+            ["offer_level"] = requestedOfferLevel,
+            ["offerLevel"] = requestedOfferLevel,
+            ["service_level"] = requestedServiceLevel,
+            ["serviceLevel"] = requestedServiceLevel,
+            ["sales_level_manual_override"] = role == "Sales",
+            ["salesLevelManualOverride"] = role == "Sales",
+            ["service_fee_percent"] = servicePercent,
+            ["serviceFeePercent"] = servicePercent,
+            ["service_percent"] = servicePercent,
+            ["servicePercent"] = servicePercent,
             ["is_locked"] = isLocked,
             ["isLocked"] = isLocked,
             ["is_protected"] = isProtectedAdmin,
@@ -744,6 +902,463 @@ public sealed class AdminApiController : ApiControllerBase
             .ToList();
     }
 
+    private static Dictionary<string, object?> BuildAdminAnalyticsSnapshot(
+        DateTime start,
+        DateTime end,
+        string label,
+        List<Dictionary<string, object?>> provinceViews,
+        List<Dictionary<string, object?>> plans,
+        List<Dictionary<string, object?>> orders,
+        List<Dictionary<string, object?>> tours)
+    {
+        var viewsInRange = provinceViews
+            .Where(item => IsInAnalyticsRange(AdminAnalyticsDate(item, "created_at", "createdAt", "updated_at", "updatedAt"), start, end))
+            .ToList();
+        var plansInRange = plans
+            .Where(item => IsInAnalyticsRange(AdminAnalyticsDate(item, "created_at", "createdAt", "start_date", "startDate"), start, end))
+            .ToList();
+        var ordersInRange = orders
+            .Where(item => IsInAnalyticsRange(AdminAnalyticsDate(item, "created_at", "createdAt", "tour_start_date", "tourStartDate"), start, end))
+            .Where(IsCountableTourOrder)
+            .ToList();
+
+        var topProvinces = TopMetrics(viewsInRange
+            .Select(item => TextAny(item, "province_name", "provinceName", "province", "name")), 5);
+
+        var budgetRanges = FixedMetrics(new[] { "1.000.000 - 3.000.000", "3.000.000 - 5.000.000", "5.000.000 - 10.000.000" },
+            plansInRange.Select(BudgetPerPersonFromPlan)
+                .Concat(ordersInRange.Select(BudgetPerPersonFromOrder))
+                .Select(BudgetBucket)
+                .Where(text => !string.IsNullOrWhiteSpace(text)));
+
+        var tourById = tours
+            .Select(tour => new { id = TextAny(tour, "id", "Id"), tour })
+            .Where(item => !string.IsNullOrWhiteSpace(item.id))
+            .GroupBy(item => item.id, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().tour, StringComparer.Ordinal);
+
+        var topTours = TopWeightedMetrics(ordersInRange.Select(order => (
+            Label: GetTourAnalyticsName(order, tourById),
+            Count: Math.Max(1, GetIntAny(order, "quantity", "people", "group_size", "groupSize"))
+        )), 5);
+
+        var groupSizes = FixedMetrics(new[] { "1 đến 2 người", "3 đến 5 người", "5 đến 10 người" },
+            plansInRange.Select(item => GetIntAny(item, "target_people", "targetPeople", "people", "group_size", "groupSize"))
+                .Concat(ordersInRange.Select(item => GetIntAny(item, "quantity", "people", "group_size", "groupSize")))
+                .Select(GroupSizeBucket)
+                .Where(text => !string.IsNullOrWhiteSpace(text)));
+
+        var topProvince = FirstMetricOrEmpty(topProvinces);
+        var budgetRange = FirstMetricOrEmpty(budgetRanges.Where(HasMetricCount));
+        var topTour = FirstMetricOrEmpty(topTours);
+        var groupSize = FirstMetricOrEmpty(groupSizes.Where(HasMetricCount));
+
+        var details = new Dictionary<string, object?>
+        {
+            ["top_provinces"] = topProvinces,
+            ["topProvinces"] = topProvinces,
+            ["budget_ranges"] = budgetRanges,
+            ["budgetRanges"] = budgetRanges,
+            ["top_tours"] = topTours,
+            ["topTours"] = topTours,
+            ["group_sizes"] = groupSizes,
+            ["groupSizes"] = groupSizes
+        };
+
+        return new Dictionary<string, object?>
+        {
+            ["label"] = label,
+            ["month"] = start.Month,
+            ["top_province"] = topProvince,
+            ["topProvince"] = topProvince,
+            ["budget_range"] = budgetRange,
+            ["budgetRange"] = budgetRange,
+            ["top_tour"] = topTour,
+            ["topTour"] = topTour,
+            ["group_size"] = groupSize,
+            ["groupSize"] = groupSize,
+            ["details"] = details,
+            ["total_orders"] = ordersInRange.Count,
+            ["totalOrders"] = ordersInRange.Count,
+            ["total_province_views"] = viewsInRange.Count,
+            ["totalProvinceViews"] = viewsInRange.Count
+        };
+    }
+
+    private static string BuildAdminAnalyticsSummary(Dictionary<string, object?> monthStats, List<Dictionary<string, object?>> yearMonths, DateTime monthStart, DateTime yearStart)
+    {
+        static IEnumerable<Dictionary<string, object?>> DetailRows(Dictionary<string, object?> stats, string snakeKey, string camelKey)
+        {
+            if (!stats.TryGetValue("details", out var rawDetails) || rawDetails is not Dictionary<string, object?> details)
+            {
+                if (!stats.TryGetValue("detail", out rawDetails) || rawDetails is not Dictionary<string, object?> altDetails) return Enumerable.Empty<Dictionary<string, object?>>();
+                details = altDetails;
+            }
+
+            if (!details.TryGetValue(snakeKey, out var rawRows) && !details.TryGetValue(camelKey, out rawRows)) return Enumerable.Empty<Dictionary<string, object?>>();
+            if (rawRows is IEnumerable<Dictionary<string, object?>> typedRows) return typedRows;
+            if (rawRows is IEnumerable<object> objectRows) return objectRows.OfType<Dictionary<string, object?>>();
+            return Enumerable.Empty<Dictionary<string, object?>>();
+        }
+
+        static List<Dictionary<string, object?>> AggregateDetails(List<Dictionary<string, object?>> months, string snakeKey, string camelKey, int take, string[]? fixedOrder = null)
+        {
+            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (fixedOrder is not null)
+            {
+                foreach (var label in fixedOrder) counts[label] = 0;
+            }
+
+            foreach (var month in months)
+            {
+                foreach (var row in DetailRows(month, snakeKey, camelKey))
+                {
+                    var label = CleanAnalyticsLabel(AnalyticsMetricLabel(row));
+                    if (string.IsNullOrWhiteSpace(label) || IsEmptyMetric(label)) continue;
+                    var count = Math.Max(0, AnalyticsMetricCount(row));
+                    counts[label] = counts.TryGetValue(label, out var current) ? current + count : count;
+                }
+            }
+
+            var query = counts.Select(item => Metric(item.Key, item.Value));
+            if (fixedOrder is not null)
+            {
+                return query
+                    .OrderByDescending(AnalyticsMetricCount)
+                    .ThenBy(item => Array.IndexOf(fixedOrder, AnalyticsMetricLabel(item)))
+                    .Take(take)
+                    .ToList();
+            }
+
+            return query
+                .Where(HasMetricCount)
+                .OrderByDescending(AnalyticsMetricCount)
+                .ThenBy(AnalyticsMetricLabel)
+                .Take(take)
+                .ToList();
+        }
+
+        static string JoinExamples(List<Dictionary<string, object?>> metrics)
+        {
+            var examples = metrics
+                .Take(3)
+                .Select(item =>
+                {
+                    var label = AnalyticsMetricLabel(item);
+                    var count = AnalyticsMetricCount(item);
+                    return string.IsNullOrWhiteSpace(label) || IsEmptyMetric(label)
+                        ? string.Empty
+                        : $"{label} ({count} lượt)";
+                })
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .ToList();
+            return examples.Count == 0 ? "chưa có dữ liệu" : string.Join(", ", examples);
+        }
+
+        var topProvinces = AggregateDetails(yearMonths, "top_provinces", "topProvinces", 3);
+        var budgetRanges = AggregateDetails(yearMonths, "budget_ranges", "budgetRanges", 3, new[] { "1.000.000 - 3.000.000", "3.000.000 - 5.000.000", "5.000.000 - 10.000.000" });
+        var topTours = AggregateDetails(yearMonths, "top_tours", "topTours", 3);
+        var groupSizes = AggregateDetails(yearMonths, "group_sizes", "groupSizes", 3, new[] { "1 đến 2 người", "3 đến 5 người", "5 đến 10 người" });
+
+        return $"Trong năm {yearStart.Year}, thống kê theo từng tháng cho thấy: tỉnh được tìm nhiều nhất gồm {JoinExamples(topProvinces)}. Ngân sách phổ biến gồm {JoinExamples(budgetRanges)}. Loại tour đặt nhiều nhất gồm {JoinExamples(topTours)}. Nhóm người dùng phổ biến gồm {JoinExamples(groupSizes)}.";
+    }
+
+    private static Dictionary<string, object?> Metric(string label, int count, Dictionary<string, object?>? extra = null)
+    {
+        var data = extra is null ? new Dictionary<string, object?>() : new Dictionary<string, object?>(extra);
+        data["label"] = string.IsNullOrWhiteSpace(label) ? "Chưa có dữ liệu" : label;
+        data["count"] = count;
+        return data;
+    }
+
+    private static Dictionary<string, object?> TopMetric(IEnumerable<string> values)
+    {
+        return FirstMetricOrEmpty(TopMetrics(values, 1));
+    }
+
+    private static List<Dictionary<string, object?>> TopMetrics(IEnumerable<string> values, int take)
+    {
+        return values
+            .Select(value => CleanAnalyticsLabel(value))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .GroupBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .Select(group => Metric(group.First(), group.Count()))
+            .OrderByDescending(AnalyticsMetricCount)
+            .ThenBy(AnalyticsMetricLabel)
+            .Take(Math.Max(1, take))
+            .ToList();
+    }
+
+    private static List<Dictionary<string, object?>> TopWeightedMetrics(IEnumerable<(string Label, int Count)> values, int take)
+    {
+        return values
+            .Select(item => new { Label = CleanAnalyticsLabel(item.Label), Count = Math.Max(0, item.Count) })
+            .Where(item => !string.IsNullOrWhiteSpace(item.Label) && item.Count > 0)
+            .GroupBy(item => item.Label, StringComparer.OrdinalIgnoreCase)
+            .Select(group => Metric(group.First().Label, group.Sum(item => item.Count)))
+            .OrderByDescending(AnalyticsMetricCount)
+            .ThenBy(AnalyticsMetricLabel)
+            .Take(Math.Max(1, take))
+            .ToList();
+    }
+
+    private static List<Dictionary<string, object?>> FixedMetrics(IEnumerable<string> labels, IEnumerable<string> values)
+    {
+        var labelArray = labels.ToArray();
+        var counts = values
+            .Select(value => CleanAnalyticsLabel(value))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .GroupBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+        return labelArray.Select(label => Metric(label, counts.TryGetValue(label, out var count) ? count : 0))
+            .OrderByDescending(AnalyticsMetricCount)
+            .ThenBy(item => Array.IndexOf(labelArray, AnalyticsMetricLabel(item)))
+            .ToList();
+    }
+
+    private static Dictionary<string, object?> FirstMetricOrEmpty(IEnumerable<Dictionary<string, object?>> metrics)
+    {
+        return metrics.FirstOrDefault() ?? Metric("Chưa có dữ liệu", 0);
+    }
+
+    private static bool HasMetricCount(Dictionary<string, object?> metric) => AnalyticsMetricCount(metric) > 0;
+
+    private static int AnalyticsMetricCount(Dictionary<string, object?> metric)
+    {
+        return int.TryParse(metric.GetValueOrDefault("count")?.ToString(), out var count) ? count : 0;
+    }
+
+    private static string AnalyticsMetricLabel(Dictionary<string, object?> metric)
+    {
+        return metric.GetValueOrDefault("label")?.ToString() ?? string.Empty;
+    }
+
+    private static int MetricCount(Dictionary<string, object?> stats, string key)
+    {
+        if (!stats.TryGetValue(key, out var raw) || raw is not Dictionary<string, object?> metric) return 0;
+        return AnalyticsMetricCount(metric);
+    }
+
+    private static bool IsCountableTourOrder(Dictionary<string, object?> order)
+    {
+        var status = TextAny(order, "status", "order_status", "orderStatus");
+        if (string.IsNullOrWhiteSpace(status)) return true;
+        var normalized = NormalizeAnalyticsText(status);
+        return !ContainsAny(normalized, "huy", "het han", "expired", "cancel");
+    }
+
+    private static string GetTourAnalyticsName(Dictionary<string, object?> order, Dictionary<string, Dictionary<string, object?>> toursById)
+    {
+        var name = TextAny(order, "tour_name", "tourName", "name", "title");
+        var tourId = TextAny(order, "tour_id", "tourId");
+        if (string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(tourId) && toursById.TryGetValue(tourId, out var tour))
+        {
+            name = TextAny(tour, "name", "title", "tour_name", "tourName");
+        }
+        return CleanAnalyticsLabel(name);
+    }
+
+    private static string MetricLabel(Dictionary<string, object?> stats, string key)
+    {
+        if (!stats.TryGetValue(key, out var raw) || raw is not Dictionary<string, object?> metric) return "Chưa có dữ liệu";
+        return metric.TryGetValue("label", out var label) ? label?.ToString() ?? "Chưa có dữ liệu" : "Chưa có dữ liệu";
+    }
+
+    private static bool IsEmptyMetric(string value) => string.IsNullOrWhiteSpace(value) || string.Equals(value, "Chưa có dữ liệu", StringComparison.OrdinalIgnoreCase);
+    private static string MetricOrFallback(string value, string fallback) => IsEmptyMetric(value) ? fallback : value;
+
+    private static DateTime AdminAnalyticsDate(Dictionary<string, object?> row, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            var date = ParseAdminAnalyticsDate(row.GetValueOrDefault(key));
+            if (date != DateTime.MinValue) return date;
+        }
+        return DateTime.MinValue;
+    }
+
+    private static DateTime ParseAdminAnalyticsDate(object? value)
+    {
+        if (value is DateTime date) return date.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(date, DateTimeKind.Utc) : date.ToUniversalTime();
+        if (value is DateTimeOffset dto) return dto.UtcDateTime;
+        var text = value?.ToString();
+        if (string.IsNullOrWhiteSpace(text)) return DateTime.MinValue;
+        return DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
+            || DateTime.TryParse(text, CultureInfo.GetCultureInfo("vi-VN"), DateTimeStyles.AssumeLocal, out parsed)
+            ? parsed.ToUniversalTime()
+            : DateTime.MinValue;
+    }
+
+    private static bool IsInAnalyticsRange(DateTime date, DateTime start, DateTime end)
+    {
+        return date != DateTime.MinValue && date >= start && date < end;
+    }
+
+    private static bool IsYoungUser(Dictionary<string, object?> user)
+    {
+        var age = GetIntAny(user, "age", "tuoi", "user_age", "userAge");
+        if (age <= 0)
+        {
+            var birthYear = GetIntAny(user, "birth_year", "birthYear", "year_of_birth", "yearOfBirth");
+            if (birthYear > 1900) age = DateTime.UtcNow.Year - birthYear;
+        }
+        if (age <= 0)
+        {
+            var birthDate = AdminAnalyticsDate(user, "birth_date", "birthDate", "birthday", "dob", "date_of_birth", "dateOfBirth");
+            if (birthDate != DateTime.MinValue)
+            {
+                var today = DateTime.UtcNow.Date;
+                age = today.Year - birthDate.Year;
+                if (birthDate.Date > today.AddYears(-age)) age--;
+            }
+        }
+        return age >= 18 && age <= 25;
+    }
+
+    private static bool IsBeachInterest(Dictionary<string, object?> row)
+    {
+        var text = NormalizeAnalyticsText(AnalyticsText(row));
+        return ContainsAny(text, "bien", "dao", "phu quoc", "nha trang", "da nang", "quy nhon", "vung tau", "ha long", "cat ba", "sam son", "phan thiet", "mui ne");
+    }
+
+    private static bool IsMountainInterest(Dictionary<string, object?> row)
+    {
+        var text = NormalizeAnalyticsText(AnalyticsText(row));
+        return ContainsAny(text, "nui", "cao nguyen", "tay bac", "sa pa", "sapa", "da lat", "moc chau", "ha giang", "dien bien", "lao cai", "kon tum", "gia lai");
+    }
+
+    private static string ClassifyTourType(Dictionary<string, object?> order, Dictionary<string, Dictionary<string, object?>> toursById)
+    {
+        var tourId = TextAny(order, "tour_id", "tourId");
+        var pieces = new List<string> { AnalyticsText(order) };
+        if (!string.IsNullOrWhiteSpace(tourId) && toursById.TryGetValue(tourId, out var tour)) pieces.Add(AnalyticsText(tour));
+        var text = NormalizeAnalyticsText(string.Join(" ", pieces));
+        if (ContainsAny(text, "bien", "dao", "phu quoc", "nha trang", "da nang", "quy nhon", "vung tau", "ha long", "cat ba", "sam son", "phan thiet", "mui ne")) return "Tour biển";
+        if (ContainsAny(text, "nui", "cao nguyen", "tay bac", "sa pa", "sapa", "da lat", "moc chau", "ha giang", "lao cai")) return "Tour núi";
+        if (ContainsAny(text, "di tich", "lich su", "di san", "pho co", "co do", "hoi an", "hue", "den", "chua")) return "Tour văn hoá - lịch sử";
+        if (ContainsAny(text, "nghi duong", "resort", "spa", "tuan trang mat")) return "Tour nghỉ dưỡng";
+        if (ContainsAny(text, "team building", "teambuilding", "doan", "cong ty")) return "Tour team building";
+        if (ContainsAny(text, "giai tri", "cong vien", "vinwonders", "khu vui choi")) return "Tour giải trí";
+        return string.IsNullOrWhiteSpace(TextAny(order, "tour_name", "tourName")) ? "Chưa phân loại" : "Tour tổng hợp";
+    }
+
+    private static string AnalyticsText(Dictionary<string, object?> row)
+    {
+        var fields = new[]
+        {
+            "title", "name", "tour_name", "tourName", "destination", "tour_destination", "tourDestination", "province_name", "provinceName",
+            "destination_status", "destinationStatus", "plan_status_label", "planStatusLabel", "status_key", "statusKey", "description", "tags", "province_tags", "provinceTags"
+        };
+        return string.Join(" ", fields.Select(field => row.GetValueOrDefault(field)?.ToString()).Where(text => !string.IsNullOrWhiteSpace(text)));
+    }
+
+    private static bool ContainsAny(string text, params string[] keywords)
+    {
+        return keywords.Any(keyword => text.Contains(NormalizeAnalyticsText(keyword), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string NormalizeAnalyticsText(string value)
+    {
+        var normalized = (value ?? string.Empty).Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(normalized.Length);
+        foreach (var ch in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark) builder.Append(ch);
+        }
+        return builder.ToString().Normalize(NormalizationForm.FormC).Replace('đ', 'd').Replace('Đ', 'D').ToLowerInvariant();
+    }
+
+    private static string CleanAnalyticsLabel(string value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        return string.Join(" ", text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static bool PlanTouchesHoliday(Dictionary<string, object?> plan)
+    {
+        var start = AdminAnalyticsDate(plan, "start_date", "startDate", "created_at", "createdAt");
+        var end = AdminAnalyticsDate(plan, "end_date", "endDate", "start_date", "startDate");
+        return RangeTouchesHoliday(start, end);
+    }
+
+    private static bool OrderTouchesHoliday(Dictionary<string, object?> order)
+    {
+        var start = AdminAnalyticsDate(order, "tour_start_date", "tourStartDate", "created_at", "createdAt");
+        var end = AdminAnalyticsDate(order, "tour_end_date", "tourEndDate", "tour_start_date", "tourStartDate");
+        return RangeTouchesHoliday(start, end);
+    }
+
+    private static bool RangeTouchesHoliday(DateTime start, DateTime end)
+    {
+        if (start == DateTime.MinValue) return false;
+        if (end == DateTime.MinValue || end < start) end = start;
+        for (var day = start.Date; day <= end.Date && day <= start.Date.AddDays(14); day = day.AddDays(1))
+        {
+            if (IsHolidayDay(day)) return true;
+        }
+        return false;
+    }
+
+    private static bool IsHolidayDay(DateTime day)
+    {
+        var month = day.Month;
+        var date = day.Day;
+        return (month == 1 && date is >= 1 and <= 3)
+            || (month == 4 && date is >= 28 and <= 30)
+            || (month == 5 && date is >= 1 and <= 3)
+            || (month == 9 && date is >= 1 and <= 3)
+            || (month == 12 && date is >= 24 and <= 25);
+    }
+
+    private static decimal BudgetPerPersonFromPlan(Dictionary<string, object?> plan)
+    {
+        var budget = TryDecimal(plan.GetValueOrDefault("budget")) ?? TryDecimal(plan.GetValueOrDefault("total_budget")) ?? TryDecimal(plan.GetValueOrDefault("totalBudget")) ?? 0m;
+        if (budget <= 0) return 0;
+        var people = Math.Max(1, GetIntAny(plan, "target_people", "targetPeople", "people", "group_size", "groupSize"));
+        return budget / people;
+    }
+
+    private static decimal BudgetPerPersonFromOrder(Dictionary<string, object?> order)
+    {
+        var total = GetOrderTotal(order);
+        if (total <= 0) total = GetOrderOriginalTotal(order);
+        if (total <= 0) return 0;
+        var quantity = Math.Max(1, GetIntAny(order, "quantity", "people", "group_size", "groupSize"));
+        return total / quantity;
+    }
+
+    private static string BudgetBucket(decimal value)
+    {
+        return value switch
+        {
+            >= 1000000m and < 3000000m => "1.000.000 - 3.000.000",
+            >= 3000000m and < 5000000m => "3.000.000 - 5.000.000",
+            >= 5000000m and <= 10000000m => "5.000.000 - 10.000.000",
+            _ => string.Empty
+        };
+    }
+
+    private static string GroupSizeBucket(int value)
+    {
+        return value switch
+        {
+            >= 1 and <= 2 => "1 đến 2 người",
+            >= 3 and <= 5 => "3 đến 5 người",
+            >= 5 and <= 10 => "5 đến 10 người",
+            _ => string.Empty
+        };
+    }
+
+    private static int GetIntAny(Dictionary<string, object?> row, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (int.TryParse(row.GetValueOrDefault(key)?.ToString(), out var value)) return value;
+        }
+        return 0;
+    }
+
     private async Task<(bool ok, IActionResult? error)> RequireAdminAsync()
     {
         var current = await CurrentUserAsync();
@@ -818,13 +1433,52 @@ public sealed class AdminApiController : ApiControllerBase
 
     private async Task AttachOfferDiscountsAsync(List<Dictionary<string, object?>> accounts)
     {
+        var levelSettings = await GetSalesLevelSettingsAsync();
         foreach (var account in accounts)
         {
             var id = Text(account, "id");
+            Dictionary<string, object?>? userDoc = string.IsNullOrWhiteSpace(id) ? null : await _repo.GetByIdAsync("users", id);
             var status = string.IsNullOrWhiteSpace(id) ? null : await _offerService.GetStatusAsync(id, Text(account, "email"));
-            var discount = int.TryParse(status?.GetValueOrDefault("discount_percent")?.ToString(), out var value) ? value : 0;
+            var automaticDiscount = int.TryParse(status?.GetValueOrDefault("automatic_discount_percent")?.ToString(), out var autoValue)
+                ? autoValue
+                : (int)(TryDecimal(status?.GetValueOrDefault("discount_percent")) ?? 0m);
+            var salesSoldCount = await GetSalesSoldCountAsync(id);
+            var level = GetUserSalesLevel(userDoc, salesSoldCount);
+            var commissionLevel = ClampSalesLevel(TryInt(userDoc?.GetValueOrDefault("commission_level")) ?? TryInt(userDoc?.GetValueOrDefault("commissionLevel")) ?? level.Level);
+            var offerLevel = ClampSalesLevel(TryInt(userDoc?.GetValueOrDefault("offer_level")) ?? TryInt(userDoc?.GetValueOrDefault("offerLevel")) ?? level.Level);
+            var serviceLevel = ClampSalesLevel(TryInt(userDoc?.GetValueOrDefault("service_level")) ?? TryInt(userDoc?.GetValueOrDefault("serviceLevel")) ?? 1);
+            var commissionSetting = GetSalesLevelSetting(levelSettings, commissionLevel);
+            var offerSetting = GetSalesLevelSetting(levelSettings, offerLevel);
+            var serviceSetting = GetSalesLevelSetting(levelSettings, serviceLevel);
+            var isSales = IsSalesRole(account.GetValueOrDefault("role"));
+            var discount = isSales
+                ? GetUserOfferPercent(userDoc, offerSetting.OfferDiscountPercent)
+                : TryGetAdminOfferOverride(userDoc, out var manualDiscount)
+                    ? manualDiscount
+                    : NormalizePercent(automaticDiscount);
+            var commissionPercent = isSales ? GetUserCommissionPercent(userDoc, commissionSetting.CommissionPercent) : GetUserCommissionPercent(userDoc, commissionSetting.CommissionPercent);
+            var servicePercent = GetUserServicePercent(userDoc, serviceSetting.ServicePercent);
+
             account["offer_discount_percent"] = discount;
             account["offerDiscountPercent"] = discount;
+            account["automatic_offer_discount_percent"] = automaticDiscount;
+            account["automaticOfferDiscountPercent"] = automaticDiscount;
+            account["commission_percent"] = commissionPercent;
+            account["commissionPercent"] = commissionPercent;
+            account["sales_level"] = commissionLevel;
+            account["salesLevel"] = commissionLevel;
+            account["commission_level"] = commissionLevel;
+            account["commissionLevel"] = commissionLevel;
+            account["offer_level"] = offerLevel;
+            account["offerLevel"] = offerLevel;
+            account["service_level"] = serviceLevel;
+            account["serviceLevel"] = serviceLevel;
+            account["sales_sold_count"] = salesSoldCount;
+            account["salesSoldCount"] = salesSoldCount;
+            account["service_fee_percent"] = servicePercent;
+            account["serviceFeePercent"] = servicePercent;
+            account["service_percent"] = servicePercent;
+            account["servicePercent"] = servicePercent;
         }
     }
 
@@ -910,6 +1564,55 @@ public sealed class AdminApiController : ApiControllerBase
         return ReadAccountRow(reader);
     }
 
+
+    private async Task EnsureAccountRolePrefixesAsync(List<Dictionary<string, object?>> accounts)
+    {
+        foreach (var account in accounts)
+        {
+            var id = Text(account, "id");
+            var normalizedRole = NormalizeRole(Text(account, "role"));
+            if (string.IsNullOrWhiteSpace(id) || normalizedRole is null) continue;
+
+            var currentUsername = Text(account, "username");
+            var targetUsername = BuildRoleUsername(normalizedRole, currentUsername);
+            var roleChanged = !string.Equals(Text(account, "role"), normalizedRole, StringComparison.OrdinalIgnoreCase);
+            var nameChanged = !string.Equals(currentUsername, targetUsername, StringComparison.Ordinal);
+            if (!roleChanged && !nameChanged) continue;
+
+            await using var conn = await _dataSource.OpenConnectionAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                update app_users_auth
+                set username = @username,
+                    role = @role,
+                    updated_at = now()
+                where id = @id;
+                """;
+            cmd.Parameters.AddWithValue("id", id);
+            cmd.Parameters.AddWithValue("username", targetUsername);
+            cmd.Parameters.AddWithValue("role", normalizedRole);
+            await cmd.ExecuteNonQueryAsync();
+
+            account["username"] = targetUsername;
+            account["role"] = normalizedRole;
+            account["updated_at"] = DateTime.UtcNow.ToString("O");
+
+            await _repo.SetAsync("users", id, new Dictionary<string, object?>
+            {
+                ["id"] = id,
+                ["uid"] = id,
+                ["email"] = Text(account, "email"),
+                ["username"] = targetUsername,
+                ["displayName"] = targetUsername,
+                ["role"] = normalizedRole,
+                ["updated_at"] = DateTime.UtcNow
+            }, merge: true);
+
+            await SyncTourSalesNameAsync(id, targetUsername);
+            await SyncPostAuthorNameAsync(id, targetUsername);
+        }
+    }
+
     private static Dictionary<string, object?> ReadAccountRow(NpgsqlDataReader reader) => new()
     {
         ["id"] = reader.GetString(0),
@@ -938,23 +1641,306 @@ public sealed class AdminApiController : ApiControllerBase
         return email == AdminEmail || IsTruthy(account.GetValueOrDefault("is_protected"));
     }
 
+    private static decimal NormalizePercent(decimal value, decimal fallback = 0m)
+    {
+        if (value < 0) return fallback;
+        if (value > 100) return 100m;
+        return value;
+    }
+
+    private sealed record SalesLevelSetting(int Level, decimal CommissionPercent, decimal OfferDiscountPercent, decimal ServicePercent);
+
+    private async Task<List<SalesLevelSetting>> GetSalesLevelSettingsAsync()
+    {
+        Dictionary<string, object?>? doc = null;
+        try
+        {
+            doc = await _repo.GetByIdAsync(SalesLevelSettingsCollection, SalesLevelSettingsDocumentId);
+        }
+        catch
+        {
+            doc = null;
+        }
+
+        if (doc?.GetValueOrDefault("levels") is IEnumerable<object?> rawLevels)
+        {
+            var parsed = rawLevels
+                .OfType<Dictionary<string, object?>>()
+                .Select(item => new SalesLevelSetting(
+                    ClampSalesLevel(TryInt(item.GetValueOrDefault("level")) ?? 1),
+                    NormalizePercent(TryDecimal(item.GetValueOrDefault("commission_percent")) ?? TryDecimal(item.GetValueOrDefault("commissionPercent")) ?? DefaultSalesLevelSetting(ClampSalesLevel(TryInt(item.GetValueOrDefault("level")) ?? 1)).CommissionPercent),
+                    NormalizePercent(TryDecimal(item.GetValueOrDefault("offer_discount_percent")) ?? TryDecimal(item.GetValueOrDefault("offerDiscountPercent")) ?? DefaultSalesLevelSetting(ClampSalesLevel(TryInt(item.GetValueOrDefault("level")) ?? 1)).OfferDiscountPercent),
+                    NormalizePercent(TryDecimal(item.GetValueOrDefault("service_percent")) ?? TryDecimal(item.GetValueOrDefault("servicePercent")) ?? TryDecimal(item.GetValueOrDefault("service_fee_percent")) ?? TryDecimal(item.GetValueOrDefault("serviceFeePercent")) ?? DefaultSalesLevelSetting(ClampSalesLevel(TryInt(item.GetValueOrDefault("level")) ?? 1)).ServicePercent)
+                ))
+                .ToList();
+            if (parsed.Count > 0) return NormalizeSalesLevelSettings(parsed);
+        }
+
+        return NormalizeSalesLevelSettings(Array.Empty<SalesLevelSetting>());
+    }
+
+    private static List<SalesLevelSetting> NormalizeSalesLevelSettings(IEnumerable<SalesLevelSetting> settings)
+    {
+        var map = settings
+            .GroupBy(item => ClampSalesLevel(item.Level))
+            .ToDictionary(group => group.Key, group => group.Last());
+
+        return Enumerable.Range(1, 5)
+            .Select(level => map.TryGetValue(level, out var item)
+                ? new SalesLevelSetting(level, NormalizePercent(item.CommissionPercent, DefaultSalesLevelSetting(level).CommissionPercent), NormalizePercent(item.OfferDiscountPercent), NormalizePercent(item.ServicePercent))
+                : DefaultSalesLevelSetting(level))
+            .ToList();
+    }
+
+    private static SalesLevelSetting DefaultSalesLevelSetting(int level) => ClampSalesLevel(level) switch
+    {
+        2 => new SalesLevelSetting(2, 12m, 0m, 0m),
+        3 => new SalesLevelSetting(3, 15m, 0m, 0m),
+        4 => new SalesLevelSetting(4, 18m, 0m, 0m),
+        5 => new SalesLevelSetting(5, 20m, 0m, 0m),
+        _ => new SalesLevelSetting(1, 8m, 0m, 0m)
+    };
+
+    private static SalesLevelSetting GetSalesLevelSetting(IReadOnlyCollection<SalesLevelSetting> settings, int level)
+    {
+        var safeLevel = ClampSalesLevel(level);
+        return settings.FirstOrDefault(item => item.Level == safeLevel) ?? DefaultSalesLevelSetting(safeLevel);
+    }
+
+    private static object ToSalesLevelResponse(SalesLevelSetting setting) => new
+    {
+        level = setting.Level,
+        commission_percent = setting.CommissionPercent,
+        commissionPercent = setting.CommissionPercent,
+        offer_discount_percent = setting.OfferDiscountPercent,
+        offerDiscountPercent = setting.OfferDiscountPercent,
+        service_percent = setting.ServicePercent,
+        servicePercent = setting.ServicePercent,
+        service_fee_percent = setting.ServicePercent,
+        serviceFeePercent = setting.ServicePercent
+    };
+
+    private static Dictionary<string, object?> ToSalesLevelDictionary(SalesLevelSetting setting) => new()
+    {
+        ["level"] = setting.Level,
+        ["commission_percent"] = setting.CommissionPercent,
+        ["commissionPercent"] = setting.CommissionPercent,
+        ["offer_discount_percent"] = setting.OfferDiscountPercent,
+        ["offerDiscountPercent"] = setting.OfferDiscountPercent,
+        ["service_percent"] = setting.ServicePercent,
+        ["servicePercent"] = setting.ServicePercent,
+        ["service_fee_percent"] = setting.ServicePercent,
+        ["serviceFeePercent"] = setting.ServicePercent
+    };
+
+    private static int ClampSalesLevel(int? level)
+    {
+        var value = level ?? 1;
+        if (value < 1) return 1;
+        if (value > 5) return 5;
+        return value;
+    }
+
+    private static (int Level, decimal Percent) GetUserSalesLevel(Dictionary<string, object?>? user, int soldCount)
+    {
+        var automatic = GetSalesLevel(soldCount);
+        if (user is null) return automatic;
+        var storedLevel = TryInt(user.GetValueOrDefault("sales_level")) ?? TryInt(user.GetValueOrDefault("salesLevel"));
+        if (storedLevel is null) return automatic;
+        return (ClampSalesLevel(storedLevel), automatic.Percent);
+    }
+
+    private static bool TryGetAdminOfferOverride(Dictionary<string, object?>? user, out decimal discount)
+    {
+        discount = 0m;
+        if (user is null) return false;
+        if (!IsTruthy(user.GetValueOrDefault("admin_offer_override")) && !IsTruthy(user.GetValueOrDefault("adminOfferOverride"))) return false;
+        discount = NormalizePercent(
+            TryDecimal(user.GetValueOrDefault("admin_offer_discount_percent"))
+            ?? TryDecimal(user.GetValueOrDefault("adminOfferDiscountPercent"))
+            ?? TryDecimal(user.GetValueOrDefault("offer_discount_percent"))
+            ?? TryDecimal(user.GetValueOrDefault("offerDiscountPercent"))
+            ?? 0m);
+        return true;
+    }
+
+    private static decimal GetUserOfferPercent(Dictionary<string, object?>? user, decimal fallback = 0m)
+    {
+        if (user is null) return NormalizePercent(fallback);
+        return NormalizePercent(
+            TryDecimal(user.GetValueOrDefault("offer_discount_percent"))
+            ?? TryDecimal(user.GetValueOrDefault("offerDiscountPercent"))
+            ?? TryDecimal(user.GetValueOrDefault("admin_offer_discount_percent"))
+            ?? TryDecimal(user.GetValueOrDefault("adminOfferDiscountPercent"))
+            ?? fallback,
+            fallback);
+    }
+
+    private static decimal GetUserCommissionPercent(Dictionary<string, object?>? user, decimal fallback = 8m)
+    {
+        if (user is null) return NormalizePercent(fallback, 8m);
+        if (IsTruthy(user.GetValueOrDefault("commission_manual_override")) || IsTruthy(user.GetValueOrDefault("commissionManualOverride")))
+        {
+            return NormalizePercent(
+                TryDecimal(user.GetValueOrDefault("commission_percent"))
+                ?? TryDecimal(user.GetValueOrDefault("commissionPercent"))
+                ?? fallback,
+                fallback);
+        }
+        return NormalizePercent(fallback, 8m);
+    }
+
+    private static decimal GetUserServicePercent(Dictionary<string, object?>? user, decimal fallback = 0m)
+    {
+        if (user is null) return NormalizePercent(fallback);
+        return NormalizePercent(
+            TryDecimal(user.GetValueOrDefault("service_fee_percent"))
+            ?? TryDecimal(user.GetValueOrDefault("serviceFeePercent"))
+            ?? TryDecimal(user.GetValueOrDefault("service_percent"))
+            ?? TryDecimal(user.GetValueOrDefault("servicePercent"))
+            ?? fallback,
+            fallback);
+    }
+
     private static string? NormalizeRole(string? role)
     {
         var value = (role ?? string.Empty).Trim().ToLowerInvariant().Replace("_", " ").Replace("-", " ");
         value = string.Join(' ', value.Split(' ', StringSplitOptions.RemoveEmptyEntries));
         return value switch
         {
-            "user" or "nguoi dung" or "người dùng" => "User",
+            "user" or "free" or "mien phi" or "miễn phí" or "nguoi dung" or "người dùng" => "Free",
+            "vip" => "VIP",
+            "premium" => "Premium",
             "admin" => "Admin",
-            "tour sales" or "toursales" or "tour sale" or "ban tour" or "bán tour" => "Tour Sales",
+            "sales" or "sale" or "tour sales" or "toursales" or "tour sale" or "ban tour" or "bán tour" => "Sales",
+            "company" or "business" or "cong ty" or "công ty" or "doanh nghiep" or "doanh nghiệp" => "Business",
             _ => null
         };
     }
 
+    private static bool IsSalesRole(object? role)
+    {
+        var value = role?.ToString() ?? string.Empty;
+        return string.Equals(value, "Sales", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "Tour Sales", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsBusinessRole(object? role)
+    {
+        var value = role?.ToString() ?? string.Empty;
+        return string.Equals(value, "Business", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "Company", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string StripRolePrefix(string? username)
+    {
+        var value = (username ?? string.Empty).Trim();
+        var changed = true;
+        while (changed)
+        {
+            changed = false;
+            foreach (var prefix in new[] { "Admin-", "Business-" })
+            {
+                if (value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = value[prefix.Length..].Trim();
+                    changed = true;
+                }
+            }
+        }
+        return string.IsNullOrWhiteSpace(value) ? "Tài khoản" : value;
+    }
+
+    private static string BuildRoleUsername(string? role, string? username)
+    {
+        var clean = StripRolePrefix(username);
+        var normalized = NormalizeRole(role) ?? role ?? "Free";
+        if (string.Equals(normalized, "Admin", StringComparison.OrdinalIgnoreCase)) return $"Admin-{clean}";
+        if (IsSalesRole(normalized) || IsBusinessRole(normalized)) return $"Business-{clean}";
+        return clean;
+    }
+
+    private static (int Level, decimal Percent) GetSalesLevel(int soldCount)
+    {
+        if (soldCount >= 300) return (5, 20m);
+        if (soldCount >= 200) return (4, 18m);
+        if (soldCount >= 120) return (3, 15m);
+        if (soldCount >= 50) return (2, 12m);
+        return (1, 8m);
+    }
+
+    private async Task<int> GetSalesSoldCountAsync(string? userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return 0;
+        var orders = await _repo.GetAllAsync("tour_orders", limit: 1000);
+        return orders
+            .Where(o => string.Equals(Text(o, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase))
+            .Where(o => string.Equals(TextAny(o, "tour_sales_id", "tourSalesId", "created_by", "createdBy", "seller_id", "sellerId"), userId, StringComparison.Ordinal))
+            .Sum(o => Math.Max(1, GetInt(o, "quantity")));
+    }
+
     private static bool IsRole(object? role, string expected) => string.Equals(role?.ToString(), expected, StringComparison.OrdinalIgnoreCase);
     private static string Text(Dictionary<string, object?> row, string key) => row.TryGetValue(key, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
+    private static string TextAny(Dictionary<string, object?>? row, params string[] keys)
+    {
+        if (row is null) return string.Empty;
+        foreach (var key in keys)
+        {
+            var value = Text(row, key);
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+        }
+        return string.Empty;
+    }
     private static bool IsTruthy(object? value) => value is bool b ? b : bool.TryParse(value?.ToString(), out var parsed) && parsed;
     private static decimal GetOrderTotal(Dictionary<string, object?> order) => TryDecimal(order.GetValueOrDefault("total_price")) ?? TryDecimal(order.GetValueOrDefault("totalPrice")) ?? 0;
+    private static decimal GetOrderOriginalTotal(Dictionary<string, object?> order)
+    {
+        var original = TryDecimal(order.GetValueOrDefault("original_total_price"))
+            ?? TryDecimal(order.GetValueOrDefault("originalTotalPrice"))
+            ?? TryDecimal(order.GetValueOrDefault("commission_base_total"))
+            ?? TryDecimal(order.GetValueOrDefault("commissionBaseTotal"))
+            ?? 0;
+        if (original > 0) return original;
+        var discount = TryDecimal(order.GetValueOrDefault("discount_amount")) ?? TryDecimal(order.GetValueOrDefault("discountAmount")) ?? 0;
+        return GetOrderTotal(order) + Math.Max(0, discount);
+    }
+    private static decimal GetOrderDiscountAmount(Dictionary<string, object?> order)
+    {
+        var stored = TryDecimal(order.GetValueOrDefault("discount_amount")) ?? TryDecimal(order.GetValueOrDefault("discountAmount")) ?? 0;
+        if (stored > 0) return stored;
+        return Math.Max(0, GetOrderOriginalTotal(order) - GetOrderTotal(order));
+    }
+    private static decimal GetOrderCommissionPercent(Dictionary<string, object?> order)
+    {
+        foreach (var key in new[] { "commission_percent", "commissionPercent" })
+        {
+            if (order.TryGetValue(key, out var raw) && TryDecimal(raw) is { } value)
+            {
+                return NormalizePercent(value, 8m);
+            }
+        }
+        return 8m;
+    }
+    private static decimal GetOrderCommissionAmount(Dictionary<string, object?> order)
+    {
+        return Math.Round(GetOrderOriginalTotal(order) * GetOrderCommissionPercent(order) / 100m, 0, MidpointRounding.AwayFromZero);
+    }
+        private static decimal GetOrderServicePercent(Dictionary<string, object?> order)
+    {
+        foreach (var key in new[] { "service_fee_percent", "serviceFeePercent", "service_percent", "servicePercent" })
+        {
+            if (order.TryGetValue(key, out var raw) && TryDecimal(raw) is { } value)
+            {
+                return NormalizePercent(value);
+            }
+        }
+        return 0m;
+    }
+    private static decimal GetOrderServiceAmount(Dictionary<string, object?> order)
+    {
+        return Math.Round(GetOrderOriginalTotal(order) * GetOrderServicePercent(order) / 100m, 0, MidpointRounding.AwayFromZero);
+    }
+    private static decimal GetOrderNetRevenue(Dictionary<string, object?> order) => Math.Max(0, GetOrderOriginalTotal(order) - GetOrderDiscountAmount(order) - GetOrderCommissionAmount(order) + GetOrderServiceAmount(order));
     private static int GetInt(Dictionary<string, object?> row, string key) => int.TryParse(row.GetValueOrDefault(key)?.ToString(), out var value) ? value : 0;
     private static int? TryInt(object? value) => int.TryParse(value?.ToString(), out var i) ? i : null;
     private static decimal? TryDecimal(object? value) => decimal.TryParse(value?.ToString(), out var d) ? d : null;
@@ -965,6 +1951,27 @@ public sealed class AdminAccountUpdateRequest
     public string? Username { get; set; }
     public string? Role { get; set; }
     public bool? IsLocked { get; set; }
+    public decimal? OfferDiscountPercent { get; set; }
+    public decimal? CommissionPercent { get; set; }
+    public bool? CommissionManualOverride { get; set; }
+    public int? SalesLevel { get; set; }
+    public int? CommissionLevel { get; set; }
+    public int? OfferLevel { get; set; }
+    public decimal? ServicePercent { get; set; }
+    public int? ServiceLevel { get; set; }
+}
+
+public sealed class AdminSalesLevelSettingsRequest
+{
+    public List<AdminSalesLevelSettingRequest>? Levels { get; set; }
+}
+
+public sealed class AdminSalesLevelSettingRequest
+{
+    public int Level { get; set; }
+    public decimal? CommissionPercent { get; set; }
+    public decimal? OfferDiscountPercent { get; set; }
+    public decimal? ServicePercent { get; set; }
 }
 
 public sealed class AdminPlanStatusOptionRequest

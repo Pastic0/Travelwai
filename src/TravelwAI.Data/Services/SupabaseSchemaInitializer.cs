@@ -49,13 +49,19 @@ public sealed class SupabaseSchemaInitializer
             );
 
             alter table app_users_auth
-                add column if not exists role text not null default 'User';
+                add column if not exists role text not null default 'Free';
+
+            alter table app_users_auth
+                alter column role set default 'Free';
 
             alter table app_users_auth
                 add column if not exists is_locked boolean not null default false;
 
             alter table app_users_auth
                 add column if not exists is_protected boolean not null default false;
+
+            alter table app_users_auth
+                add column if not exists tour_sales_level integer not null default 1;
 
             create index if not exists ix_app_users_auth_email
                 on app_users_auth(lower(email));
@@ -65,6 +71,24 @@ public sealed class SupabaseSchemaInitializer
 
             create index if not exists ix_app_users_auth_role
                 on app_users_auth(role);
+
+            update app_users_auth
+            set role = 'Free', updated_at = now()
+            where role = 'User';
+
+            update app_users_auth
+            set role = 'Business', updated_at = now()
+            where role = 'Company';
+
+            update app_documents
+            set data = jsonb_set(data, '{role}', to_jsonb('Free'::text), true),
+                updated_at = now()
+            where collection = 'users' and data->>'role' = 'User';
+
+            update app_documents
+            set data = jsonb_set(data, '{role}', to_jsonb('Business'::text), true),
+                updated_at = now()
+            where collection = 'users' and data->>'role' = 'Company';
 
             create table if not exists password_reset_codes (
                 id text primary key,
@@ -88,7 +112,7 @@ public sealed class SupabaseSchemaInitializer
                 on password_reset_codes(reset_token_hash);
 
             update app_users_auth
-            set role = 'User',
+            set role = 'Free',
                 is_protected = false,
                 updated_at = now()
             where id in (

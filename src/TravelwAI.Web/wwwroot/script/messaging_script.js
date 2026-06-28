@@ -18,7 +18,7 @@ let aiMessageSending = false;
 let outgoingFriendRequestKeys = new Set();
 let pendingAiContextByAssistant = {};
 const API_BASE_URL = "/api";
-const CLIENT_CACHE_VERSION = "2026-06-16-cache-v1";
+const CLIENT_CACHE_VERSION = "2026-06-28-profile-cart-pricing-v14";
 const USERS_CACHE_TTL_MS = 5 * 60 * 1000;
 const FRIEND_CACHE_TTL_MS = 30 * 1000;
 const CONVERSATION_CACHE_TTL_MS = 15 * 1000;
@@ -711,11 +711,50 @@ function buildAiContextForRequest(aiConfig, text) {
   return "";
 }
 
+function isAdminSupportChatRequested() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("admin") === "1" || /^(admin|support)$/i.test(params.get("chat") || "");
+}
+
 function getDirectChatEmailFromQuery() {
   const params = new URLSearchParams(window.location.search);
-  const adminRequested = params.get("admin") === "1" || /^(admin|support)$/i.test(params.get("chat") || "");
   const directEmail = params.get("email") || params.get("userEmail") || params.get("adminEmail") || params.get("to") || "";
-  return (adminRequested ? SUPPORT_ADMIN_EMAIL : directEmail).trim().toLowerCase();
+  return directEmail.trim().toLowerCase();
+}
+
+async function ensureAdminSupportConversation() {
+  const token = localStorage.getItem("idToken") || sessionStorage.getItem("idToken");
+  if (!token) throw new Error("Bạn cần đăng nhập để nhắn tin với Admin chính.");
+
+  const response = await fetch(`${API_BASE_URL}/support/admin-conversation`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.success === false) {
+    throw new Error(result.detail || result.message || "Không thể mở hội thoại Admin chính.");
+  }
+
+  const conversationId = result.conversation_id || result.conversationId || result.data?.conversation_id || result.data?.conversationId;
+  if (!conversationId) throw new Error("Không đọc được mã hội thoại Admin chính.");
+
+  invalidateClientCache("conversations");
+  await loadConversations(true);
+  const conversation = (conversations || []).find((item) => String(item.id || item.conversation_id || item.conversationId || "") === String(conversationId));
+  return conversation || {
+    id: conversationId,
+    conversation_id: conversationId,
+    conversation_type: "direct",
+    is_group: false,
+    group_name: "Nhắn tin Admin chính",
+    participants: [currentUser || {}],
+    participant_ids: [getCurrentUserId()],
+    last_message: "",
+    last_message_time: "",
+  };
 }
 
 function findUserByEmail(email) {
@@ -725,29 +764,39 @@ function findUserByEmail(email) {
 }
 
 async function handlePendingDirectChat() {
+  const adminRequested = isAdminSupportChatRequested();
   const targetEmail = getDirectChatEmailFromQuery();
-  if (!targetEmail) return false;
+  if (!adminRequested && !targetEmail) return false;
 
   try {
-    if (String(currentUser?.email || "").trim().toLowerCase() === targetEmail) {
-      try { localStorage.removeItem(ADMIN_PENDING_MESSAGE_KEY); } catch (_) {}
-      showMessagingToast("Bạn đang đăng nhập bằng tài khoản Admin này, không thể tự nhắn cho chính mình.", "info");
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return true;
+    let conversation = null;
+    let openedLabel = "hội thoại Admin chính";
+
+    if (adminRequested) {
+      conversation = await ensureAdminSupportConversation();
+    } else {
+      if (String(currentUser?.email || "").trim().toLowerCase() === targetEmail) {
+        try { localStorage.removeItem(ADMIN_PENDING_MESSAGE_KEY); } catch (_) {}
+        showMessagingToast("Bạn đang đăng nhập bằng tài khoản này, không thể tự nhắn cho chính mình.", "info");
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return true;
+      }
+
+      let targetUser = findUserByEmail(targetEmail);
+      if (!targetUser) {
+        await get_all_users(true);
+        targetUser = findUserByEmail(targetEmail);
+      }
+
+      if (!targetUser) {
+        showError(`Không tìm thấy tài khoản ${targetEmail}.`);
+        return true;
+      }
+
+      openedLabel = getUserDisplayName(targetUser) || targetEmail;
+      conversation = await ensureConversationWithUser(targetUser);
     }
 
-    let targetUser = findUserByEmail(targetEmail);
-    if (!targetUser) {
-      await get_all_users(true);
-      targetUser = findUserByEmail(targetEmail);
-    }
-
-    if (!targetUser) {
-      showError(`Không tìm thấy tài khoản Admin ${targetEmail}.`);
-      return true;
-    }
-
-    const conversation = await ensureConversationWithUser(targetUser);
     await selectConversation(conversation);
 
     let pendingMessage = "";
@@ -762,19 +811,19 @@ async function handlePendingDirectChat() {
       try {
         await waitForWebSocketOpen(5000);
         await sendMessage();
-        showMessagingToast(`Đã gửi tin nhắn cho Admin ${targetEmail}.`, "success");
+        showMessagingToast("Đã gửi tin nhắn trong hội thoại Admin chính.", "success");
       } catch (error) {
-        showMessagingToast("Đã mở cuộc trò chuyện với Admin. Bạn bấm Gửi để gửi nội dung đang nhập.", "info");
+        showMessagingToast("Đã mở hội thoại Admin chính. Bạn bấm Gửi để gửi nội dung đang nhập.", "info");
         messageInput.focus();
       }
     } else {
-      showMessagingToast(`Đã mở tin nhắn với Admin ${targetEmail}.`, "success");
+      showMessagingToast(`Đã mở ${openedLabel}.`, "success");
     }
 
     window.history.replaceState({}, document.title, window.location.pathname);
   } catch (error) {
-    console.error("Không thể mở tin nhắn Admin:", error);
-    showError(error.message || "Không thể mở tin nhắn với Admin.");
+    console.error("Không thể mở hội thoại:", error);
+    showError(error.message || "Không thể mở hội thoại.");
   }
 
   return true;
@@ -978,7 +1027,7 @@ function renderFriendsPanel(searchQuery = activeFriendsSearchQuery) {
   });
 
   if (filteredItems.length === 0) {
-    sidebarList.innerHTML = '<div class="loading-message">Không tìm thấy bạn bè phù hợp</div>';
+    sidebarList.innerHTML = '<div class="loading-message">Không tìm thấy bạn bè</div>';
     return;
   }
 
@@ -1155,7 +1204,7 @@ function renderConversations(searchQuery = activeConversationSearchQuery) {
   });
 
   if (filteredConversations.length === 0) {
-    conversationList.innerHTML = '<div class="loading-message">Không tìm thấy cuộc trò chuyện phù hợp</div>';
+    conversationList.innerHTML = '<div class="loading-message">Không tìm thấy cuộc trò chuyện</div>';
     return;
   }
 
@@ -1453,7 +1502,7 @@ async function openConversationNameEditor() {
   const currentName = isGroupMode ? getGroupDisplayName(currentConversation) : getConversationNickname(currentConversation);
   const defaultName = isGroupMode ? getGroupDisplayName(currentConversation) : getConversationDisplayName(currentConversation);
   const label = isGroupMode ? "Nhập tên nhóm mới:" : "Nhập biệt danh mới:";
-  const nextName = prompt(label, currentName || defaultName || "");
+  const nextName = await window.TravelwAIPrompt(label, currentName || defaultName || "");
 
   if (nextName === null) return;
 
@@ -2004,32 +2053,44 @@ function getNavigationTargetFromText(text) {
   const normalized = normalizeForSearch(text);
   if (!normalized) return null;
 
+  if (window.TravelwAIPageCommands && typeof window.TravelwAIPageCommands.parseManagerCommand === "function") {
+    const command = window.TravelwAIPageCommands.parseManagerCommand(text);
+    if (command && command.type === "navigate") return command;
+    if (command) return null;
+  }
+
   if (/dang\s*nhap|login/.test(normalized)) {
-    return { type: "navigate", url: "/login", reply: "Mình chuyển bạn qua trang Đăng nhập." };
+    return { type: "navigate", url: "/login", reply: "Đang mở trang Đăng nhập." };
   }
 
   if (/dang\s*ky|tao\s*tai\s*khoan|register|sign\s*up|signup/.test(normalized)) {
-    return { type: "navigate", url: "/signup", reply: "Mình chuyển bạn qua trang Đăng ký." };
+    return { type: "navigate", url: "/signup", reply: "Đang mở trang Đăng ký." };
   }
 
   if (/quen\s*mat\s*khau|khoi\s*phuc\s*mat\s*khau|lay\s*lai\s*mat\s*khau|forgot\s*password|reset\s*password/.test(normalized)) {
-    return { type: "navigate", url: "/forgot-password", reply: "Mình chuyển bạn qua trang Quên mật khẩu." };
+    return { type: "navigate", url: "/forgot-password", reply: "Đang mở trang Quên mật khẩu." };
   }
 
   const rules = [
-    { url: "/schedule", reply: "Mình chuyển bạn đến trang Lịch trình.", patterns: [/lap\s*lich\s*trinh/, /tao\s*lich\s*trinh/, /lich\s*trinh/] },
-    { url: "/plans", reply: "Mình chuyển bạn đến trang Kế hoạch.", patterns: [/lap\s*ke\s*hoach/, /tao\s*ke\s*hoach/, /ke\s*hoach/] },
-    { url: "/provinces", reply: "Mình chuyển bạn đến Bản đồ Việt Nam.", patterns: [/ban\s*do/, /tinh\s*thanh/, /34\s*tinh/, /viet\s*nam/] },
-    { url: "/posts", reply: "Mình chuyển bạn đến trang Bài viết.", patterns: [/bai\s*viet/, /tin\s*du\s*lich/, /kham\s*pha\s*bai/] },
-    { url: "/tours", reply: "Mình chuyển bạn đến trang Tour du lịch.", patterns: [/tour\s*du\s*lich/, /dat\s*tour/, /xem\s*tour/] },
-    { url: "/tour-sales", reply: "Mình chuyển bạn đến trang Tài khoản.", patterns: [/tour\s*sales/, /ban\s*tour/, /don\s*ban\s*tour/, /sales/] },
-    { url: "/admin", reply: "Mình chuyển bạn đến trang Admin.", patterns: [/admin/, /quan\s*tri/, /quan\s*ly\s*he\s*thong/] },
-    { url: "/messaging", reply: "Mình đang mở trang Nhắn tin.", patterns: [/tin\s*nhan/, /nhan\s*tin/, /messaging/, /chat/] },
-    { url: "/profile", reply: "Mình chuyển bạn đến trang Hồ sơ.", patterns: [/ho\s*so/, /thong\s*tin\s*ca\s*nhan/, /tai\s*khoan/, /doi\s*ten/] },
-    { url: "/notifications", reply: "Mình chuyển bạn đến trang Thông báo.", patterns: [/thong\s*bao/, /notification/] },
-    { url: "/contact", reply: "Mình chuyển bạn đến trang Phản hồi.", patterns: [/phan\s*hoi/, /lien\s*he/, /gop\s*y/, /ho\s*tro/] },
-    { url: "/home", reply: "Mình chuyển bạn về trang chủ.", patterns: [/trang\s*chu/, /home/] },
-    { url: "/landing", reply: "Mình chuyển bạn về trang giới thiệu TravelwAI.", patterns: [/landing/, /gioi\s*thieu/, /trang\s*gioi\s*thieu/] },
+    { url: "/pricing", reply: "Đang mở Bảng giá.", patterns: [/bang\s*gia/, /pricing/, /gia\s*goi/, /goi\s*tai\s*khoan/, /mua\s*goi/] },
+    { url: "/cart", reply: "Đang mở Giỏ hàng.", patterns: [/gio\s*hang/, /cart/] },
+    { url: "/checkout", reply: "Đang mở Thanh toán.", patterns: [/thanh\s*toan/, /checkout/, /xac\s*nhan\s*thanh\s*toan/, /qr\s*thanh\s*toan/] },
+    { url: "/manage", reply: "Đang mở Manage.", patterns: [/manage/, /quan\s*ly\s*goi/, /quan\s*ly\s*don\s*goi/, /don\s*goi/] },
+    { url: "/business", reply: "Đang mở Business.", patterns: [/business/, /trang\s*business/, /doanh\s*nghiep/, /kinh\s*doanh/] },
+    { url: "/contact", reply: "Đang mở Liên hệ.", patterns: [/trang\s*lien\s*he/, /contact\s*page/, /lien\s*he\s*travelwai/] },
+    { url: "/schedule", reply: "Đang mở trang Lịch trình.", patterns: [/lap\s*lich\s*trinh/, /tao\s*lich\s*trinh/, /lich\s*trinh/] },
+    { url: "/plans", reply: "Đang mở trang Kế hoạch.", patterns: [/lap\s*ke\s*hoach/, /tao\s*ke\s*hoach/, /ke\s*hoach/] },
+    { url: "/provinces", reply: "Đang mở Bản đồ Việt Nam.", patterns: [/ban\s*do/, /tinh\s*thanh/, /34\s*tinh/, /viet\s*nam/] },
+    { url: "/posts", reply: "Đang mở trang Bài viết.", patterns: [/bai\s*viet/, /tin\s*du\s*lich/, /kham\s*pha\s*bai/] },
+    { url: "/tours", reply: "Đang mở trang Tour du lịch.", patterns: [/tour\s*du\s*lich/, /dat\s*tour/, /xem\s*tour/] },
+    { url: "/tour-sales", reply: "Đang mở trang Sales.", patterns: [/sales/, /ban\s*tour/, /don\s*ban\s*tour/, /sales/] },
+    { url: "/admin", reply: "Đang mở trang Admin.", patterns: [/admin/, /quan\s*tri/, /quan\s*ly\s*he\s*thong/] },
+    { url: "/messaging", reply: "Đang mở trang Nhắn tin.", patterns: [/tin\s*nhan/, /nhan\s*tin/, /messaging/, /chat/] },
+    { url: "/profile", reply: "Đang mở trang Hồ sơ.", patterns: [/ho\s*so/, /thong\s*tin\s*ca\s*nhan/, /tai\s*khoan/, /doi\s*ten/] },
+    { url: "/notifications", reply: "Đang mở trang Thông báo.", patterns: [/thong\s*bao/, /notification/] },
+    { url: "/messaging?admin=1", reply: "Đang mở hội thoại với Admin.", patterns: [/phan\s*hoi/, /lien\s*he/, /gop\s*y/, /ho\s*tro/] },
+    { url: "/home", reply: "Đang mở trang chủ.", patterns: [/trang\s*chu/, /home/] },
+    { url: "/landing", reply: "Đang mở giới thiệu TravelwAI.", patterns: [/landing/, /gioi\s*thieu/, /trang\s*gioi\s*thieu/] },
   ];
 
   return rules.find((rule) => rule.patterns.some((pattern) => pattern.test(normalized))) || null;
@@ -2047,17 +2108,22 @@ function getManagerNavigationTarget(text) {
   const normalized = normalizeForSearch(text);
 
   if (/dang\s*xuat|thoat\s*tai\s*khoan|log\s*out/.test(normalized)) {
-    return { type: "logout", reply: "Mình sẽ đăng xuất tài khoản cho bạn." };
+    return { type: "logout", reply: "Đang đăng xuất tài khoản." };
   }
 
   if (/doi\s*mat\s*khau|doi\s*password|change\s*password/.test(normalized)) {
-    return { type: "navigate", url: "/profile", password: true, reply: "Mình chuyển bạn đến Hồ sơ để đổi mật khẩu." };
+    return { type: "navigate", url: "/profile", password: true, reply: "Đang mở Hồ sơ để đổi mật khẩu." };
+  }
+
+  if (window.TravelwAIPageCommands && typeof window.TravelwAIPageCommands.parseManagerCommand === "function") {
+    const command = window.TravelwAIPageCommands.parseManagerCommand(text);
+    if (command) return command;
   }
 
   if (/(co|có)?\s*trang\s*nao|danh\s*sach\s*trang|menu|chuc\s*nang|huong\s*dan\s*(web|website)?/.test(normalized)) {
     return {
       type: "info",
-      reply: "TravelwAI có các trang: Đăng nhập, Đăng ký, Trang chủ, Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Bài viết, Tour du lịch, Hồ sơ, Thông báo, Tài khoản Sales và Admin. Bạn nhắn tên trang, mình sẽ mở ngay."
+      reply: "Các trang TravelwAI: Đăng nhập, Đăng ký, Quên mật khẩu, Đặt lại mật khẩu, Trang chủ, Giới thiệu, Bản đồ Việt Nam, Chi tiết tỉnh, Lịch trình, Kế hoạch, Bảng giá, Giỏ hàng, Thanh toán, Hồ sơ, Nhắn tin, Hỗ trợ Admin, Liên hệ, Thông báo, Bài viết, Tour du lịch, Sales, Business, Admin, Manage. Nhắn: mở [tên trang], tới trang [tên trang] hoặc chi tiết trang [tên trang]."
     };
   }
 
@@ -2125,16 +2191,16 @@ async function handleManagerDirectChatCommand(text) {
     await get_all_users(true);
     const targetUser = findUserByNameOrEmail(targetName);
     if (!targetUser) {
-      appendLocalAiAssistantReply(`Mình chưa tìm thấy người dùng tên ${targetName}. Bạn kiểm tra lại tên hoặc email rồi nhắn lại nhé.`, "travelwai");
+      appendLocalAiAssistantReply(`Chưa tìm thấy người dùng tên ${targetName}. Bạn kiểm tra lại tên hoặc email rồi nhắn lại nhé.`, "travelwai");
       return true;
     }
 
-    appendLocalAiAssistantReply(`Mình đang mở cuộc trò chuyện với ${getUserDisplayName(targetUser)}.`, "travelwai");
+    appendLocalAiAssistantReply(`Đang mở cuộc trò chuyện với ${getUserDisplayName(targetUser)}.`, "travelwai");
     await startChatWithUser(targetUser);
     return true;
   } catch (error) {
     console.error("Lỗi mở cuộc trò chuyện theo yêu cầu AI quản lý:", error);
-    appendLocalAiAssistantReply("Mình chưa mở được cuộc trò chuyện này. Bạn thử lại sau nhé.", "travelwai");
+    appendLocalAiAssistantReply("Chưa mở được cuộc trò chuyện. Vui lòng thử lại sau.", "travelwai");
     return true;
   }
 }
@@ -2219,7 +2285,7 @@ async function handleManagerFriendRequestCommand(text) {
     const targetEmail = /@/.test(targetName) ? targetName : "";
 
     if (!targetUser && !targetEmail) {
-      appendLocalAiAssistantReply(`Mình chưa tìm thấy người dùng tên ${targetName}. Bạn nhập lại tên hoặc email chính xác hơn nhé.`, "travelwai");
+      appendLocalAiAssistantReply(`Chưa tìm thấy người dùng tên ${targetName}. Bạn nhập lại tên hoặc email chính xác hơn nhé.`, "travelwai");
       return true;
     }
 
@@ -2229,7 +2295,7 @@ async function handleManagerFriendRequestCommand(text) {
     return true;
   } catch (error) {
     console.error("Lỗi gửi kết bạn theo yêu cầu AI quản lý:", error);
-    appendLocalAiAssistantReply(error.message || "Mình chưa gửi được yêu cầu kết bạn. Bạn thử lại sau nhé.", "travelwai");
+    appendLocalAiAssistantReply(error.message || "Chưa gửi được yêu cầu kết bạn. Vui lòng thử lại sau.", "travelwai");
     return true;
   }
 }
@@ -2244,12 +2310,12 @@ async function tryHandleTravelwaiManagerCommand(text) {
       if (confirmedTarget.password) {
         sessionStorage.setItem("travelwaiOpenProfilePassword", "1");
       }
-      if (confirmedTarget.url && confirmedTarget.url !== "/contact") {
+      if (confirmedTarget.url) {
         setTimeout(() => { window.location.href = confirmedTarget.url; }, 650);
       }
       return true;
     }
-    appendLocalAiAssistantReply("Bạn nhắn tên trang hoặc chức năng muốn mở, ví dụ: đăng nhập, bản đồ, lịch trình, tour du lịch, nhắn tin, đổi mật khẩu.", "travelwai");
+    appendLocalAiAssistantReply("Dùng cú pháp: tới trang [tên trang], qua trang [tên trang] hoặc chi tiết trang [tên trang].", "travelwai");
     return true;
   }
 
@@ -2282,7 +2348,7 @@ async function tryHandleTravelwaiManagerCommand(text) {
     sessionStorage.setItem("travelwaiOpenProfilePassword", "1");
   }
 
-  if (target.url && target.url !== "/contact") {
+  if (target.url) {
     setTimeout(() => {
       window.location.href = target.url;
     }, 650);
@@ -2396,8 +2462,12 @@ async function sendAiMessage(options = {}) {
     const friendlyMessage = errorMessage.includes("429")
       ? "AI đang quá tải hoặc bị giới hạn lượt gọi, vui lòng thử lại sau."
       : errorMessage;
+    if (/free|nâng cấp|nang cap|upgrade_required|free_ai_quota_exceeded/i.test(errorMessage) && window.TravelwAIPricingPopup?.showFreeAiPopup) {
+      window.TravelwAIPricingPopup.showFreeAiPopup(errorMessage);
+      return;
+    }
     if (aiKey === "travelwai") {
-      appendLocalAiAssistantReply("Mình chưa nhận diện được lệnh này. Bạn có thể nhắn: đăng nhập, đăng ký, bản đồ, lịch trình, kế hoạch, tour du lịch, bài viết, nhắn tin, đổi mật khẩu hoặc đăng xuất.", "travelwai");
+      appendLocalAiAssistantReply("Chưa nhận diện được lệnh. Bạn có thể nhắn: đăng nhập, đăng ký, bản đồ, lịch trình, kế hoạch, tour du lịch, bài viết, nhắn tin, đổi mật khẩu hoặc đăng xuất.", "travelwai");
     } else if (options.background) {
       showMessagingToast(friendlyMessage, "error");
     } else {
@@ -2640,12 +2710,12 @@ async function handleShareMemory() {
   const memoryFile = document.getElementById("memoryFile").files[0];
 
   if (!memoryFile) {
-    alert("Vui lòng chọn tệp kỷ niệm để chia sẻ.");
+    window.TravelwAIToast("Vui lòng chọn tệp kỷ niệm để chia sẻ.");
     return;
   }
 
   if (!selectedUserForSharing) {
-    alert(
+    window.TravelwAIToast(
       "Vui lòng chọn người nhận bằng cách nhập email và bấm vào gợi ý."
     );
     return;
@@ -3353,7 +3423,7 @@ function showMessagingToast(message, type = "info") {
 }
 
 function showError(message) {
-  alert(message);
+  window.TravelwAIToast(message);
 }
 
 function handleAttachment() {
@@ -3451,7 +3521,7 @@ async function addFriendFromCurrentConversation() {
     markOutgoingFriendRequest(otherParticipant);
     setFriendActionButtonMode(addFriendButton, "sent", true);
     await refreshFriendsAndRequests(false, true);
-    alert(result.message || "Yêu cầu kết bạn đã được gửi thành công.");
+    window.TravelwAIToast(result.message || "Yêu cầu kết bạn đã được gửi thành công.");
   } catch (error) {
     console.error("Lỗi gửi yêu cầu kết bạn:", error);
 
@@ -3464,7 +3534,7 @@ async function addFriendFromCurrentConversation() {
         markOutgoingFriendRequest(otherParticipant);
         setFriendActionButtonMode(addFriendButton, "sent", true);
       }
-      alert(message);
+      window.TravelwAIToast(message);
     } else {
       setFriendActionButtonMode(addFriendButton, "add");
       showError(message);
@@ -3489,7 +3559,7 @@ async function removeFriendFromCurrentConversation() {
     return;
   }
 
-  const confirmed = confirm(
+  const confirmed = await window.TravelwAIConfirm(
     `Bạn có chắc chắn muốn xóa ${displayName} khỏi danh sách bạn bè?
 Cuộc trò chuyện hiện tại sẽ vẫn được giữ lại.`
   );
@@ -3520,7 +3590,7 @@ Cuộc trò chuyện hiện tại sẽ vẫn được giữ lại.`
     syncRemoveFriendButtonVisibility(otherParticipant);
     await refreshFriendsAndRequests(false, true);
     syncRemoveFriendButtonVisibility(otherParticipant);
-    alert(result.message || "Đã xóa khỏi danh sách bạn bè.");
+    window.TravelwAIToast(result.message || "Đã xóa khỏi danh sách bạn bè.");
   } catch (error) {
     console.error("Lỗi xóa bạn bè:", error);
     showError(error.message || "Không thể xóa bạn bè. Vui lòng thử lại.");
@@ -3557,7 +3627,7 @@ async function clearConversation() {
   }
 
   if (isAiConversation(currentConversation)) {
-    const confirmed = confirm("Bạn có chắc chắn muốn xóa lịch sử cuộc trò chuyện AI không?");
+    const confirmed = await window.TravelwAIConfirm("Bạn có chắc chắn muốn xóa lịch sử cuộc trò chuyện AI không?");
     if (!confirmed) return;
 
     localStorage.removeItem(getAiStorageKey(currentConversation));
@@ -3569,7 +3639,7 @@ async function clearConversation() {
   }
 
   const displayName = getConversationDisplayName(currentConversation);
-  const confirmed = confirm(
+  const confirmed = await window.TravelwAIConfirm(
     `Bạn có chắc chắn muốn xóa cuộc trò chuyện với ${displayName}?
 Tin nhắn trong cuộc trò chuyện này sẽ bị xóa và không thể khôi phục.`
   );
@@ -3599,7 +3669,7 @@ Tin nhắn trong cuộc trò chuyện này sẽ bị xóa và không thể khôi
     currentMessages = [];
     resetConversationInterface();
     renderConversations(activeConversationSearchQuery);
-    alert("Đã xóa cuộc trò chuyện.");
+    window.TravelwAIToast("Đã xóa cuộc trò chuyện.");
   } catch (error) {
     console.error("Lỗi xóa cuộc trò chuyện:", error);
     showError(error.message || "Không thể xóa cuộc trò chuyện. Vui lòng thử lại.");
@@ -3753,7 +3823,7 @@ async function sendFriendRequest(targetUserId, isFromModal = false, buttonOverri
         statusMessageElement.className =
           "friend-detail-status friend-detail-status-success";
       } else {
-        alert(successMsg);
+        window.TravelwAIToast(successMsg);
       }
       if (buttonToUpdate) {
         buttonToUpdate.textContent = "Đã gửi yêu cầu";
@@ -3781,7 +3851,7 @@ async function sendFriendRequest(targetUserId, isFromModal = false, buttonOverri
         if (response.status === 409) {
 
           buttonToUpdate.textContent =
-            responseData.message || "Yêu cầu đã tồn tại";
+            responseData.message || "Yêu cầu đã có";
         } else {
           buttonToUpdate.textContent = "Thêm bạn";
           buttonToUpdate.disabled = false;
@@ -3897,7 +3967,7 @@ async function handleFriendRequestAction(requestEmail, action, listItemElement, 
     const token =
       localStorage.getItem("idToken") || sessionStorage.getItem("idToken");
     if (!token) {
-      alert("Lỗi xác thực. Vui lòng đăng nhập lại.");
+      window.TravelwAIToast("Lỗi xác thực. Vui lòng đăng nhập lại.");
       buttons.forEach((btn) => (btn.disabled = false));
       listItemElement.style.opacity = 1;
       return;
@@ -3918,19 +3988,19 @@ async function handleFriendRequestAction(requestEmail, action, listItemElement, 
     const innerResult = responseData.data || responseData;
     if (response.ok && responseData.success && innerResult.success !== false) {
       const successMessage = innerResult.message || responseData.message || (action === 'accepted' ? 'Đã chấp nhận yêu cầu kết bạn.' : 'Đã từ chối yêu cầu kết bạn.');
-      if (!options.silent) alert(successMessage);
+      if (!options.silent) window.TravelwAIToast(successMessage);
 
       await refreshFriendsAndRequests(false, true);
       await loadConversations(true);
     } else {
       const innerResult = responseData.data || responseData;
-      alert(innerResult.message || responseData.message || "Không thể xử lý yêu cầu. Vui lòng thử lại.");
+      window.TravelwAIToast(innerResult.message || responseData.message || "Không thể xử lý yêu cầu. Vui lòng thử lại.");
       buttons.forEach((btn) => (btn.disabled = false));
       listItemElement.style.opacity = 1;
     }
   } catch (error) {
     console.error(`Error ${action} friend request:`, error);
-    alert("Đã xảy ra lỗi. Vui lòng thử lại.");
+    window.TravelwAIToast("Đã xảy ra lỗi. Vui lòng thử lại.");
     buttons.forEach((btn) => (btn.disabled = false));
     listItemElement.style.opacity = 1;
   }

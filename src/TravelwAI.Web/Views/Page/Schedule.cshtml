@@ -11,13 +11,14 @@
 
 
 
-    <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <link rel="stylesheet" href="css/schedule_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <script src="script/accounts.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-23-landing-tools-footer-dark-v4" />
+    <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <link rel="stylesheet" href="css/schedule_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <script src="script/accounts.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-28-admin-analytics-budget-number-v25" />
   </head>
   <body class="schedule-page">
+    @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
     @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "schedule")
 
     <main class="schedule-shell">
@@ -220,7 +221,7 @@
                   <button type="button" id="addEmailBtn" class="btn-add-email">Thêm</button>
                 </div>
                 <div id="emailList" class="email-list"></div>
-                <small class="form-help">Có thể nhập nhiều email, mỗi email bấm Thêm một lần.</small>
+                <small class="form-help">Nhập từng email rồi bấm Thêm.</small>
               </div>
             </div>
 
@@ -295,10 +296,10 @@
       </div>
     </div>
 
-    <script src="script/schedule.script.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-    <script src="/script/travelwai_contact_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-    <script src="/script/travelwai_notification_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-      <script src="/script/theme_toggle.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+    <script src="script/schedule.script.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+    <script src="/script/travelwai_contact_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+    <script src="/script/travelwai_notification_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+      <script src="/script/theme_toggle.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
 </body>
 </html>
 

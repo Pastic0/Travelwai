@@ -31,6 +31,7 @@
   const miniChatHistories = { travelwai: [], guide: [] };
   let activeMiniChatKey = "travelwai";
 
+
   function readTheme() {
     try {
       const saved = localStorage.getItem(storageKey);
@@ -308,6 +309,22 @@
     return host;
   }
 
+  function ensureReloadButton(host) {
+    let button = document.getElementById("travelwaiReloadButton");
+    if (!button) {
+      button = document.createElement("button");
+      button.id = "travelwaiReloadButton";
+      button.className = "twai-theme-toggle twai-tool-action twai-reload-toggle";
+      button.type = "button";
+    }
+    if (button.parentElement !== host) host.appendChild(button);
+    button.textContent = "🔄";
+    button.setAttribute("aria-label", "Tải lại");
+    button.setAttribute("title", "Tải lại");
+    button.onclick = function () { window.location.reload(); };
+    return button;
+  }
+
   function ensureCacheButton(host) {
     let button = document.getElementById("travelwaiCacheClearButton");
     if (!button) {
@@ -321,7 +338,7 @@
     }
 
     setCacheButtonState(button, false);
-    button.addEventListener("click", function () {
+    button.onclick = function () {
       button.disabled = true;
       const localIds = collectNotificationIdsFromLocalCache().concat(collectNotificationIdsFromDom());
       fetchCurrentNotificationIds().then(function (serverIds) {
@@ -341,7 +358,7 @@
           }, 1200);
         });
       });
-    });
+    };
     return button;
   }
 
@@ -357,10 +374,10 @@
     if (button.parentElement !== host) host.appendChild(button);
 
     setButtonState(button, readTheme());
-    button.addEventListener("click", function () {
+    button.onclick = function () {
       const current = document.documentElement.getAttribute("data-travelwai-theme") === "dark" ? "dark" : "light";
       applyTheme(current === "dark" ? "light" : "dark");
-    });
+    };
     return button;
   }
 
@@ -372,15 +389,12 @@
       button.id = "travelwaiMiniChatButton-" + key;
       button.className = "twai-theme-toggle twai-tool-action twai-mini-chat-toggle twai-mini-chat-toggle-" + key;
       button.type = "button";
-      button.textContent = "";
-      button.setAttribute("aria-label", "Nhắn với " + config.title);
-      button.setAttribute("title", "Nhắn với " + config.title);
-      button.addEventListener("click", function () { openMiniChat(key); });
-      host.appendChild(button);
-    } else if (button.parentElement !== host) {
-      host.appendChild(button);
     }
-    button.textContent = "";
+    if (button.parentElement !== host) host.appendChild(button);
+    button.textContent = config.buttonIcon;
+    button.setAttribute("aria-label", "Nhắn với " + config.title);
+    button.setAttribute("title", "Nhắn với " + config.title);
+    button.onclick = function () { openMiniChat(key); };
     return button;
   }
 
@@ -494,32 +508,45 @@
     const normalized = normalizeMiniChatText(text);
     if (!normalized) return null;
 
+  if (window.TravelwAIPageCommands && typeof window.TravelwAIPageCommands.parseManagerCommand === "function") {
+    const command = window.TravelwAIPageCommands.parseManagerCommand(text);
+    if (command && command.type === "navigate") return command;
+    if (command) return null;
+  }
+
     if (/dang\s*nhap|login/.test(normalized)) {
-      return { type: "navigate", url: "/login", reply: "Mình chuyển bạn qua trang Đăng nhập." };
+      return { type: "navigate", url: "/login", reply: "Đang mở trang Đăng nhập." };
     }
 
     if (/dang\s*ky|tao\s*tai\s*khoan|register|sign\s*up|signup/.test(normalized)) {
-      return { type: "navigate", url: "/signup", reply: "Mình chuyển bạn qua trang Đăng ký." };
+      return { type: "navigate", url: "/signup", reply: "Đang mở trang Đăng ký." };
     }
 
     if (/quen\s*mat\s*khau|khoi\s*phuc\s*mat\s*khau|lay\s*lai\s*mat\s*khau|forgot\s*password|reset\s*password/.test(normalized)) {
-      return { type: "navigate", url: "/forgot-password", reply: "Mình chuyển bạn qua trang Quên mật khẩu." };
+      return { type: "navigate", url: "/forgot-password", reply: "Đang mở trang Quên mật khẩu." };
     }
 
     const rules = [
-      { url: "/tour-sales", reply: "Mình chuyển bạn đến trang Sales.", patterns: [/tour\s*sales/, /trang\s*sales/, /qua\s*sales/, /sales/, /ban\s*tour/, /don\s*ban\s*tour/] },
-      { url: "/admin", reply: "Mình chuyển bạn đến trang Admin.", patterns: [/admin/, /quan\s*tri/, /quan\s*ly\s*he\s*thong/] },
-      { url: "/schedule", reply: "Mình chuyển bạn đến trang Lịch trình.", patterns: [/lap\s*lich\s*trinh/, /tao\s*lich\s*trinh/, /lich\s*trinh/] },
-      { url: "/plans", reply: "Mình chuyển bạn đến trang Kế hoạch.", patterns: [/lap\s*ke\s*hoach/, /tao\s*ke\s*hoach/, /ke\s*hoach/] },
-      { url: "/provinces", reply: "Mình chuyển bạn đến Bản đồ Việt Nam.", patterns: [/ban\s*do/, /tinh\s*thanh/, /34\s*tinh/, /viet\s*nam/] },
-      { url: "/posts", reply: "Mình chuyển bạn đến trang Bài viết.", patterns: [/bai\s*viet/, /tin\s*du\s*lich/, /kham\s*pha\s*bai/] },
-      { url: "/tours", reply: "Mình chuyển bạn đến trang Tour du lịch.", patterns: [/tour\s*du\s*lich/, /dat\s*tour/, /xem\s*tour/, /qua\s*tour/, /trang\s*tour/, /^tour$/, /\btour\b/] },
-      { url: "/messaging", reply: "Mình đang mở trang Nhắn tin.", patterns: [/tin\s*nhan/, /nhan\s*tin/, /messaging/, /chat/] },
-      { url: "/profile", reply: "Mình chuyển bạn đến trang Hồ sơ.", patterns: [/ho\s*so/, /thong\s*tin\s*ca\s*nhan/, /tai\s*khoan/, /doi\s*ten/] },
-      { url: "/notifications", reply: "Mình chuyển bạn đến trang Thông báo.", patterns: [/thong\s*bao/, /notification/] },
-      { url: "/contact", reply: "Mình chuyển bạn đến trang Phản hồi.", patterns: [/phan\s*hoi/, /lien\s*he/, /gop\s*y/, /ho\s*tro/] },
-      { url: "/home", reply: "Mình chuyển bạn về trang chủ.", patterns: [/trang\s*chu/, /home/] },
-      { url: "/landing", reply: "Mình chuyển bạn về trang giới thiệu TravelwAI.", patterns: [/landing/, /gioi\s*thieu/, /trang\s*gioi\s*thieu/] }
+      { url: "/pricing", reply: "Đang mở Bảng giá.", patterns: [/bang\s*gia/, /pricing/, /gia\s*goi/, /goi\s*tai\s*khoan/, /mua\s*goi/] },
+      { url: "/cart", reply: "Đang mở Giỏ hàng.", patterns: [/gio\s*hang/, /cart/] },
+      { url: "/checkout", reply: "Đang mở Thanh toán.", patterns: [/thanh\s*toan/, /checkout/, /xac\s*nhan\s*thanh\s*toan/, /qr\s*thanh\s*toan/] },
+      { url: "/manage", reply: "Đang mở Manage.", patterns: [/manage/, /quan\s*ly\s*goi/, /quan\s*ly\s*don\s*goi/, /don\s*goi/] },
+      { url: "/business", reply: "Đang mở Business.", patterns: [/business/, /trang\s*business/, /doanh\s*nghiep/, /kinh\s*doanh/] },
+      { url: "/contact", reply: "Đang mở Liên hệ.", patterns: [/trang\s*lien\s*he/, /contact\s*page/, /lien\s*he\s*travelwai/] },
+      { url: "/tour-sales", reply: "Đang mở trang Sales.", patterns: [/sales/, /trang\s*sales/, /qua\s*sales/, /ban\s*tour/, /don\s*ban\s*tour/] },
+      { url: "/business", reply: "Đang mở trang Business.", patterns: [/business/, /cong\s*ty/, /công\s*ty/] },
+      { url: "/admin", reply: "Đang mở trang Admin.", patterns: [/admin/, /quan\s*tri/, /quan\s*ly\s*he\s*thong/] },
+      { url: "/schedule", reply: "Đang mở trang Lịch trình.", patterns: [/lap\s*lich\s*trinh/, /tao\s*lich\s*trinh/, /lich\s*trinh/] },
+      { url: "/plans", reply: "Đang mở trang Kế hoạch.", patterns: [/lap\s*ke\s*hoach/, /tao\s*ke\s*hoach/, /ke\s*hoach/] },
+      { url: "/provinces", reply: "Đang mở Bản đồ Việt Nam.", patterns: [/ban\s*do/, /tinh\s*thanh/, /34\s*tinh/, /viet\s*nam/] },
+      { url: "/posts", reply: "Đang mở trang Bài viết.", patterns: [/bai\s*viet/, /tin\s*du\s*lich/, /kham\s*pha\s*bai/] },
+      { url: "/tours", reply: "Đang mở trang Tour du lịch.", patterns: [/tour\s*du\s*lich/, /dat\s*tour/, /xem\s*tour/, /qua\s*tour/, /trang\s*tour/, /^tour$/, /\btour\b/] },
+      { url: "/messaging", reply: "Đang mở trang Nhắn tin.", patterns: [/tin\s*nhan/, /nhan\s*tin/, /messaging/, /chat/] },
+      { url: "/profile", reply: "Đang mở trang Hồ sơ.", patterns: [/ho\s*so/, /thong\s*tin\s*ca\s*nhan/, /tai\s*khoan/, /doi\s*ten/] },
+      { url: "/notifications", reply: "Đang mở trang Thông báo.", patterns: [/thong\s*bao/, /notification/] },
+      { url: "/messaging?admin=1", reply: "Đang mở hội thoại với Admin.", patterns: [/phan\s*hoi/, /lien\s*he/, /gop\s*y/, /ho\s*tro/] },
+      { url: "/home", reply: "Đang mở trang chủ.", patterns: [/trang\s*chu/, /home/] },
+      { url: "/landing", reply: "Đang mở giới thiệu TravelwAI.", patterns: [/landing/, /gioi\s*thieu/, /trang\s*gioi\s*thieu/] }
     ];
 
     return rules.find(function (rule) {
@@ -531,17 +558,22 @@
     const normalized = normalizeMiniChatText(text);
 
     if (/dang\s*xuat|thoat\s*tai\s*khoan|log\s*out/.test(normalized)) {
-      return { type: "logout", reply: "Mình sẽ đăng xuất tài khoản cho bạn." };
+      return { type: "logout", reply: "Đang đăng xuất tài khoản." };
     }
 
     if (/doi\s*mat\s*khau|doi\s*password|change\s*password/.test(normalized)) {
-      return { type: "navigate", url: "/profile", password: true, reply: "Mình chuyển bạn đến Hồ sơ để đổi mật khẩu." };
+      return { type: "navigate", url: "/profile", password: true, reply: "Đang mở Hồ sơ để đổi mật khẩu." };
+    }
+
+    if (window.TravelwAIPageCommands && typeof window.TravelwAIPageCommands.parseManagerCommand === "function") {
+      const command = window.TravelwAIPageCommands.parseManagerCommand(text);
+      if (command) return command;
     }
 
     if (/(co\s*)?trang\s*nao|danh\s*sach\s*trang|menu|chuc\s*nang|huong\s*dan\s*(web|website)?/.test(normalized)) {
       return {
         type: "info",
-        reply: "TravelwAI có các trang: Đăng nhập, Đăng ký, Trang chủ, Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Bài viết, Tour du lịch, Hồ sơ, Thông báo, Sales và Admin. Bạn nhắn tên trang, mình sẽ mở ngay."
+        reply: "Các trang TravelwAI: Đăng nhập, Đăng ký, Quên mật khẩu, Đặt lại mật khẩu, Trang chủ, Giới thiệu, Bản đồ Việt Nam, Chi tiết tỉnh, Lịch trình, Kế hoạch, Bảng giá, Giỏ hàng, Thanh toán, Hồ sơ, Nhắn tin, Hỗ trợ Admin, Liên hệ, Thông báo, Bài viết, Tour du lịch, Sales, Business, Admin, Manage. Nhắn: mở [tên trang], tới trang [tên trang] hoặc chi tiết trang [tên trang]."
       };
     }
 
@@ -557,6 +589,7 @@
 
     if (target.type === "logout") {
       window.setTimeout(function () {
+        try { if (typeof window.clearTravelwAIAdminSupportOnLogout === "function") window.clearTravelwAIAdminSupportOnLogout({ awaitRequest: false }); } catch { }
         try { localStorage.clear(); } catch { }
         try { sessionStorage.clear(); } catch { }
         window.location.href = "/";
@@ -586,7 +619,7 @@
         return true;
       }
 
-      pushMiniChat("assistant", "Bạn nhắn tên trang hoặc chức năng muốn mở, ví dụ: đăng nhập, bản đồ, lịch trình, tour du lịch, sales, admin, nhắn tin, đổi mật khẩu.");
+      pushMiniChat("assistant", "Dùng cú pháp: tới trang [tên trang], qua trang [tên trang] hoặc chi tiết trang [tên trang].");
       return true;
     }
 
@@ -648,13 +681,17 @@
         return result;
       });
     }).then(function (result) {
-      const reply = result?.data?.reply || result?.reply || "Mình đã nhận được tin nhắn.";
+      const reply = result?.data?.reply || result?.reply || "Đã nhận tin nhắn.";
       pushMiniChat("assistant", reply);
       if (activeMiniChatKey === "travelwai") {
         const target = getMiniChatManagerTarget(text) || getMiniChatNavigationTargetFromText(reply);
         if (target && target.type !== "info") runMiniChatManagerAction(target);
       }
     }).catch(function (error) {
+      if (/free|nâng cấp|nang cap|upgrade_required|free_ai_quota_exceeded/i.test(error.message || "") && window.TravelwAIPricingPopup?.showFreeAiPopup) {
+        window.TravelwAIPricingPopup.showFreeAiPopup(error.message);
+        return;
+      }
       pushMiniChat("assistant", error.message || "Không gửi được tin nhắn.");
     }).finally(function () {
       if (form) form.classList.remove("loading");
@@ -668,6 +705,7 @@
     const host = ensureFloatingToolsHost();
     ensureMiniChatButton(host, "travelwai");
     ensureMiniChatButton(host, "guide");
+    ensureReloadButton(host);
     ensureCacheButton(host);
     ensureThemeButton(host);
     ensureMiniChatPanel();

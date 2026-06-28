@@ -108,8 +108,10 @@ builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<TourOrderAutomation>();
 builder.Services.AddScoped<TourOfferService>();
 builder.Services.AddScoped<EmailNotificationService>();
+builder.Services.AddScoped<PlanQueueService>();
 builder.Services.AddHostedService<TourOrderExpirationHostedService>();
 builder.Services.AddHostedService<PlanGroupExpirationHostedService>();
+builder.Services.AddHostedService<AccountPlanQueueHostedService>();
 
 builder.Services.AddControllersWithViews()
     .AddJsonOptions(options =>
@@ -204,7 +206,11 @@ var protectedPagePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     "/notifications",
     "/posts",
     "/tours",
+    "/cart",
+    "/checkout",
     "/tour-sales",
+    "/manage",
+    "/business",
     "/admin"
 };
 
@@ -475,15 +481,24 @@ static void ClearAuthCookiesAndRedirectToLogin(HttpContext context)
 {
     context.Response.Cookies.Delete("TravelwAIAuth", new CookieOptions { Path = "/" });
     context.Response.Cookies.Delete("TravelwAIRefresh", new CookieOptions { Path = "/" });
-    context.Response.Redirect("/login");
+
+    var path = context.Request.Path.Value ?? "/home";
+    if (path.Length > 1) path = path.TrimEnd('/');
+    var returnUrl = $"{path}{context.Request.QueryString}";
+    if (string.IsNullOrWhiteSpace(returnUrl) || !returnUrl.StartsWith('/'))
+    {
+        returnUrl = "/home";
+    }
+
+    context.Response.Redirect($"/login?returnUrl={Uri.EscapeDataString(returnUrl)}");
 }
 
 static bool HasPageRoleAccess(string path, Dictionary<string, object?> authResult)
 {
     var user = authResult.GetValueOrDefault("user") as Dictionary<string, object?>;
-    var role = user?.GetValueOrDefault("role")?.ToString() ?? "User";
+    var role = user?.GetValueOrDefault("role")?.ToString() ?? "Free";
 
-    if (string.Equals(path, "/admin", StringComparison.OrdinalIgnoreCase))
+    if (string.Equals(path, "/admin", StringComparison.OrdinalIgnoreCase) || string.Equals(path, "/manage", StringComparison.OrdinalIgnoreCase))
     {
         return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
     }
@@ -491,7 +506,15 @@ static bool HasPageRoleAccess(string path, Dictionary<string, object?> authResul
     if (string.Equals(path, "/tour-sales", StringComparison.OrdinalIgnoreCase))
     {
         return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Sales", StringComparison.OrdinalIgnoreCase)
             || string.Equals(role, "Tour Sales", StringComparison.OrdinalIgnoreCase);
+    }
+
+    if (string.Equals(path, "/business", StringComparison.OrdinalIgnoreCase))
+    {
+        return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Business", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Company", StringComparison.OrdinalIgnoreCase);
     }
 
     return true;

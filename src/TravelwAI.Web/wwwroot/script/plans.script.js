@@ -262,7 +262,7 @@ function updatePlanProvinceOptions(statusKey) {
 
   const matched = provinceTravelTags.filter((province) => provinceMatchesStatus(province, status));
 
-  select.innerHTML = '<option value="">Chọn tỉnh/thành phù hợp</option>' + matched
+  select.innerHTML = '<option value="">Chọn tỉnh/thành</option>' + matched
     .map((province) => `<option value="${escapeAttr(province.name || province.province_name || "")}">${escapeHtml(province.name || province.province_name || "Tỉnh thành")} - ${escapeHtml((province.tags || []).join(", "))}</option>`)
     .join("");
 }
@@ -558,7 +558,7 @@ function renderPlanUserSearchResults(users) {
   if (!container) return;
 
   if (!users.length) {
-    container.innerHTML = '<div class="plan-search-result"><small>Không tìm thấy người phù hợp</small></div>';
+    container.innerHTML = '<div class="plan-search-result"><small>Không tìm thấy người</small></div>';
     container.style.display = "block";
     return;
   }
@@ -658,7 +658,7 @@ async function createPlanGroup(planId) {
 }
 
 async function cancelPlan(planId) {
-  if (!confirm("Hủy kế hoạch này? Sau khi hủy bạn mới có thể lập kế hoạch mới.")) return;
+  if (!await window.TravelwAIConfirm("Hủy kế hoạch này? Sau khi hủy bạn mới có thể lập kế hoạch mới.")) return;
 
   try {
     const response = await fetch(`${PLAN_API_BASE}/plans/${encodeURIComponent(planId)}`, {

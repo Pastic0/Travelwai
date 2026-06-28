@@ -7,15 +7,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="/logo/travelwai-paper-plane.png" type="image/png" />
-    <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <link rel="stylesheet" href="css/schedule_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <link rel="stylesheet" href="css/plans_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <script src="script/accounts.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+    <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <link rel="stylesheet" href="css/schedule_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <link rel="stylesheet" href="css/plans_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <script src="script/accounts.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
     <title>Kế hoạch - TravelwAI</title>
   </head>
   <body class="schedule-page plans-page">
+    @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
     @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "plans")
 
     <main class="schedule-shell plans-shell">
@@ -117,7 +118,7 @@
                 </div>
 
                 <div class="form-group">
-                  <label for="planProvinceName">Tỉnh/thành phù hợp *</label>
+                  <label for="planProvinceName">Tỉnh/thành *</label>
                   <select id="planProvinceName" required>
                     <option value="">Chọn trạng thái trước</option>
                   </select>
@@ -176,7 +177,7 @@
                     <input id="planUserSearchInput" type="text" placeholder="Nhập tên hoặc email" autocomplete="off" />
                     <div id="planUserSearchResults" class="user-search-results"></div>
                   </div>
-                  <small class="form-help">Có thể chọn nhiều người, khi đủ số người hệ thống sẽ tự tạo lịch trình.</small>
+                  <small class="form-help">Chọn nhiều người. Khi đủ số người, hệ thống tự tạo lịch trình.</small>
                 </div>
                 <div id="selectedInviteList" class="selected-invite-list"></div>
               </div>
@@ -191,10 +192,10 @@
       </div>
     </div>
 
-    <script src="script/plans.script.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-    <script src="/script/travelwai_contact_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-    <script src="/script/travelwai_notification_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-      <script src="/script/theme_toggle.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+    <script src="script/plans.script.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+    <script src="/script/travelwai_contact_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+    <script src="/script/travelwai_notification_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+      <script src="/script/theme_toggle.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
 </body>
 </html>
 

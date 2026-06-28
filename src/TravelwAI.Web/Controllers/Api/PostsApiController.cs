@@ -12,7 +12,7 @@ namespace TravelwAI.Web.Controllers.Api;
 public sealed class PostsApiController : ApiControllerBase
 {
     private const string PostsCollection = "travel_posts";
-    private const string SeedVersion = "2026-06-21-posts-clean-author-v1";
+    private const string SeedVersion = "2026-06-28-free-chatbot-quota-v13";
     private const int SeedPostLimit = 10;
     private static readonly string[] PostListFields =
     {
@@ -90,6 +90,10 @@ public sealed class PostsApiController : ApiControllerBase
     {
         var current = await CurrentUserAsync();
         if (!current.ok) return current.error!;
+        if (!CanUseAiPost(current.authUser))
+        {
+            return StatusCode(403, new { success = false, message = "Tài khoản Free chưa dùng được AI tạo bài viết. Vui lòng nâng cấp VIP hoặc Premium." });
+        }
 
         var festivalKeyword = request.Festival?.Trim();
         if (string.IsNullOrWhiteSpace(festivalKeyword))
@@ -103,7 +107,7 @@ public sealed class PostsApiController : ApiControllerBase
             return NotFound(new
             {
                 success = false,
-                message = "Không tìm thấy dữ liệu thật phù hợp với Lễ hội/ngày lễ này nên AI không tạo nội dung. Hãy nhập rõ tên lễ hội/ngày lễ hơn."
+                message = "Không tìm thấy dữ liệu phù hợp. Hãy nhập rõ tên lễ hội/ngày lễ hơn."
             });
         }
 
@@ -120,7 +124,7 @@ public sealed class PostsApiController : ApiControllerBase
             province = facts.Province,
             month = facts.Month,
             holidayType = facts.HolidayType,
-            message = "Đã điền nội dung khám phá văn hoá lịch sử."
+            message = "Đã điền nội dung bài viết."
         });
     }
 
@@ -142,7 +146,10 @@ public sealed class PostsApiController : ApiControllerBase
         data["created_at"] = DateTime.UtcNow;
         data["updated_at"] = DateTime.UtcNow;
         var id = await _repo.AddAsync(PostsCollection, data);
-        await _offerService.GrantPostOfferAsync(current.userId!, id);
+        if (CanUsePostOffer(current.authUser))
+        {
+            await _offerService.GrantPostOfferAsync(current.userId!, id);
+        }
         return Ok(new { success = true, id, message = "Đã thêm bài viết" });
     }
 
@@ -897,10 +904,10 @@ public sealed class PostsApiController : ApiControllerBase
 
         return string.Join(Environment.NewLine + Environment.NewLine, new[]
         {
-            $"{title} mở ra một hành trình khám phá {festival} tại {province} theo cách chậm rãi và sâu hơn bề mặt du lịch thông thường. Người đọc được dẫn vào không gian của {type.ToLowerInvariant()}, nơi từng con đường, mái nhà, âm thanh, màu sắc và câu chuyện địa phương đều có thể trở thành dấu mốc để hiểu thêm về vùng đất. Khi khám phá chủ đề này vào tháng {month}, điều đáng chú ý không chỉ là khung cảnh bên ngoài mà còn là cảm giác được bước vào một miền ký ức đang sống: có người kể chuyện, có dấu vết sinh hoạt, có những thói quen được gìn giữ qua nhiều thế hệ.",
-            $"Ý nghĩa của {festival} nằm ở khả năng kết nối người đi với cộng đồng bản địa. Những từ khóa như {keywords} không chỉ giúp định vị địa điểm, mà còn gợi ra các lớp giá trị cần quan sát: niềm tin, ký ức, sự gắn bó với đất đai, tinh thần đoàn kết và niềm tự hào văn hóa. Càng đi kỹ, người khám phá càng nhận ra mỗi chi tiết đều có lý do tồn tại. Một làn điệu, một món ăn, một nghi thức, một tên làng hay một vật dụng quen thuộc đều có thể kể lại cách người dân nhìn về quê hương của họ.",
-            $"Điểm hay của hành trình này là người đọc có thể cảm nhận {province} bằng nhiều giác quan. Buổi sáng thích hợp để nhìn nhịp sống bắt đầu, lắng nghe tiếng nói địa phương và quan sát cách không gian chuẩn bị cho ngày mới. Buổi chiều là lúc phù hợp để đi sâu vào các điểm văn hóa, hỏi thêm về nguồn gốc tên gọi, biểu tượng và những thay đổi của nơi này theo thời gian. Nếu có khoảnh khắc đứng lại thật lâu trước một di tích, một dòng sông, một sân đình hay một góc chợ, chuyến đi sẽ trở nên có hồn hơn.",
-            $"Khám phá {title} vì thế không chỉ là ghi lại hình ảnh đẹp. Nó giúp người đọc hiểu vì sao một vùng đất được yêu mến, vì sao cộng đồng vẫn giữ những tập tục cũ và vì sao du lịch văn hóa cần sự tôn trọng. Giá trị lớn nhất của bài viết là làm rõ ý nghĩa của việc đi để hiểu: hiểu con người, hiểu ký ức địa phương, hiểu vẻ đẹp Việt Nam trong những điều tưởng nhỏ. Khi rời {province}, điều còn lại không chỉ là một điểm đã đến, mà là một câu chuyện có thể nhớ, kể lại và trân trọng."
+            $"{title} giới thiệu {festival} tại {province}, tập trung vào văn hoá, lịch sử và trải nghiệm địa phương. Nội dung giúp người đọc biết điểm nổi bật, bối cảnh hình thành và lý do nên ghé thăm vào tháng {month}.",
+            $"Các từ khóa chính của hành trình là {keywords}. Đây là những gợi ý để tìm hiểu địa điểm, hoạt động, phong tục và câu chuyện gắn với cộng đồng bản địa.",
+            $"Khi đến {province}, người đọc có thể bắt đầu bằng các điểm tham quan nổi bật, sau đó tìm hiểu thêm về ẩm thực, làng nghề, lễ hội hoặc di tích gần đó. Nên dành thời gian hỏi người địa phương để hiểu rõ hơn về nguồn gốc và ý nghĩa của từng trải nghiệm.",
+            $"Bài viết hướng đến cách đi du lịch có hiểu biết và tôn trọng văn hoá địa phương. Sau chuyến đi, người đọc không chỉ có hình ảnh đẹp mà còn hiểu thêm về con người, ký ức và giá trị của {province}."
         });
     }
 

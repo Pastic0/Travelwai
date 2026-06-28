@@ -5,6 +5,8 @@ namespace TravelwAI.Business.Services;
 
 public sealed class ChatService : IChatService
 {
+    private const string PrimaryAdminId = "admin2324802010387";
+    private const string PrimaryAdminEmail = "2324802010387@student.tdmu.edu.vn";
     private readonly IDataRepository _repo;
 
     public ChatService(IDataRepository repo)
@@ -80,6 +82,93 @@ public sealed class ChatService : IChatService
         return id;
     }
 
+    public async Task<string?> CreateOrGetSupportAdminConversationAsync(string currentUserId)
+    {
+        if (string.IsNullOrWhiteSpace(currentUserId)) return null;
+
+        var currentUser = await GetUserByIdAsync(currentUserId);
+        var primaryAdmin = await GetPrimaryAdminUserInternalAsync();
+        var primaryAdminId = primaryAdmin?.GetValueOrDefault("id")?.ToString();
+        if (string.IsNullOrWhiteSpace(primaryAdminId)) return null;
+
+        if (string.Equals(primaryAdminId, currentUserId, StringComparison.Ordinal)) return null;
+
+        var participantIds = new List<string> { primaryAdminId, currentUserId }
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        var existing = await _repo.WhereEqualAsync("conversations", "support_user_id", currentUserId, limit: 20);
+        var supportConversation = existing
+            .Where(c => IsTruthy(c.GetValueOrDefault("support_admin")))
+            .OrderByDescending(c => c.GetValueOrDefault("created_at")?.ToString() ?? string.Empty)
+            .FirstOrDefault();
+
+        if (supportConversation is not null)
+        {
+            var conversationId = supportConversation.GetValueOrDefault("id")?.ToString();
+            if (!string.IsNullOrWhiteSpace(conversationId))
+            {
+                await _repo.UpdateAsync("conversations", conversationId, new Dictionary<string, object?>
+                {
+                    ["participant_ids"] = participantIds,
+                    ["conversation_type"] = "direct",
+                    ["is_group"] = false,
+                    ["support_admin"] = true,
+                    ["support_user_id"] = currentUserId,
+                    ["primary_admin_id"] = primaryAdminId,
+                    ["group_name"] = BuildSupportAdminGroupName(currentUser),
+                    ["created_user"] = currentUserId,
+                    ["other_user"] = primaryAdminId
+                });
+                return conversationId;
+            }
+        }
+
+        var id = await _repo.AddAsync("conversations", new Dictionary<string, object?>
+        {
+            ["conversation_type"] = "direct",
+            ["is_group"] = false,
+            ["support_admin"] = true,
+            ["support_user_id"] = currentUserId,
+            ["primary_admin_id"] = primaryAdminId,
+            ["group_name"] = BuildSupportAdminGroupName(currentUser),
+            ["created_user"] = currentUserId,
+            ["created_by"] = currentUserId,
+            ["other_user"] = primaryAdminId,
+            ["participant_ids"] = participantIds,
+            ["created_at"] = DateTime.UtcNow,
+            ["last_message_time"] = null,
+            ["last_message"] = null
+        });
+
+        if (id is not null)
+        {
+            await _repo.UpdateAsync("conversations", id, new Dictionary<string, object?> { ["conversation_id"] = id });
+        }
+
+        return id;
+    }
+
+    public async Task<int> DeleteSupportAdminConversationsForUserAsync(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return 0;
+
+        var currentUser = await GetUserByIdAsync(userId);
+        if (IsAdminUser(currentUser)) return 0;
+
+        var supportConversations = await _repo.WhereEqualAsync("conversations", "support_user_id", userId, limit: 50);
+        var deleted = 0;
+        foreach (var conversation in supportConversations.Where(c => IsTruthy(c.GetValueOrDefault("support_admin"))))
+        {
+            var conversationId = conversation.GetValueOrDefault("id")?.ToString();
+            if (string.IsNullOrWhiteSpace(conversationId)) continue;
+            await _repo.DeleteWhereEqualAsync("messages", "conversation_id", conversationId);
+            if (await _repo.DeleteAsync("conversations", conversationId)) deleted += 1;
+        }
+
+        return deleted;
+    }
+
     public async Task<List<Dictionary<string, object?>>> GetConversationsAsync(string userId)
     {
         var all = await _repo.WhereArrayContainsAsync("conversations", "participant_ids", userId, limit: 100);
@@ -92,6 +181,53 @@ public sealed class ChatService : IChatService
                 .Select(g => g.First())
                 .ToList();
         }
+
+        var currentUser = await GetUserByIdAsync(userId);
+        if (IsPrimaryAdminUser(currentUser))
+        {
+            var supportConversations = await _repo.WhereEqualAsync("conversations", "support_admin", true, limit: 200);
+            foreach (var supportConversation in supportConversations)
+            {
+                var conversationId = supportConversation.GetValueOrDefault("id")?.ToString();
+                if (string.IsNullOrWhiteSpace(conversationId)) continue;
+
+                var supportUserId = supportConversation.GetValueOrDefault("support_user_id")?.ToString();
+                if (string.IsNullOrWhiteSpace(supportUserId)) continue;
+                if (string.Equals(supportUserId, userId, StringComparison.Ordinal)) continue;
+
+                var participantIds = new List<string> { userId, supportUserId }
+                    .Distinct(StringComparer.Ordinal)
+                    .ToList();
+
+                await _repo.UpdateAsync("conversations", conversationId, new Dictionary<string, object?>
+                {
+                    ["participant_ids"] = participantIds,
+                    ["conversation_type"] = "direct",
+                    ["is_group"] = false,
+                    ["support_admin"] = true,
+                    ["primary_admin_id"] = userId,
+                    ["created_user"] = supportUserId,
+                    ["other_user"] = userId
+                });
+                supportConversation["participant_ids"] = participantIds;
+                supportConversation["conversation_type"] = "direct";
+                supportConversation["is_group"] = false;
+                supportConversation["created_user"] = supportUserId;
+                supportConversation["other_user"] = userId;
+                all.Add(supportConversation);
+            }
+        }
+
+        if (IsAdminUser(currentUser) && !IsPrimaryAdminUser(currentUser))
+        {
+            all = all.Where(c => !IsTruthy(c.GetValueOrDefault("support_admin"))).ToList();
+        }
+
+        all = all
+            .GroupBy(c => c.GetValueOrDefault("id")?.ToString())
+            .Where(g => !string.IsNullOrWhiteSpace(g.Key))
+            .Select(g => g.First())
+            .ToList();
 
         foreach (var conv in all)
         {
@@ -218,12 +354,11 @@ public sealed class ChatService : IChatService
             }).ToList();
     }
 
-    public async Task<List<Dictionary<string, object?>>> GetAdminUsersAsync(string currentUserId)
+    private async Task<List<Dictionary<string, object?>>> GetAllAdminUsersInternalAsync()
     {
         var users = await _repo.GetAllAsync("users", limit: 300);
         return users
-            .Where(u => u.GetValueOrDefault("id")?.ToString() != currentUserId)
-            .Where(u => string.Equals(u.GetValueOrDefault("role")?.ToString(), "Admin", StringComparison.OrdinalIgnoreCase))
+            .Where(IsAdminUser)
             .Select(u => new Dictionary<string, object?>
             {
                 ["email"] = u.GetValueOrDefault("email"),
@@ -234,6 +369,19 @@ public sealed class ChatService : IChatService
                 ["role"] = u.GetValueOrDefault("role"),
                 ["id"] = u.GetValueOrDefault("id")
             })
+            .ToList();
+    }
+
+    private async Task<Dictionary<string, object?>?> GetPrimaryAdminUserInternalAsync()
+    {
+        var admins = await GetAllAdminUsersInternalAsync();
+        return admins.FirstOrDefault(IsPrimaryAdminUser);
+    }
+
+    public async Task<List<Dictionary<string, object?>>> GetAdminUsersAsync(string currentUserId)
+    {
+        return (await GetAllAdminUsersInternalAsync())
+            .Where(u => u.GetValueOrDefault("id")?.ToString() != currentUserId)
             .ToList();
     }
 
@@ -317,6 +465,40 @@ public sealed class ChatService : IChatService
         }
 
         return participants;
+    }
+
+    private static string BuildSupportAdminGroupName(Dictionary<string, object?>? user)
+    {
+        var name = user?.GetValueOrDefault("username")?.ToString()
+            ?? user?.GetValueOrDefault("displayName")?.ToString()
+            ?? user?.GetValueOrDefault("name")?.ToString()
+            ?? user?.GetValueOrDefault("email")?.ToString()?.Split('@').FirstOrDefault()
+            ?? "Người dùng";
+
+        return $"Nhắn tin Admin chính - {name}";
+    }
+
+    private static bool IsAdminUser(Dictionary<string, object?>? user)
+    {
+        return string.Equals(user?.GetValueOrDefault("role")?.ToString(), "Admin", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPrimaryAdminUser(Dictionary<string, object?>? user)
+    {
+        var id = user?.GetValueOrDefault("id")?.ToString();
+        var email = user?.GetValueOrDefault("email")?.ToString();
+        return string.Equals(id, PrimaryAdminId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(email, PrimaryAdminEmail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsTruthy(object? value)
+    {
+        return value switch
+        {
+            bool typed => typed,
+            string text => string.Equals(text, "true", StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
     }
 
     private static string BuildGroupName(List<Dictionary<string, object?>> participants, string currentUserId)

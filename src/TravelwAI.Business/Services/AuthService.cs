@@ -57,7 +57,7 @@ public sealed class AuthService : IAuthService
                 ["email"] = email.ToLowerInvariant(),
                 ["phone"] = existingProfile?.GetValueOrDefault("phone") ?? string.Empty,
                 ["profilePic"] = existingProfile?.GetValueOrDefault("profilePic") ?? string.Empty,
-                ["role"] = result.GetValueOrDefault("role")?.ToString() ?? "User",
+                ["role"] = result.GetValueOrDefault("role")?.ToString() ?? "Free",
                 ["is_locked"] = result.GetValueOrDefault("is_locked") ?? false,
                 ["is_protected"] = result.GetValueOrDefault("is_protected") ?? false,
                 ["is_active"] = true,
@@ -95,7 +95,7 @@ public sealed class AuthService : IAuthService
                     ["email"] = email.ToLowerInvariant(),
                     ["phone"] = string.Empty,
                     ["profilePic"] = string.Empty,
-                    ["role"] = result.GetValueOrDefault("role")?.ToString() ?? "User",
+                    ["role"] = result.GetValueOrDefault("role")?.ToString() ?? "Free",
                     ["is_locked"] = result.GetValueOrDefault("is_locked") ?? false,
                     ["is_protected"] = result.GetValueOrDefault("is_protected") ?? false,
                     ["is_active"] = true,
@@ -113,7 +113,7 @@ public sealed class AuthService : IAuthService
             var update = new Dictionary<string, object?>
             {
                 ["email"] = email.ToLowerInvariant(),
-                ["role"] = result.GetValueOrDefault("role")?.ToString() ?? existingProfile.GetValueOrDefault("role")?.ToString() ?? "User",
+                ["role"] = result.GetValueOrDefault("role")?.ToString() ?? existingProfile.GetValueOrDefault("role")?.ToString() ?? "Free",
                 ["is_locked"] = result.GetValueOrDefault("is_locked") ?? existingProfile.GetValueOrDefault("is_locked") ?? false,
                 ["is_protected"] = result.GetValueOrDefault("is_protected") ?? existingProfile.GetValueOrDefault("is_protected") ?? false,
                 ["is_active"] = true,
@@ -198,7 +198,7 @@ public sealed class AuthService : IAuthService
             result["email"] = user.GetValueOrDefault("email")?.ToString();
             result["displayName"] = user.GetValueOrDefault("displayName")?.ToString();
             result["username"] = user.GetValueOrDefault("username")?.ToString() ?? user.GetValueOrDefault("displayName")?.ToString();
-            result["role"] = user.GetValueOrDefault("role")?.ToString() ?? "User";
+            result["role"] = user.GetValueOrDefault("role")?.ToString() ?? "Free";
             result["is_locked"] = user.GetValueOrDefault("is_locked") ?? user.GetValueOrDefault("isLocked") ?? false;
             result["is_protected"] = user.GetValueOrDefault("is_protected") ?? user.GetValueOrDefault("isProtected") ?? false;
         }

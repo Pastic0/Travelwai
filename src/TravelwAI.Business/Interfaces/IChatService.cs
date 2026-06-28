@@ -4,6 +4,8 @@ public interface IChatService
 {
     Task<string?> CreateConversationAsync(string currentUserId, string otherUserId);
     Task<string?> CreateGroupConversationAsync(string currentUserId, IEnumerable<string> participantIds, string? groupName = null);
+    Task<string?> CreateOrGetSupportAdminConversationAsync(string currentUserId);
+    Task<int> DeleteSupportAdminConversationsForUserAsync(string userId);
     Task<List<Dictionary<string, object?>>> GetConversationsAsync(string userId);
     Task<string?> SendMessageAsync(string conversationId, string senderId, string content);
     Task<List<Dictionary<string, object?>>> GetMessagesAsync(string conversationId, int limit, int offset);

@@ -238,6 +238,7 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
+
 function renderGroup(containerId, items, emptyText, icon) {
   const container = document.getElementById(containerId);
   if (!container) return;

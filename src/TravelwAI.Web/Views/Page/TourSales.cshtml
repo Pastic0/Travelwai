@@ -6,14 +6,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sales tour - TravelwAI</title>
+    <title>Sales - TravelwAI</title>
   <link rel="icon" href="/logo/travelwai-paper-plane.png" type="image/png" />
-  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-<link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-23-landing-tools-footer-dark-v4" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+<link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-28-admin-analytics-budget-number-v25" />
 </head>
 <body class="tour-admin-page tour-sales-page" data-page="tour-sales">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
   @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "tour-sales")
 
   <main class="tour-admin-shell">
@@ -23,8 +24,22 @@
         <h1>Sales TravelwAI</h1>
       </div>
       <div class="tour-actions page-hero-actions sales-hero-actions">
-        <button class="btn-soft btn-page-refresh btn-sales-refresh" type="button" onclick="loadTourSalesPage()">Tải lại</button>
-        <a class="btn-soft btn-page-link btn-admin-link" id="adminPanelLink" href="/admin" style="display:none;text-decoration:none">Trang Admin</a>
+        <button type="button" id="tourCommissionBtn" class="tour-offer-btn" style="display:none" onclick="openTourCommissionModal()">
+          <svg class="tour-offer-btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8"></path>
+            <path d="M2 8h20v4H2z"></path>
+            <path d="M12 8v13"></path>
+            <path d="M12 8H8.5A2.5 2.5 0 1 1 12 5.5V8z"></path>
+            <path d="M12 8h3.5A2.5 2.5 0 1 0 12 5.5V8z"></path>
+          </svg>
+          <span>Hoa hồng</span>
+        </button>
+        <span class="management-page-switcher" data-admin-page-switcher>
+          <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/admin" style="display:none;text-decoration:none">Admin</a>
+          <a class="btn-soft btn-page-link admin-role-page-link management-page-link is-current" href="/tour-sales" style="display:none;text-decoration:none" aria-current="page">Sales</a>
+          <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/business" style="display:none;text-decoration:none">Business</a>
+          <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/manage" style="display:none;text-decoration:none">Manage</a>
+        </span>
       </div>
     </section>
 
@@ -32,7 +47,7 @@
       <article class="stat-card"><span>Tổng tour</span><strong id="statTours">0</strong></article>
       <article class="stat-card"><span>Tour đang bán</span><strong id="statActiveTours">0</strong></article>
       <article class="stat-card"><span>Đã bán</span><strong id="statSold">0</strong></article>
-      <article class="stat-card"><span>Doanh thu</span><strong id="statRevenue">0đ</strong></article>
+      <article class="stat-card" id="statRevenueCard" role="button" tabindex="0" onclick="openRevenueDetailModal()"><span>Doanh thu</span><strong id="statRevenue">0đ</strong></article>
     </section>
 
     <section class="management-panel">
@@ -41,7 +56,7 @@
           <h2>Danh sách tour</h2>
         </div>
         <div class="sales-list-actions">
-          <button class="btn-primary btn-add-tour" type="button" onclick="openTourModal()">Thêm tour</button>
+          <button class="btn-primary btn-add-tour btn-add-tour-icon" type="button" onclick="openTourModal()" title="Thêm tour" aria-label="Thêm tour"><svg class="btn-add-tour-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span>Thêm tour</span></button>
           <div class="tour-search-box tour-search-box-small">
             <input id="tourSearchInput" type="search" placeholder="Tìm tour..." autocomplete="off" />
             <button class="btn-soft btn-clear-tour-search" id="clearTourSearch" type="button">Xóa</button>
@@ -127,14 +142,50 @@
     </form>
   </div>
 
+  <div class="form-modal tour-offer-modal" id="tourCommissionModal">
+    <div class="form-card tour-offer-card">
+      <div class="tour-offer-modal-header">
+        <div><h2>Hoa hồng tour</h2></div>
+        <button type="button" class="tour-offer-close" onclick="closeTourCommissionModal()" aria-label="Đóng">&times;</button>
+      </div>
+      <div class="tour-offer-progress-wrap">
+        <div class="tour-offer-progress-info">
+          <strong id="tourCommissionLevelText">0%</strong>
+          <span id="tourCommissionTotalText">0đ</span>
+        </div>
+        <div class="tour-offer-progress-bar"><span id="tourCommissionProgressFill"></span></div>
+      </div>
+      <div class="tour-offer-invite-list" id="tourCommissionLevelList"></div>
+    </div>
+  </div>
+
+  <div class="form-modal tour-offer-modal" id="revenueDetailModal">
+    <div class="form-card tour-offer-card">
+      <div class="tour-offer-modal-header">
+        <div><h2>Chi tiết doanh thu</h2></div>
+        <button type="button" class="tour-offer-close" onclick="closeRevenueDetailModal()" aria-label="Đóng">&times;</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Doanh thu gốc</th><th>Ưu đãi</th><th>Hoa hồng</th><th>Dịch vụ</th><th>Doanh thu Business</th></tr>
+          </thead>
+          <tbody id="revenueDetailBody"><tr><td colspan="5" class="empty-line">Chưa có dữ liệu.</td></tr></tbody>
+        </table>
+      </div>
+      <div class="tour-offer-invite-list" id="revenueDetailSummary"></div>
+    </div>
+  </div>
+
   <div class="toast" id="tourToast"></div>
 
-  <script src="/script/accounts.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-  <script src="/script/image_upload_optimizer.js?v=2026-06-25-admin-chat-upload-fix-v1"></script>
-  <script src="/script/tour_sales.js?v=2026-06-25-admin-chat-upload-fix-v1"></script>
-  <script src="/script/travelwai_contact_panel.js?v=2026-06-25-admin-chat-upload-fix-v1"></script>
-  <script src="/script/travelwai_notification_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-    <script src="/script/theme_toggle.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+  <script src="/script/accounts.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/management_nav.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/image_upload_optimizer.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/tour_sales.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/travelwai_contact_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+    <script src="/script/theme_toggle.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
 </body>
 </html>
 

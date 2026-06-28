@@ -19,6 +19,10 @@ public sealed class SchedulesController : ApiControllerBase
     {
         var current = await CurrentUserAsync();
         if (!current.ok) return current.error!;
+        if (!CanCreateSchedule(current.authUser))
+        {
+            return StatusCode(403, new { success = false, detail = "Tài khoản Free chưa dùng được lịch trình. Vui lòng nâng cấp VIP hoặc Premium.", message = "Tài khoản Free chưa dùng được lịch trình." });
+        }
         var id = await _scheduleService.CreateScheduleAsync(current.userId!, schedule);
         return id is null
             ? StatusCode(500, new { success = false, detail = "Không thể lưu lịch trình" })

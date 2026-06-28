@@ -10,11 +10,12 @@
     <link rel="icon" href="/logo/travelwai-paper-plane.png" type="image/png" />
 
 
-    <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-<link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-23-landing-tools-footer-dark-v4" />
+    <link rel="stylesheet" href="css/main_site_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+<link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-28-admin-analytics-budget-number-v25" />
 </head>
   <body>
+    @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
     <div class="background-slider"></div>
 
     @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "")
@@ -24,14 +25,17 @@
         <h1>Khám phá Việt Nam</h1>
         <h2>theo cách riêng của bạn</h2>
         <p>TravelwAI giúp bạn tìm điểm đến, xem bản đồ 34 tỉnh thành, lập lịch trình, quản lý kế hoạch và kết nối hỗ trợ trong cùng một giao diện hiện đại.</p>
-        <a href="/provinces" class="detail-btn">Xem bản đồ 34 tỉnh thành</a>
+        <div class="main-hero-actions">
+          <a href="/provinces" class="detail-btn">Xem bản đồ 34 tỉnh thành</a>
+          <a href="#" class="detail-btn" data-pricing-trigger>Xem bảng giá</a>
+        </div>
       </div>
     </main>
-    <script src="script/accounts.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-    <script src="/script/main_site_script.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-    <script src="/script/travelwai_contact_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-    <script src="/script/travelwai_notification_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-      <script src="/script/theme_toggle.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+    <script src="script/accounts.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+    <script src="/script/main_site_script.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+    <script src="/script/travelwai_contact_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+    <script src="/script/travelwai_notification_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+      <script src="/script/theme_toggle.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
 </body>
 </html>
 

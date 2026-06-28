@@ -12,12 +12,14 @@ public sealed class AuthController : ControllerBase
     private readonly IAuthService _authService;
     private readonly TourOfferService _tourOfferService;
     private readonly EmailNotificationService _emailNotificationService;
+    private readonly PlanQueueService _planQueueService;
 
-    public AuthController(IAuthService authService, TourOfferService tourOfferService, EmailNotificationService emailNotificationService)
+    public AuthController(IAuthService authService, TourOfferService tourOfferService, EmailNotificationService emailNotificationService, PlanQueueService planQueueService)
     {
         _authService = authService;
         _tourOfferService = tourOfferService;
         _emailNotificationService = emailNotificationService;
+        _planQueueService = planQueueService;
     }
 
     [HttpPost("signup")]
@@ -76,6 +78,7 @@ public sealed class AuthController : ControllerBase
             request.Password,
             request.Username?.Trim() ?? string.Empty);
 
+        await SyncPlanResultAsync(result);
         WriteAuthCookiesIfSuccess(result);
         return Ok(result);
     }
@@ -86,7 +89,9 @@ public sealed class AuthController : ControllerBase
         if (request is null || string.IsNullOrWhiteSpace(request.IdToken))
             return Ok(new { message = "Chưa cung cấp ID token", success = false });
 
-        return Ok(await _authService.VerifyTokenAsync(request.IdToken.Trim()));
+        var result = await _authService.VerifyTokenAsync(request.IdToken.Trim());
+        await SyncPlanResultAsync(result);
+        return Ok(result);
     }
 
     [HttpPost("refresh-token")]
@@ -96,6 +101,7 @@ public sealed class AuthController : ControllerBase
             return Ok(new { message = "Chưa cung cấp refresh token", success = false });
 
         var result = await _authService.RefreshTokenAsync(request.RefreshToken.Trim());
+        await SyncPlanResultAsync(result);
         WriteAuthCookiesIfSuccess(result);
         return Ok(result);
     }
@@ -159,6 +165,7 @@ public sealed class AuthController : ControllerBase
             return Ok(new { message = "Chưa cung cấp ID token", success = false });
 
         var result = await _authService.VerifyTokenAsync(request.IdToken.Trim());
+        await SyncPlanResultAsync(result);
         if (result.TryGetValue("success", out var success) && success is bool ok && ok)
         {
             Response.Cookies.Append("TravelwAIAuth", request.IdToken.Trim(), BuildAuthCookieOptions(TimeSpan.FromHours(1)));
@@ -171,6 +178,31 @@ public sealed class AuthController : ControllerBase
     {
         ClearAuthCookies();
         return Ok(new { success = true, message = "Đã đăng xuất" });
+    }
+
+    private async Task SyncPlanResultAsync(Dictionary<string, object?> result)
+    {
+        if (!result.TryGetValue("success", out var success) || success is not bool ok || !ok) return;
+        var userId = result.GetValueOrDefault("localId")?.ToString()
+            ?? result.GetValueOrDefault("uid")?.ToString()
+            ?? result.GetValueOrDefault("userId")?.ToString();
+        if (string.IsNullOrWhiteSpace(userId)) return;
+        var state = await _planQueueService.SyncUserAsync(userId, result.GetValueOrDefault("role")?.ToString());
+        result["role"] = state.CurrentRole;
+        result["planRole"] = state.CurrentRole;
+        result["plan_role"] = state.CurrentRole;
+        result["planStartedAt"] = state.CurrentStartedAt;
+        result["plan_started_at"] = state.CurrentStartedAt;
+        result["planExpiresAt"] = state.CurrentExpiresAt;
+        result["plan_expires_at"] = state.CurrentExpiresAt;
+        result["nextPlanRole"] = state.NextRole;
+        result["next_plan_role"] = state.NextRole;
+        result["nextPlanStartedAt"] = state.NextStartedAt;
+        result["next_plan_started_at"] = state.NextStartedAt;
+        result["nextPlanExpiresAt"] = state.NextExpiresAt;
+        result["next_plan_expires_at"] = state.NextExpiresAt;
+        result["planCountdownSeconds"] = state.CountdownSeconds;
+        result["plan_countdown_seconds"] = state.CountdownSeconds;
     }
 
     private void WriteAuthCookiesIfSuccess(Dictionary<string, object?> result)

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TravelwAI.Business.Interfaces;
 using TravelwAI.Models.Requests;
+using TravelwAI.Web.Services;
 
 namespace TravelwAI.Web.Controllers.Api;
 
@@ -9,11 +10,13 @@ public sealed class ProfileController : ApiControllerBase
 {
     private readonly IChatService _chatService;
     private readonly IFileStorageService _fileStorage;
+    private readonly PlanQueueService _planQueueService;
 
-    public ProfileController(IAuthService authService, IChatService chatService, IFileStorageService fileStorage) : base(authService)
+    public ProfileController(IAuthService authService, IChatService chatService, IFileStorageService fileStorage, PlanQueueService planQueueService) : base(authService)
     {
         _chatService = chatService;
         _fileStorage = fileStorage;
+        _planQueueService = planQueueService;
     }
 
     [HttpGet]
@@ -39,6 +42,23 @@ public sealed class ProfileController : ApiControllerBase
         }
 
         NormalizeProfileForClient(profile, current.authUser);
+        var planState = await _planQueueService.SyncUserAsync(current.userId!, NormalizeAccountRole(current.authUser?.GetValueOrDefault("role")));
+        profile["role"] = planState.CurrentRole;
+        profile["userRole"] = planState.CurrentRole;
+        profile["plan_role"] = planState.CurrentRole;
+        profile["planRole"] = planState.CurrentRole;
+        profile["plan_started_at"] = planState.CurrentStartedAt;
+        profile["planStartedAt"] = planState.CurrentStartedAt;
+        profile["plan_expires_at"] = planState.CurrentExpiresAt;
+        profile["planExpiresAt"] = planState.CurrentExpiresAt;
+        profile["next_plan_role"] = planState.NextRole;
+        profile["nextPlanRole"] = planState.NextRole;
+        profile["next_plan_started_at"] = planState.NextStartedAt;
+        profile["nextPlanStartedAt"] = planState.NextStartedAt;
+        profile["next_plan_expires_at"] = planState.NextExpiresAt;
+        profile["nextPlanExpiresAt"] = planState.NextExpiresAt;
+        profile["plan_countdown_seconds"] = planState.CountdownSeconds;
+        profile["planCountdownSeconds"] = planState.CountdownSeconds;
         return Ok(new { message = "Đã tải hồ sơ", success = true, user = profile });
     }
 
@@ -146,7 +166,7 @@ public sealed class ProfileController : ApiControllerBase
         profile["email"] = email;
         profile["username"] = username;
         profile["displayName"] = profile.GetValueOrDefault("displayName")?.ToString() ?? username;
-        profile["role"] = GetText(authUser, "role") ?? profile.GetValueOrDefault("role")?.ToString() ?? "User";
+        profile["role"] = GetText(authUser, "role") ?? profile.GetValueOrDefault("role")?.ToString() ?? "Free";
         profile["userRole"] = profile["role"];
         if (registeredAt.HasValue)
         {

@@ -13,6 +13,22 @@ let postSearchQuery = "";
 let selectedAdminPostImageFiles = [];
 let selectedAiAvatarAssistant = "travelwinne";
 let selectedSiteBackgroundTheme = "light";
+let salesLevelSettings = [
+  { level: 1, commissionPercent: 8, offerDiscountPercent: 0, servicePercent: 0 },
+  { level: 2, commissionPercent: 12, offerDiscountPercent: 0, servicePercent: 0 },
+  { level: 3, commissionPercent: 15, offerDiscountPercent: 0, servicePercent: 0 },
+  { level: 4, commissionPercent: 18, offerDiscountPercent: 0, servicePercent: 0 },
+  { level: 5, commissionPercent: 20, offerDiscountPercent: 0, servicePercent: 0 }
+];
+let adminAnalyticsData = null;
+let adminAnalyticsYearMonths = [];
+let accountPlanSettings = [
+  { role: "Free", name: "Free", price: "0đ", subtitle: "Dùng thử cơ bản", note: "Miễn phí", cta: "Bắt đầu miễn phí", requiresPayment: false, benefits: ["Xem bản đồ Việt Nam, bài viết và tour du lịch", "Nhắn tin thường và xem thông báo", "Không dùng AI tạo bài viết", "Không lập lịch trình", "Không dùng ưu đãi bài viết", "Chatbot AI 3 câu hỏi trong 5 phút"] },
+  { role: "VIP", name: "VIP", price: "59.000đ", subtitle: "Có AI và lịch trình", note: "Theo tháng", cta: "Nâng cấp VIP", requiresPayment: true, benefits: ["AI tạo bài viết", "Lập lịch trình", "Không dùng ưu đãi bài viết", "Chatbot AI 10 câu hỏi trong 5 phút"] },
+  { role: "Premium", name: "Premium", price: "129.000đ", subtitle: "Không giới hạn", note: "Đầy đủ", cta: "Nâng cấp Premium", requiresPayment: true, benefits: ["Đầy đủ tính năng", "Ưu đãi bài viết", "Chatbot AI không giới hạn"] },
+  { role: "Sales", name: "Sales", price: "Đăng ký", subtitle: "Bán tour và nhận hoa hồng", note: "Thu phí đăng ký", cta: "Đăng ký Sales", requiresPayment: true, benefits: ["Quản lý tour đã tạo", "Xem đơn bán tour", "Nhận hoa hồng theo cấp"] },
+  { role: "Business", name: "Business", price: "Đăng ký", subtitle: "Đối tác tour và dịch vụ", note: "Thu phí đăng ký", cta: "Đăng ký Business", requiresPayment: true, benefits: ["Quản lý tour Business", "Xem doanh thu Business", "Tính phí dịch vụ theo cấp"] }
+];
 
 const adminPlanStatusColors = {
   binh_thuong: "#e5e7eb",
@@ -73,15 +89,47 @@ function adminIconButton(className, iconType, label, onClick) {
   return `<button class="${className} admin-table-icon-button" type="button" onclick="${onClick}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${adminActionIcon(iconType)}</button>`;
 }
 
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, "&#96;");
+}
+
+function stripAccountRolePrefix(value) {
+  let text = String(value ?? "").trim();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const prefix of ["Admin-", "Business-"]) {
+      if (text.toLowerCase().startsWith(prefix.toLowerCase())) {
+        text = text.slice(prefix.length).trim();
+        changed = true;
+      }
+    }
+  }
+  return text;
+}
+
 function cleanAccountDisplayName(value) {
-  return String(value ?? "")
+  return stripAccountRolePrefix(String(value ?? "")
     .replace(/^\s*Tài\s*khoản\s+/i, "")
-    .trim();
+    .trim());
+}
+
+function updateAdminPageRoleLinks() {
+  if (typeof updateAdminRolePageLinks === "function") {
+    updateAdminRolePageLinks();
+    return;
+  }
+  const isAdmin = String(localStorage.getItem("userRole") || "").trim().toLowerCase() === "admin";
+  document.querySelectorAll(".admin-role-page-link").forEach(link => {
+    link.style.display = isAdmin ? "inline-flex" : "none";
+  });
 }
 
 async function loadAdminPage() {
+  updateAdminPageRoleLinks();
+  await Promise.all([loadSalesLevelSettings(true), loadAccountPlanSettings(true)]);
   await loadAccounts();
-  await Promise.all([loadAdminDashboard(), loadTours(), loadSchedules(), loadPlanStatusOptions(), loadProvinceTags(), loadPosts()]);
+  await Promise.all([loadAdminDashboard(), loadAdminAnalytics(true), loadTours(), loadSchedules(), loadPlanStatusOptions(), loadProvinceTags(), loadPosts()]);
 }
 
 async function loadAdminDashboard() {
@@ -102,6 +150,236 @@ async function loadAdminDashboard() {
     showToast(error.message);
   }
 }
+
+async function loadAdminAnalytics(silent = false) {
+  try {
+    const response = await authenticatedFetch("/api/admin/analytics");
+    const result = await readJson(response);
+    adminAnalyticsData = result.data || null;
+    renderAdminAnalytics();
+  } catch (error) {
+    console.error(error);
+    if (!silent) showToast(error.message || "Không tải được thống kê");
+    renderEmptyAdminAnalytics();
+  }
+}
+
+function renderAdminAnalytics() {
+  const data = adminAnalyticsData || {};
+  renderAdminAnalyticsSnapshot("Month", data.month || {});
+  renderAdminAnalyticsYearMonths(data.year_months || data.yearMonths || []);
+  const summary = document.getElementById("adminAnalyticsSummary");
+  if (summary) summary.textContent = "Bấm AI thống kê để tạo nhận xét.";
+}
+
+function renderEmptyAdminAnalytics() {
+  renderAdminAnalyticsSnapshot("Month", {});
+  renderAdminAnalyticsYearMonths([]);
+  const summary = document.getElementById("adminAnalyticsSummary");
+  if (summary) summary.textContent = "Chưa có dữ liệu thống kê.";
+}
+
+function renderAdminAnalyticsSnapshot(prefix, stats) {
+  setText(`analytics${prefix}TopProvince`, formatAnalyticsMetric(stats.top_province || stats.topProvince));
+  setText(`analytics${prefix}BudgetRange`, formatAnalyticsMetric(stats.budget_range || stats.budgetRange));
+  setText(`analytics${prefix}TopTour`, formatAnalyticsMetric(stats.top_tour || stats.topTour));
+  setText(`analytics${prefix}GroupSize`, formatAnalyticsMetric(stats.group_size || stats.groupSize));
+}
+
+function renderAdminAnalyticsYearMonths(months) {
+  const body = document.getElementById("analyticsYearMonthBody");
+  if (!body) return;
+  const list = Array.isArray(months) ? months : [];
+  adminAnalyticsYearMonths = list;
+  if (!list.length) {
+    body.innerHTML = `<tr><td colspan="5" class="empty-line">Chưa có dữ liệu thống kê.</td></tr>`;
+    return;
+  }
+  body.innerHTML = list.map((item, index) => {
+    const label = escapeHtml(item.label || `Tháng ${item.month || ""}`.trim());
+    const cell = (kind, metric) => `<td class="admin-analytics-year-cell" data-analytics-detail="${kind}" data-analytics-month-index="${index}" role="button" tabindex="0">${escapeHtml(formatAnalyticsMetric(metric))}</td>`;
+    return `<tr>
+      <td><strong>${label}</strong></td>
+      ${cell("province", item.top_province || item.topProvince)}
+      ${cell("budget", item.budget_range || item.budgetRange)}
+      ${cell("tour", item.top_tour || item.topTour)}
+      ${cell("group", item.group_size || item.groupSize)}
+    </tr>`;
+  }).join("");
+}
+
+function formatAnalyticsMetric(metric) {
+  const label = String(metric?.label || "Chưa có dữ liệu").trim() || "Chưa có dữ liệu";
+  const count = Number(metric?.count || 0);
+  if (!count || label === "Chưa có dữ liệu") return label;
+  return `${label} (${count} lượt)`;
+}
+
+function getAdminAnalyticsDetails(kind, stats) {
+  const source = stats || adminAnalyticsData?.month || {};
+  const details = source.details || source.detail || {};
+  if (kind === "province") {
+    return {
+      title: "5 tỉnh được tìm kiếm nhiều nhất",
+      rows: details.top_provinces || details.topProvinces || []
+    };
+  }
+  if (kind === "budget") {
+    return {
+      title: "Ngân sách phổ biến",
+      rows: details.budget_ranges || details.budgetRanges || []
+    };
+  }
+  if (kind === "tour") {
+    return {
+      title: "5 tour được mua nhiều nhất",
+      rows: details.top_tours || details.topTours || []
+    };
+  }
+  return {
+    title: "Nhóm người dùng",
+    rows: details.group_sizes || details.groupSizes || []
+  };
+}
+
+function openAdminAnalyticsDetailModal(kind, stats) {
+  const modal = document.getElementById("adminAnalyticsDetailModal");
+  const title = document.getElementById("adminAnalyticsDetailTitle");
+  const body = document.getElementById("adminAnalyticsDetailBody");
+  if (!modal || !body) return;
+  const detail = getAdminAnalyticsDetails(kind, stats);
+  if (title) title.textContent = detail.title;
+  const rows = Array.isArray(detail.rows) ? detail.rows : [];
+  if (!rows.length) {
+    body.innerHTML = `<div class="empty-line">Chưa có dữ liệu.</div>`;
+  } else {
+    body.innerHTML = rows.map((item) => {
+      const label = String(item?.label || "Chưa có dữ liệu").trim() || "Chưa có dữ liệu";
+      const count = Number(item?.count || 0);
+      return `<div class="admin-analytics-detail-item">${escapeHtml(label)} <strong>(${count} lượt)</strong></div>`;
+    }).join("");
+  }
+  modal.classList.add("open");
+}
+
+function closeAdminAnalyticsDetailModal() {
+  document.getElementById("adminAnalyticsDetailModal")?.classList.remove("open");
+}
+
+function setupAdminAnalyticsCards() {
+  document.querySelectorAll(".admin-analytics-card[data-analytics-detail]").forEach((card) => {
+    const open = () => openAdminAnalyticsDetailModal(card.dataset.analyticsDetail || "province");
+    card.addEventListener("click", open);
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        open();
+      }
+    });
+  });
+
+  const yearBody = document.getElementById("analyticsYearMonthBody");
+  if (yearBody && yearBody.dataset.analyticsClickBound !== "1") {
+    yearBody.dataset.analyticsClickBound = "1";
+    const openYearDetail = (target) => {
+      const cell = target?.closest?.(".admin-analytics-year-cell[data-analytics-detail][data-analytics-month-index]");
+      if (!cell) return;
+      const index = Number(cell.dataset.analyticsMonthIndex || -1);
+      const stats = adminAnalyticsYearMonths[index] || null;
+      openAdminAnalyticsDetailModal(cell.dataset.analyticsDetail || "province", stats);
+    };
+    yearBody.addEventListener("click", (event) => openYearDetail(event.target));
+    yearBody.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const cell = event.target?.closest?.(".admin-analytics-year-cell[data-analytics-detail][data-analytics-month-index]");
+      if (!cell) return;
+      event.preventDefault();
+      openYearDetail(cell);
+    });
+  }
+}
+
+const ADMIN_ANALYTICS_BUDGET_ORDER = ["1.000.000 - 3.000.000", "3.000.000 - 5.000.000", "5.000.000 - 10.000.000"];
+const ADMIN_ANALYTICS_GROUP_ORDER = ["1 đến 2 người", "3 đến 5 người", "5 đến 10 người"];
+
+function getAdminAnalyticsRows(stats, snakeKey, camelKey) {
+  const details = stats?.details || stats?.detail || {};
+  const rows = details?.[snakeKey] || details?.[camelKey] || [];
+  return Array.isArray(rows) ? rows : [];
+}
+
+function aggregateAdminAnalyticsRows(months, snakeKey, camelKey, take = 3, fixedOrder = null) {
+  const counts = new Map();
+  if (Array.isArray(fixedOrder)) fixedOrder.forEach(label => counts.set(label, 0));
+  (Array.isArray(months) ? months : []).forEach(month => {
+    getAdminAnalyticsRows(month, snakeKey, camelKey).forEach(item => {
+      const label = String(item?.label || "").trim();
+      if (!label || label === "Chưa có dữ liệu") return;
+      const count = Math.max(0, Number(item?.count || 0));
+      counts.set(label, (counts.get(label) || 0) + count);
+    });
+  });
+
+  let rows = Array.from(counts.entries()).map(([label, count]) => ({ label, count }));
+  if (Array.isArray(fixedOrder)) {
+    rows = rows.sort((a, b) => {
+      const diff = Number(b.count || 0) - Number(a.count || 0);
+      if (diff) return diff;
+      return fixedOrder.indexOf(a.label) - fixedOrder.indexOf(b.label);
+    });
+  } else {
+    rows = rows
+      .filter(item => Number(item.count || 0) > 0)
+      .sort((a, b) => Number(b.count || 0) - Number(a.count || 0) || a.label.localeCompare(b.label, "vi"));
+  }
+  return rows.slice(0, take);
+}
+
+function renderAdminAnalyticsAiCell(item) {
+  if (!item || !item.label || !Number(item.count || 0)) return `<td class="empty-line">Chưa có dữ liệu</td>`;
+  return `<td><strong>${escapeHtml(item.label)}</strong><span>${Number(item.count || 0)} lượt</span></td>`;
+}
+
+function showAdminAnalyticsAiSummary() {
+  const summary = document.getElementById("adminAnalyticsSummary");
+  if (!summary) return;
+  const months = adminAnalyticsData?.year_months || adminAnalyticsData?.yearMonths || [];
+  const rows = [
+    {
+      title: "Tỉnh được tìm nhiều nhất",
+      items: aggregateAdminAnalyticsRows(months, "top_provinces", "topProvinces", 3)
+    },
+    {
+      title: "Ngân sách phổ biến",
+      items: aggregateAdminAnalyticsRows(months, "budget_ranges", "budgetRanges", 3, ADMIN_ANALYTICS_BUDGET_ORDER)
+    },
+    {
+      title: "Loại tour đặt nhiều nhất",
+      items: aggregateAdminAnalyticsRows(months, "top_tours", "topTours", 3)
+    },
+    {
+      title: "Nhóm người dùng",
+      items: aggregateAdminAnalyticsRows(months, "group_sizes", "groupSizes", 3, ADMIN_ANALYTICS_GROUP_ORDER)
+    }
+  ];
+
+  const hasData = rows.some(row => row.items.some(item => Number(item.count || 0) > 0));
+  if (!hasData) {
+    summary.textContent = "Chưa có dữ liệu để thống kê.";
+    return;
+  }
+
+  summary.innerHTML = `<div class="admin-analytics-ai-title">AI thống kê theo năm</div>
+    <div class="admin-analytics-ai-table-wrap">
+      <table class="admin-analytics-ai-table">
+        <thead><tr><th>Hạng mục</th><th>Ví dụ 1</th><th>Ví dụ 2</th><th>Ví dụ 3</th></tr></thead>
+        <tbody>
+          ${rows.map(row => `<tr><td><strong>${escapeHtml(row.title)}</strong></td>${[0, 1, 2].map(index => renderAdminAnalyticsAiCell(row.items[index])).join("")}</tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
+}
+
 
 async function loadAccounts() {
   const body = document.getElementById("accountTableBody");
@@ -129,8 +407,201 @@ function getAdminSearchValue(value) {
     .trim();
 }
 
+function clampPercent(value, fallback = 0) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(0, Math.min(100, number));
+}
+
+function normalizeSalesLevel(value) {
+  const level = Number(value);
+  if (!Number.isFinite(level)) return 1;
+  return Math.max(1, Math.min(5, Math.round(level)));
+}
+
+function getSalesLevelSetting(level) {
+  const safeLevel = normalizeSalesLevel(level);
+  return salesLevelSettings.find(item => Number(item.level) === safeLevel) || salesLevelSettings[0];
+}
+
+function normalizeSalesLevelSettings(rows) {
+  const source = Array.isArray(rows) ? rows : [];
+  return [1, 2, 3, 4, 5].map(level => {
+    const current = source.find(item => Number(item?.level) === level) || {};
+    const fallback = salesLevelSettings.find(item => Number(item.level) === level) || {};
+    return {
+      level,
+      commissionPercent: clampPercent(current.commission_percent ?? current.commissionPercent ?? fallback.commissionPercent ?? 0),
+      offerDiscountPercent: clampPercent(current.offer_discount_percent ?? current.offerDiscountPercent ?? fallback.offerDiscountPercent ?? 0),
+      servicePercent: clampPercent(current.service_percent ?? current.servicePercent ?? current.service_fee_percent ?? current.serviceFeePercent ?? fallback.servicePercent ?? 0)
+    };
+  });
+}
+
+async function loadSalesLevelSettings(silent = false) {
+  try {
+    const response = await authenticatedFetch('/api/admin/sales-level-settings');
+    const result = await readJson(response);
+    salesLevelSettings = normalizeSalesLevelSettings(result.data || result.levels || []);
+    renderSalesLevelSettingsForm();
+  } catch (error) {
+    if (!silent) showToast(error.message || 'Không tải được cấu hình từng cấp');
+    renderSalesLevelSettingsForm();
+  }
+}
+
+function renderSalesLevelSettingsForm() {
+  const grid = document.getElementById('salesLevelSettingsGrid');
+  if (!grid) return;
+  grid.innerHTML = salesLevelSettings.map(item => `
+    <tr>
+      <td><strong>Cấp ${item.level}</strong></td>
+      <td><input id="salesLevelOffer${item.level}" type="number" min="0" max="100" step="1" value="${item.offerDiscountPercent}" /></td>
+      <td><input id="salesLevelCommission${item.level}" type="number" min="0" max="100" step="1" value="${item.commissionPercent}" /></td>
+      <td><input id="salesLevelService${item.level}" type="number" min="0" max="100" step="1" value="${item.servicePercent}" /></td>
+    </tr>
+  `).join('');
+}
+
+async function submitSalesLevelSettingsForm(event) {
+  event.preventDefault();
+  const levels = [1, 2, 3, 4, 5].map(level => ({
+    level,
+    offerDiscountPercent: clampPercent(document.getElementById(`salesLevelOffer${level}`)?.value || 0),
+    commissionPercent: clampPercent(document.getElementById(`salesLevelCommission${level}`)?.value || getSalesLevelSetting(level).commissionPercent),
+    servicePercent: clampPercent(document.getElementById(`salesLevelService${level}`)?.value || getSalesLevelSetting(level).servicePercent || 0)
+  }));
+  try {
+    const response = await authenticatedFetch('/api/admin/sales-level-settings', {
+      method: 'PUT',
+      body: JSON.stringify({ levels })
+    });
+    const result = await readJson(response);
+    salesLevelSettings = normalizeSalesLevelSettings(result.data || levels);
+    renderSalesLevelSettingsForm();
+    syncAccountLevelFields();
+    showToast(result.message || 'Đã lưu cấu hình từng cấp');
+  } catch (error) {
+    showToast(error.message || 'Không lưu được cấu hình từng cấp');
+  }
+}
+
+function normalizeAccountPlanRole(value) {
+  const role = String(value || "Free").trim().toLowerCase();
+  if (role === "user") return "Free";
+  if (role === "company") return "Business";
+  if (role === "sales" || role === "tour sales" || role === "toursales") return "Sales";
+  if (role === "business") return "Business";
+  if (role === "vip") return "VIP";
+  if (role === "premium") return "Premium";
+  return "Free";
+}
+
+function normalizeAccountPlanSettings(rows) {
+  const source = Array.isArray(rows) ? rows : [];
+  return accountPlanSettings.map(fallback => {
+    const current = source.find(item => normalizeAccountPlanRole(item?.role) === fallback.role) || {};
+    const benefits = Array.isArray(current.benefits) ? current.benefits : fallback.benefits;
+    return {
+      role: fallback.role,
+      name: current.name || fallback.name,
+      price: current.price || fallback.price,
+      subtitle: current.subtitle || fallback.subtitle,
+      note: current.note || fallback.note,
+      cta: current.cta || fallback.cta,
+      requiresPayment: Boolean(current.requiresPayment ?? current.requires_payment ?? fallback.requiresPayment),
+      benefits: benefits.map(item => String(item || "").trim()).filter(Boolean)
+    };
+  });
+}
+
+async function loadAccountPlanSettings(silent = false) {
+  try {
+    const response = await fetch('/api/account-plans', { cache: 'no-store' });
+    const result = await readJson(response);
+    accountPlanSettings = normalizeAccountPlanSettings(result.data || result.plans || []);
+  } catch (error) {
+    if (!silent) showToast(error.message || 'Không tải được bảng giá');
+  }
+  renderAccountPlanSettingsForm();
+}
+
+function renderAccountPlanSettingsForm() {
+  const body = document.getElementById('accountPlanSettingsBody');
+  if (!body) return;
+  body.innerHTML = accountPlanSettings.map(plan => `
+    <tr>
+      <td><strong>${escapeHtml(plan.name)}</strong><br><small>${escapeHtml(plan.role)}</small><input id="accountPlanName${plan.role}" type="hidden" value="${escapeAttr(plan.name)}" /><input id="accountPlanNote${plan.role}" type="hidden" value="${escapeAttr(plan.note)}" /><input id="accountPlanCta${plan.role}" type="hidden" value="${escapeAttr(plan.cta)}" /></td>
+      <td><input id="accountPlanPrice${plan.role}" value="${escapeAttr(plan.price)}" /></td>
+      <td><input id="accountPlanSubtitle${plan.role}" value="${escapeAttr(plan.subtitle)}" /></td>
+      <td><textarea id="accountPlanBenefits${plan.role}" rows="4">${escapeHtml(plan.benefits.join('\n'))}</textarea></td>
+      <td><select id="accountPlanPayment${plan.role}"><option value="true" ${plan.requiresPayment ? 'selected' : ''}>Có</option><option value="false" ${!plan.requiresPayment ? 'selected' : ''}>Không</option></select></td>
+    </tr>
+  `).join('');
+}
+
+async function submitAccountPlanSettingsForm(event) {
+  event.preventDefault();
+  const plans = accountPlanSettings.map(plan => ({
+    role: plan.role,
+    name: document.getElementById(`accountPlanName${plan.role}`)?.value || plan.name,
+    price: document.getElementById(`accountPlanPrice${plan.role}`)?.value.trim() || plan.price,
+    subtitle: document.getElementById(`accountPlanSubtitle${plan.role}`)?.value.trim() || plan.subtitle,
+    note: document.getElementById(`accountPlanNote${plan.role}`)?.value || plan.note,
+    cta: document.getElementById(`accountPlanCta${plan.role}`)?.value || plan.cta,
+    requiresPayment: document.getElementById(`accountPlanPayment${plan.role}`)?.value === 'true',
+    benefits: (document.getElementById(`accountPlanBenefits${plan.role}`)?.value || '')
+      .split(/\n+/)
+      .map(item => item.trim())
+      .filter(Boolean)
+  }));
+  try {
+    const response = await authenticatedFetch('/api/admin/account-plans', {
+      method: 'PUT',
+      body: JSON.stringify({ plans })
+    });
+    const result = await readJson(response);
+    accountPlanSettings = normalizeAccountPlanSettings(result.data || plans);
+    renderAccountPlanSettingsForm();
+    if (window.TravelwAIPricingPopup?.reload) window.TravelwAIPricingPopup.reload();
+    showToast(result.message || 'Đã lưu bảng giá');
+  } catch (error) {
+    showToast(error.message || 'Không lưu được bảng giá');
+  }
+}
+
+function getAccountOfferLevel(account) {
+  return normalizeSalesLevel(account?.offer_level ?? account?.offerLevel ?? account?.sales_level ?? account?.salesLevel ?? 1);
+}
+
+function getAccountCommissionLevel(account) {
+  return normalizeSalesLevel(account?.commission_level ?? account?.commissionLevel ?? account?.sales_level ?? account?.salesLevel ?? 1);
+}
+
+function getAccountServiceLevel(account) {
+  return normalizeSalesLevel(account?.service_level ?? account?.serviceLevel ?? 1);
+}
+
+function getAccountSalesLevel(account) {
+  return getAccountCommissionLevel(account);
+}
+
 function getAccountOfferPercent(account) {
-  return Math.max(0, Math.min(25, Number(account?.offer_discount_percent ?? account?.offerDiscountPercent ?? 0)));
+  const level = getAccountOfferLevel(account);
+  const fallback = getSalesLevelSetting(level)?.offerDiscountPercent ?? 0;
+  return clampPercent(account?.offer_discount_percent ?? account?.offerDiscountPercent ?? account?.admin_offer_discount_percent ?? account?.adminOfferDiscountPercent ?? fallback, fallback);
+}
+
+function getAccountCommissionPercent(account) {
+  const level = getAccountCommissionLevel(account);
+  const fallback = getSalesLevelSetting(level)?.commissionPercent ?? 8;
+  return clampPercent(account?.commission_percent ?? account?.commissionPercent ?? fallback, fallback);
+}
+
+function getAccountServicePercent(account) {
+  const level = getAccountServiceLevel(account);
+  const fallback = getSalesLevelSetting(level)?.servicePercent ?? 0;
+  return clampPercent(account?.service_fee_percent ?? account?.serviceFeePercent ?? account?.service_percent ?? account?.servicePercent ?? fallback, fallback);
 }
 
 function renderAccountOffer(account) {
@@ -144,9 +615,14 @@ function getAccountSearchText(account) {
   return getAdminSearchValue([
     account?.username,
     account?.email,
-    account?.role || "User",
+    account?.role || "Free",
     locked,
     `Ưu đãi ${discount}%`,
+    `${getAccountCommissionPercent(account)}% hoa hồng`,
+    `${getAccountServicePercent(account)}% dịch vụ`,
+    `Cấp hoa hồng ${getAccountCommissionLevel(account)}`,
+    `Cấp ưu đãi ${getAccountOfferLevel(account)}`,
+    `Cấp dịch vụ ${getAccountServiceLevel(account)}`,
     account?.created_at,
     formatDate(account?.created_at)
   ].join(" "));
@@ -162,18 +638,18 @@ function renderAccounts() {
     : travelwaiAccounts;
 
   if (!visibleAccounts.length) {
-    body.innerHTML = `<tr><td colspan="6" class="empty-line">${query ? "Không tìm thấy tài khoản phù hợp." : "Chưa có tài khoản."}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" class="empty-line">${query ? "Không tìm thấy tài khoản." : "Chưa có tài khoản."}</td></tr>`;
     return;
   }
 
   body.innerHTML = visibleAccounts.map((account) => {
-    const role = account.role || "User";
+    const role = account.role || "Free";
     const protectedAdmin = account.is_protected || account.isProtected;
     const locked = account.is_locked || account.isLocked;
     return `
       <tr>
         <td><strong>${escapeHtml(account.username || "Người dùng")}</strong><br><small>${escapeHtml(account.email || "")}</small></td>
-        <td>${roleBadge(role)}</td>
+        <td>${renderAccountRole(account)}</td>
         <td>${locked ? `<span class="badge badge-lock">Đã khóa</span>` : `<span class="badge badge-open">Hoạt động</span>`}</td>
         <td>${renderAccountOffer(account)}</td>
         <td>${formatDate(account.created_at)}</td>
@@ -246,7 +722,7 @@ function renderSchedules() {
     : travelwaiSchedules;
 
   if (!visibleSchedules.length) {
-    body.innerHTML = `<tr><td colspan="5" class="empty-line">${query ? "Không tìm thấy lịch trình phù hợp." : "Chưa có lịch trình."}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="5" class="empty-line">${query ? "Không tìm thấy lịch trình." : "Chưa có lịch trình."}</td></tr>`;
     return;
   }
 
@@ -267,10 +743,33 @@ function renderSchedules() {
   }).join("");
 }
 
+function normalizeAccountRole(role) {
+  const value = String(role || "Free").trim().toLowerCase();
+  if (value === "tour sales") return "Sales";
+  if (value === "sales") return "Sales";
+  if (value === "company" || value === "business") return "Business";
+  if (value === "admin") return "Admin";
+  if (value === "vip") return "VIP";
+  if (value === "premium") return "Premium";
+  return "Free";
+}
+
 function roleBadge(role) {
-  if (role === "Admin") return `<span class="badge badge-admin">Admin</span>`;
-  if (role === "Tour Sales") return `<span class="badge badge-sales">Tour Sales</span>`;
-  return `<span class="badge badge-user">User</span>`;
+  const normalized = normalizeAccountRole(role);
+  if (normalized === "Admin") return `<span class="badge badge-admin">Admin</span>`;
+  if (normalized === "Sales") return `<span class="badge badge-sales">Sales</span>`;
+  if (normalized === "Business") return `<span class="badge badge-sales">Business</span>`;
+  if (normalized === "VIP") return `<span class="badge badge-user">VIP</span>`;
+  if (normalized === "Premium") return `<span class="badge badge-user">Premium</span>`;
+  if (normalized === "Free") return `<span class="badge badge-user">Free</span>`;
+  return `<span class="badge badge-user">Free</span>`;
+}
+
+function renderAccountRole(account) {
+  const role = normalizeAccountRole(account?.role || "Free");
+  if (role === "Sales") return `${roleBadge(role)}<br><small>Cấp hoa hồng ${getAccountCommissionLevel(account)} - Hoa hồng ${getAccountCommissionPercent(account)}%</small>`;
+  if (role === "Business") return `${roleBadge(role)}<br><small>Cấp dịch vụ ${getAccountServiceLevel(account)} - Dịch vụ ${getAccountServicePercent(account)}%</small>`;
+  return roleBadge(role);
 }
 
 function openAccountModal(id) {
@@ -278,15 +777,38 @@ function openAccountModal(id) {
   if (!account) return showToast("Không tìm thấy tài khoản");
   document.getElementById("accountId").value = account.id || "";
   document.getElementById("accountEmail").value = account.email || "";
-  document.getElementById("accountUsername").value = account.username || "";
+  document.getElementById("accountUsername").value = stripAccountRolePrefix(account.username || "");
+  const commissionInput = document.getElementById("accountCommissionPercent");
+  const commissionLevel = document.getElementById("accountSalesLevel");
   const offerInput = document.getElementById("accountOfferDiscount");
-  if (offerInput) offerInput.value = `${getAccountOfferPercent(account)}%`;
-  document.getElementById("accountRole").value = account.role || "User";
+  const offerLevel = document.getElementById("accountOfferLevel");
+  const serviceInput = document.getElementById("accountServicePercent");
+  const serviceLevel = document.getElementById("accountServiceLevel");
+  if (commissionInput) commissionInput.value = getAccountCommissionPercent(account);
+  if (commissionLevel) {
+    commissionLevel.value = String(getAccountCommissionLevel(account));
+    commissionLevel.dataset.originalValue = String(getAccountCommissionLevel(account));
+  }
+  if (offerInput) offerInput.value = getAccountOfferPercent(account);
+  if (offerLevel) {
+    offerLevel.value = String(getAccountOfferLevel(account));
+    offerLevel.dataset.originalValue = String(getAccountOfferLevel(account));
+  }
+  if (serviceInput) serviceInput.value = getAccountServicePercent(account);
+  if (serviceLevel) {
+    serviceLevel.value = String(getAccountServiceLevel(account));
+    serviceLevel.dataset.originalValue = String(getAccountServiceLevel(account));
+  }
+  document.getElementById("accountRole").value = normalizeAccountRole(account.role || "Free");
   document.getElementById("accountLocked").checked = !!(account.is_locked || account.isLocked);
 
   const protectedAdmin = account.is_protected || account.isProtected;
   document.getElementById("accountRole").disabled = !!protectedAdmin;
+  [commissionInput, commissionLevel, offerInput, offerLevel, serviceInput, serviceLevel].forEach(field => {
+    if (field) field.disabled = !!protectedAdmin;
+  });
   document.getElementById("accountLocked").disabled = !!protectedAdmin;
+  syncAccountLevelFields(false);
   document.getElementById("accountModal")?.classList.add("open");
 }
 
@@ -294,12 +816,54 @@ function closeAccountModal() {
   document.getElementById("accountModal")?.classList.remove("open");
 }
 
+function syncAccountLevelFields(applySelected = false) {
+  const role = normalizeAccountRole(document.getElementById("accountRole")?.value || "Free");
+  const roleDisabled = !!document.getElementById("accountRole")?.disabled;
+  const commissionInput = document.getElementById("accountCommissionPercent");
+  const commissionLevel = document.getElementById("accountSalesLevel");
+  const offerInput = document.getElementById("accountOfferDiscount");
+  const offerLevel = document.getElementById("accountOfferLevel");
+  const serviceInput = document.getElementById("accountServicePercent");
+  const serviceLevel = document.getElementById("accountServiceLevel");
+  const disableSalesFields = role !== "Sales" || roleDisabled;
+  const disableCompanyFields = role !== "Business" || roleDisabled;
+  if (commissionInput) commissionInput.disabled = disableSalesFields;
+  if (commissionLevel) commissionLevel.disabled = disableSalesFields;
+  if (offerInput) offerInput.disabled = roleDisabled;
+  if (offerLevel) offerLevel.disabled = roleDisabled;
+  if (serviceInput) serviceInput.disabled = disableCompanyFields;
+  if (serviceLevel) serviceLevel.disabled = disableCompanyFields;
+  if (applySelected && role === "Sales") {
+    const commissionSetting = getSalesLevelSetting(commissionLevel?.value || 1);
+    if (commissionInput && commissionSetting) commissionInput.value = commissionSetting.commissionPercent;
+  }
+  if (applySelected) {
+    const offerSetting = getSalesLevelSetting(offerLevel?.value || 1);
+    if (offerInput && offerSetting) offerInput.value = offerSetting.offerDiscountPercent;
+  }
+  if (applySelected && role === "Business") {
+    const serviceSetting = getSalesLevelSetting(serviceLevel?.value || 1);
+    if (serviceInput && serviceSetting) serviceInput.value = serviceSetting.servicePercent;
+  }
+}
+
 async function submitAccountForm(event) {
   event.preventDefault();
   const id = document.getElementById("accountId").value;
+  const commissionLevel = normalizeSalesLevel(document.getElementById("accountSalesLevel")?.value || 1);
+  const offerLevel = normalizeSalesLevel(document.getElementById("accountOfferLevel")?.value || 1);
+  const serviceLevel = normalizeSalesLevel(document.getElementById("accountServiceLevel")?.value || 1);
   const payload = {
     username: document.getElementById("accountUsername").value.trim(),
     role: document.getElementById("accountRole").value,
+    offerDiscountPercent: clampPercent(document.getElementById("accountOfferDiscount")?.value || 0),
+    offerLevel,
+    salesLevel: commissionLevel,
+    commissionLevel,
+    commissionPercent: clampPercent(document.getElementById("accountCommissionPercent")?.value || 0),
+    commissionManualOverride: true,
+    servicePercent: clampPercent(document.getElementById("accountServicePercent")?.value || 0),
+    serviceLevel,
     isLocked: document.getElementById("accountLocked").checked
   };
   try {
@@ -317,7 +881,7 @@ async function submitAccountForm(event) {
 }
 
 async function deleteAccount(id) {
-  if (!confirm("Xóa tài khoản này? Tour và bài viết của tài khoản sẽ tự động chuyển sang Admin.")) return;
+  if (!await window.TravelwAIConfirm("Xóa tài khoản này? Tour và bài viết của tài khoản sẽ tự động chuyển sang Admin.")) return;
   try {
     const response = await authenticatedFetch(`/api/admin/accounts/${encodeURIComponent(id)}`, { method: "DELETE" });
     const result = await readJson(response);
@@ -329,7 +893,7 @@ async function deleteAccount(id) {
 }
 
 async function deleteSchedule(id) {
-  if (!confirm("Xóa lịch trình này?")) return;
+  if (!await window.TravelwAIConfirm("Xóa lịch trình này?")) return;
   try {
     const response = await authenticatedFetch(`/api/admin/schedules/${encodeURIComponent(id)}`, { method: "DELETE" });
     const result = await readJson(response);
@@ -377,7 +941,7 @@ function renderPlanStatusOptions() {
     : travelwaiPlanStatuses;
 
   if (!visibleStatuses.length) {
-    body.innerHTML = `<tr><td colspan="5" class="empty-line">${query ? "Không tìm thấy trạng thái phù hợp." : "Chưa có trạng thái."}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="5" class="empty-line">${query ? "Không tìm thấy trạng thái." : "Chưa có trạng thái."}</td></tr>`;
     return;
   }
 
@@ -437,7 +1001,7 @@ function renderProvinceTags() {
     : travelwaiProvinceTags;
 
   if (!visibleProvinces.length) {
-    body.innerHTML = `<tr><td colspan="4" class="empty-line">${query ? "Không tìm thấy tỉnh thành phù hợp." : "Chưa có tỉnh thành."}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="4" class="empty-line">${query ? "Không tìm thấy tỉnh thành." : "Chưa có tỉnh thành."}</td></tr>`;
     return;
   }
 
@@ -577,7 +1141,7 @@ async function submitPlanStatusOptionForm(event) {
 }
 
 async function disablePlanStatusOption(key) {
-  if (!confirm("Ẩn trạng thái này?")) return;
+  if (!await window.TravelwAIConfirm("Ẩn trạng thái này?")) return;
   try {
     const response = await authenticatedFetch(`/api/admin/plan-status-options/${encodeURIComponent(key)}`, { method: "DELETE" });
     const result = await readJson(response);
@@ -626,7 +1190,7 @@ async function submitTravelTagForm(event) {
 async function deleteTravelTag(name) {
   const tagName = String(name || "").trim();
   if (!tagName) return;
-  if (!confirm(`Xoá tag "${tagName}"?`)) return;
+  if (!await window.TravelwAIConfirm(`Xoá tag "${tagName}"?`)) return;
 
   try {
     const response = await authenticatedFetch(`/api/admin/travel-tags/${encodeURIComponent(tagName)}`, { method: "DELETE" });
@@ -823,7 +1387,7 @@ function renderPosts() {
   const query = getAdminSearchValue(postSearchQuery);
   const visible = query ? travelwaiPosts.filter(post => getPostSearchText(post).includes(query)) : travelwaiPosts;
   if (!visible.length) {
-    body.innerHTML = `<tr><td colspan="6" class="empty-line">${query ? "Không tìm thấy bài viết phù hợp." : "Chưa có bài viết."}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" class="empty-line">${query ? "Không tìm thấy bài viết." : "Chưa có bài viết."}</td></tr>`;
     return;
   }
   body.innerHTML = visible.map(post => {
@@ -841,7 +1405,7 @@ function renderPosts() {
 }
 
 function getPostAuthorAccounts() {
-  const roleOrder = { admin: 0, "tour sales": 1, user: 2 };
+  const roleOrder = { admin: 0, sales: 1, "tour sales": 1, business: 2, company: 2, premium: 3, vip: 4, free: 5, user: 5 };
   const source = Array.isArray(travelwaiAccounts) ? travelwaiAccounts : [];
   return source
     .filter(account => getAccountId(account))
@@ -918,7 +1482,7 @@ async function generateAdminPostContentFromFestival() {
     const data = result.data || result;
     const content = stripPostSourceLines(data.content || "");
     const summary = stripPostSourceLines(data.summary || "");
-    if (!content) throw new Error("Không tìm thấy nội dung thật phù hợp.");
+    if (!content) throw new Error("Không tìm thấy nội dung phù hợp.");
 
     if (titleInput && data.title) titleInput.value = data.title;
 
@@ -937,7 +1501,7 @@ async function generateAdminPostContentFromFestival() {
     const month = Number(data.month || 0);
     if (monthSelect && month >= 1 && month <= 12) monthSelect.value = String(month);
 
-    showToast(result.message || "Đã điền nội dung khám phá văn hoá lịch sử.");
+    showToast(result.message || "Đã điền nội dung bài viết.");
   } catch (error) {
     showToast(error.message || "Không tạo được nội dung từ Lễ hội/ngày lễ này.");
   } finally {
@@ -1023,7 +1587,7 @@ async function submitPostForm(event) {
 }
 
 async function deletePost(id) {
-  if (!confirm("Xóa bài viết này?")) return;
+  if (!await window.TravelwAIConfirm("Xóa bài viết này?")) return;
   try {
     const response = await authenticatedFetch(`/api/admin/posts/${encodeURIComponent(id)}`, { method: "DELETE" });
     const result = await readJson(response);
@@ -1202,24 +1766,36 @@ document.addEventListener("DOMContentLoaded", () => {
   if (document.body.dataset.page !== "admin") return;
   setupAdminTabs();
   setupAdminSearch();
+  setupAdminAnalyticsCards();
   setupAiAvatarUpload();
   document.getElementById("accountForm")?.addEventListener("submit", submitAccountForm);
+  document.getElementById("accountRole")?.addEventListener("change", () => syncAccountLevelFields(false));
+  document.getElementById("accountSalesLevel")?.addEventListener("change", () => syncAccountLevelFields(true));
+  document.getElementById("accountOfferLevel")?.addEventListener("change", () => syncAccountLevelFields(true));
+  document.getElementById("accountServiceLevel")?.addEventListener("change", () => syncAccountLevelFields(true));
+  document.getElementById("salesLevelSettingsForm")?.addEventListener("submit", submitSalesLevelSettingsForm);
+  document.getElementById("accountPlanSettingsForm")?.addEventListener("submit", submitAccountPlanSettingsForm);
   document.getElementById("planStatusOptionForm")?.addEventListener("submit", submitPlanStatusOptionForm);
   document.getElementById("provinceTagForm")?.addEventListener("submit", submitProvinceTagForm);
   document.getElementById("travelTagForm")?.addEventListener("submit", submitTravelTagForm);
   document.getElementById("postForm")?.addEventListener("submit", submitPostForm);
   document.getElementById("postAiButton")?.addEventListener("click", generateAdminPostContentFromFestival);
+  document.getElementById("adminAnalyticsAiButton")?.addEventListener("click", showAdminAnalyticsAiSummary);
+  document.getElementById("adminAnalyticsRefreshButton")?.addEventListener("click", () => loadAdminAnalytics(false));
   document.getElementById("postImageUrls")?.addEventListener("input", renderAdminPostImagePreview);
   document.getElementById("postImageUploadButton")?.addEventListener("click", () => document.getElementById("postImageFiles")?.click());
   document.getElementById("postImageFiles")?.addEventListener("change", (event) => {
     selectedAdminPostImageFiles = Array.from(event.target.files || []);
     renderAdminPostImagePreview();
   });
+  updateAdminPageRoleLinks();
   loadAdminPage();
 });
 
 window.loadAdminPage = loadAdminPage;
 window.loadAdminDashboard = loadAdminDashboard;
+window.loadAdminAnalytics = loadAdminAnalytics;
+window.closeAdminAnalyticsDetailModal = closeAdminAnalyticsDetailModal;
 window.openAccountModal = openAccountModal;
 window.closeAccountModal = closeAccountModal;
 window.openAiAvatarModal = openAiAvatarModal;

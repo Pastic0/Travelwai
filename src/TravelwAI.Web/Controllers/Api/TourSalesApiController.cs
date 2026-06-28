@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
+using Npgsql;
 using TravelwAI.Business.Interfaces;
 using TravelwAI.Data.Interfaces;
 using TravelwAI.Web.Services;
@@ -10,19 +11,23 @@ namespace TravelwAI.Web.Controllers.Api;
 [Route("api/tour-sales")]
 public sealed class TourSalesApiController : ApiControllerBase
 {
+    private const string SalesLevelSettingsCollection = "sales_level_settings";
+    private const string SalesLevelSettingsDocumentId = "default";
     private readonly IDataRepository _repo;
     private readonly TourOrderAutomation _tourAutomation;
     private readonly IFileStorageService _fileStorage;
     private readonly IChatService _chatService;
     private readonly EmailNotificationService _emailNotificationService;
+    private readonly NpgsqlDataSource _dataSource;
 
-    public TourSalesApiController(IAuthService authService, IDataRepository repo, TourOrderAutomation tourAutomation, IFileStorageService fileStorage, IChatService chatService, EmailNotificationService emailNotificationService) : base(authService)
+    public TourSalesApiController(IAuthService authService, IDataRepository repo, TourOrderAutomation tourAutomation, IFileStorageService fileStorage, IChatService chatService, EmailNotificationService emailNotificationService, NpgsqlDataSource dataSource) : base(authService)
     {
         _repo = repo;
         _tourAutomation = tourAutomation;
         _fileStorage = fileStorage;
         _chatService = chatService;
         _emailNotificationService = emailNotificationService;
+        _dataSource = dataSource;
     }
 
     [HttpGet("dashboard")]
@@ -36,15 +41,53 @@ public sealed class TourSalesApiController : ApiControllerBase
 
         var tours = await _repo.GetAllAsync("tours", limit: 200);
         var orders = await _repo.GetAllAsync("tour_orders", limit: 500);
+        await AttachTourSalesToOrdersAsync(orders, tours, access.role, access.userId);
+
+        var isAdmin = IsAdminRole(access.role);
+        if (isAdmin && RequestIsCompanyPage())
+        {
+            tours = await FilterToursByOwnerRoleAsync(tours, "Business");
+            orders = orders.Where(o => IsCompanyRole(TextAny(o, "owner_role", "ownerRole"))).ToList();
+        }
+        else if (!isAdmin)
+        {
+            tours = tours.Where(t => IsOwnedByCurrentSales(t, access.userId)).ToList();
+            var ownedTourIds = tours
+                .Select(t => Text(t, "id"))
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            orders = orders.Where(o => IsOrderOwnedByCurrentSales(o, access.userId, ownedTourIds)).ToList();
+        }
+
         var activeTours = tours.Count(t => string.Equals(Text(t, "status"), "Đang bán", StringComparison.OrdinalIgnoreCase) && !(GetInt(t, "slots") > 0 && GetInt(t, "sold") >= GetInt(t, "slots")));
         var sold = tours.Sum(t => GetInt(t, "sold"));
         var slots = tours.Sum(t => GetInt(t, "slots"));
-        var revenue = orders.Where(o => string.Equals(Text(o, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase)).Sum(GetOrderTotal);
+        var soldOrders = orders.Where(o => string.Equals(Text(o, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase)).ToList();
+        var grossRevenue = soldOrders.Sum(GetOrderOriginalTotal);
+        var discountDeducted = soldOrders.Sum(GetOrderDiscountAmount);
+        var commission = soldOrders.Sum(GetOrderCommissionAmount);
+        var serviceFee = soldOrders.Sum(GetOrderServiceAmount);
+        var companyOriginalDeducted = soldOrders.Where(IsCompanyOrder).Sum(GetOrderOriginalTotal);
+        var companyRevenue = Math.Max(0, companyOriginalDeducted - serviceFee);
+        var isSales = IsSalesRole(access.role);
+        var isCompany = IsCompanyRole(access.role);
+        var revenue = isSales
+            ? commission
+            : isCompany
+                ? Math.Max(0, grossRevenue - serviceFee)
+                : grossRevenue - discountDeducted - commission + serviceFee - companyOriginalDeducted;
+        var currentCommissionPercent = await GetTourSalesCommissionPercentAsync(access.userId);
+        var currentServicePercent = await GetUserServicePercentAsync(access.userId);
+        var currentSoldCount = await GetOwnerSoldQuantityAsync(access.userId);
+        var currentLevel = await GetTourSalesLevelAsync(access.userId, currentSoldCount);
 
         return Ok(new
         {
             success = true,
             role = access.role,
+            current_user_id = access.userId,
+            current_user_name = await GetCurrentSalesNameAsync(access.userId!, access.authUser),
             data = new
             {
                 tours = tours.Count,
@@ -53,7 +96,32 @@ public sealed class TourSalesApiController : ApiControllerBase
                 slots,
                 available = Math.Max(0, slots - sold),
                 orders = orders.Count,
-                revenue
+                revenue,
+                grossRevenue,
+                gross_revenue = grossRevenue,
+                discountDeducted,
+                discount_deducted = discountDeducted,
+                commission,
+                commissionDeducted = commission,
+                commission_deducted = commission,
+                serviceFee,
+                service_fee = serviceFee,
+                serviceDeducted = serviceFee,
+                service_deducted = serviceFee,
+                companyOriginalDeducted,
+                company_original_deducted = companyOriginalDeducted,
+                companyGrossDeducted = companyOriginalDeducted,
+                company_gross_deducted = companyOriginalDeducted,
+                companyRevenue,
+                company_revenue = companyRevenue,
+                commission_percent = currentCommissionPercent,
+                commissionPercent = currentCommissionPercent,
+                service_percent = currentServicePercent,
+                servicePercent = currentServicePercent,
+                sales_level = currentLevel.Level,
+                salesLevel = currentLevel.Level,
+                sales_sold_count = currentSoldCount,
+                salesSoldCount = currentSoldCount
             }
         });
     }
@@ -85,9 +153,17 @@ public sealed class TourSalesApiController : ApiControllerBase
             }
         }
 
-        if (!string.Equals(access.role, "Admin", StringComparison.OrdinalIgnoreCase))
+        var isAdmin = IsAdminRole(access.role);
+        if (isAdmin && RequestIsCompanyPage())
         {
-            tours = tours.Where(t => !IsTourSoldOut(t)).ToList();
+            tours = await FilterToursByOwnerRoleAsync(tours, "Business");
+        }
+        else if (!isAdmin)
+        {
+            tours = tours
+                .Where(t => IsOwnedByCurrentSales(t, access.userId))
+                .Where(t => !IsTourSoldOut(t))
+                .ToList();
         }
 
         await HydrateTourSalesAsync(tours, access.role, access.userId);
@@ -138,7 +214,7 @@ public sealed class TourSalesApiController : ApiControllerBase
         var salesName = await GetCurrentSalesNameAsync(ownerId, string.Equals(ownerId, access.userId, StringComparison.Ordinal) ? access.authUser : null);
         if (string.IsNullOrWhiteSpace(salesName))
         {
-            salesName = request.TourSalesName?.Trim() ?? "Tour Sales";
+            salesName = request.TourSalesName?.Trim() ?? "Sales";
         }
 
         var data = new Dictionary<string, object?>
@@ -180,7 +256,7 @@ public sealed class TourSalesApiController : ApiControllerBase
         if (current is null) return NotFound(new { success = false, message = "Không tìm thấy tour" });
         if (!CanEditTour(access.role, access.userId, current))
         {
-            return StatusCode(403, new { success = false, message = "Tour Sales chỉ được sửa tour của họ." });
+            return StatusCode(403, new { success = false, message = "Sales chỉ được sửa tour của họ." });
         }
 
         var nextStartDate = request.StartDate is null ? Text(current, "start_date") : request.StartDate.Trim();
@@ -206,13 +282,13 @@ public sealed class TourSalesApiController : ApiControllerBase
         var automaticSalesName = string.IsNullOrWhiteSpace(ownerId)
             ? storedSalesName
             : await GetUserDisplayNameAsync(ownerId);
-        if (string.IsNullOrWhiteSpace(automaticSalesName)) automaticSalesName = request.TourSalesName?.Trim() ?? "Tour Sales";
+        if (string.IsNullOrWhiteSpace(automaticSalesName)) automaticSalesName = request.TourSalesName?.Trim() ?? "Sales";
 
         var salesName = manualSalesName && !string.IsNullOrWhiteSpace(storedSalesName)
             ? storedSalesName
             : automaticSalesName;
 
-        if (string.IsNullOrWhiteSpace(salesName)) salesName = "Tour Sales";
+        if (string.IsNullOrWhiteSpace(salesName)) salesName = "Sales";
 
         var data = new Dictionary<string, object?>
         {
@@ -252,7 +328,7 @@ public sealed class TourSalesApiController : ApiControllerBase
         if (current is null) return NotFound(new { success = false, message = "Không tìm thấy tour" });
         if (!CanEditTour(access.role, access.userId, current))
         {
-            return StatusCode(403, new { success = false, message = "Tour Sales chỉ được xóa tour của họ." });
+            return StatusCode(403, new { success = false, message = "Sales chỉ được xóa tour của họ." });
         }
 
         var ok = await _repo.DeleteAsync("tours", id);
@@ -270,38 +346,99 @@ public sealed class TourSalesApiController : ApiControllerBase
 
         var orders = await _repo.GetAllAsync("tour_orders", limit: 500);
         var tours = await _repo.GetAllAsync("tours", limit: 500);
-        var tourMap = tours
-            .Where(t => !string.IsNullOrWhiteSpace(Text(t, "id")))
-            .ToDictionary(t => Text(t, "id"), t => t, StringComparer.OrdinalIgnoreCase);
         var isAdmin = string.Equals(access.role, "Admin", StringComparison.OrdinalIgnoreCase);
+        await AttachTourSalesToOrdersAsync(orders, tours, access.role, access.userId);
 
-        foreach (var order in orders)
+        if (isAdmin && RequestIsCompanyPage())
         {
-            var tourId = TextAny(order, "tour_id", "tourId");
-            if (!string.IsNullOrWhiteSpace(tourId) && tourMap.TryGetValue(tourId, out var tour))
-            {
-                var ownerId = GetTourOwnerId(tour);
-                var salesName = string.IsNullOrWhiteSpace(ownerId)
-                    ? TextAny(tour, "tour_sales_name", "tourSalesName", "sales_name", "salesName")
-                    : await GetUserDisplayNameAsync(ownerId);
-                if (string.IsNullOrWhiteSpace(salesName)) salesName = "Tour Sales";
+            orders = orders.Where(o => IsCompanyRole(TextAny(o, "owner_role", "ownerRole"))).ToList();
+        }
+        else if (!isAdmin)
+        {
+            var ownedTourIds = tours
+                .Where(t => IsOwnedByCurrentSales(t, access.userId))
+                .Select(t => Text(t, "id"))
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-                order["tour_sales_id"] = ownerId;
-                order["tourSalesId"] = ownerId;
-                order["tour_sales_name"] = salesName;
-                order["tourSalesName"] = salesName;
-                order["can_sell"] = isAdmin || (!string.IsNullOrWhiteSpace(ownerId) && string.Equals(ownerId, access.userId, StringComparison.Ordinal));
-                order["canSell"] = order["can_sell"];
-            }
-            else
-            {
-                var ownerId = TextAny(order, "tour_sales_id", "tourSalesId", "seller_id", "sellerId");
-                order["can_sell"] = isAdmin || (!string.IsNullOrWhiteSpace(ownerId) && string.Equals(ownerId, access.userId, StringComparison.Ordinal));
-                order["canSell"] = order["can_sell"];
-            }
+            orders = orders.Where(o => IsOrderOwnedByCurrentSales(o, access.userId, ownedTourIds)).ToList();
         }
 
-        return Ok(new { success = true, data = orders });
+        return Ok(new { success = true, role = access.role, current_user_id = access.userId, data = orders });
+    }
+
+    [HttpGet("commission")]
+    public async Task<IActionResult> GetCommissionStatus()
+    {
+        var access = await RequireTourAccessAsync();
+        if (!access.ok) return access.error!;
+
+        await _tourAutomation.ExpirePendingOrdersAsync();
+        await CleanupCanceledToursAndOrdersAsync();
+
+        var tours = await _repo.GetAllAsync("tours", limit: 500);
+        var orders = await _repo.GetAllAsync("tour_orders", limit: 500);
+        await AttachTourSalesToOrdersAsync(orders, tours, access.role, access.userId);
+
+        if (!string.Equals(access.role, "Admin", StringComparison.OrdinalIgnoreCase))
+        {
+            tours = tours.Where(t => IsOwnedByCurrentSales(t, access.userId)).ToList();
+            var ownedTourIds = tours
+                .Select(t => Text(t, "id"))
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            orders = orders.Where(o => IsOrderOwnedByCurrentSales(o, access.userId, ownedTourIds)).ToList();
+        }
+
+        var soldOrders = orders.Where(o => string.Equals(Text(o, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase)).ToList();
+        var percent = await GetTourSalesCommissionPercentAsync(access.userId);
+        var soldCount = await GetOwnerSoldQuantityAsync(access.userId);
+        var level = await GetTourSalesLevelAsync(access.userId, soldCount);
+        var servicePercent = await GetUserServicePercentAsync(access.userId);
+        var grossRevenue = soldOrders.Sum(GetOrderOriginalTotal);
+        var discountDeducted = soldOrders.Sum(GetOrderDiscountAmount);
+        var commission = soldOrders.Sum(GetOrderCommissionAmount);
+        var serviceFee = soldOrders.Sum(GetOrderServiceAmount);
+        var companyOriginalDeducted = soldOrders.Where(IsCompanyOrder).Sum(GetOrderOriginalTotal);
+        var companyRevenue = Math.Max(0, companyOriginalDeducted - serviceFee);
+
+        return Ok(new
+        {
+            success = true,
+            role = access.role,
+            current_user_id = access.userId,
+            current_user_name = await GetCurrentSalesNameAsync(access.userId!, access.authUser),
+            commission_percent = percent,
+            commissionPercent = percent,
+            service_percent = servicePercent,
+            servicePercent = servicePercent,
+            sales_level = level.Level,
+            salesLevel = level.Level,
+            sales_sold_count = soldCount,
+            salesSoldCount = soldCount,
+            data = new
+            {
+                soldOrders = soldOrders.Count,
+                sold_orders = soldOrders.Count,
+                grossRevenue,
+                gross_revenue = grossRevenue,
+                discountDeducted,
+                discount_deducted = discountDeducted,
+                commission,
+                commissionDeducted = commission,
+                commission_deducted = commission,
+                serviceFee,
+                service_fee = serviceFee,
+                serviceDeducted = serviceFee,
+                service_deducted = serviceFee,
+                companyOriginalDeducted,
+                company_original_deducted = companyOriginalDeducted,
+                companyGrossDeducted = companyOriginalDeducted,
+                company_gross_deducted = companyOriginalDeducted,
+                companyRevenue,
+                company_revenue = companyRevenue
+            }
+        });
     }
 
     [HttpPost("tours/{id}/sell")]
@@ -326,17 +463,17 @@ public sealed class TourSalesApiController : ApiControllerBase
         var status = Text(order, "status");
         if (string.Equals(status, "Đã hủy", StringComparison.OrdinalIgnoreCase))
         {
-            return BadRequest(new { success = false, message = "Đơn này đã bị hủy do quá 3 phút chưa bán." });
+            return BadRequest(new { success = false, message = "Đơn đã bị hủy vì quá 3 phút chưa bán." });
         }
         if (string.Equals(status, "Đã bán", StringComparison.OrdinalIgnoreCase))
         {
-            return BadRequest(new { success = false, message = "Đơn này đã bán rồi." });
+            return BadRequest(new { success = false, message = "Đơn đã được bán." });
         }
         if (_tourAutomation.IsExpiredPendingOrder(order))
         {
             await _tourAutomation.ExpireOrderAsync(id, order);
             await CleanupCanceledToursAndOrdersAsync();
-            return BadRequest(new { success = false, message = "Đơn này đã quá 3 phút nên đã bị hủy và tự động xóa khỏi trang Sales." });
+            return BadRequest(new { success = false, message = "Đơn quá 3 phút nên đã bị hủy và xoá khỏi Sales." });
         }
 
         var tourId = Text(order, "tour_id");
@@ -347,7 +484,7 @@ public sealed class TourSalesApiController : ApiControllerBase
         if (tour is null) return NotFound(new { success = false, message = "Không tìm thấy tour của đơn này" });
         if (!string.Equals(access.role, "Admin", StringComparison.OrdinalIgnoreCase) && !CanEditTour(access.role, access.userId, tour))
         {
-            return StatusCode(403, new { success = false, message = "Tour này thuộc Tour Sales khác, bạn không thể bán." });
+            return StatusCode(403, new { success = false, message = "Tour thuộc Sales khác." });
         }
 
         var quantity = Math.Max(1, GetInt(order, "quantity"));
@@ -361,14 +498,57 @@ public sealed class TourSalesApiController : ApiControllerBase
         var scheduleId = await _tourAutomation.EnsureScheduleForSoldOrderAsync(order, tour, id);
         if (string.IsNullOrWhiteSpace(scheduleId))
         {
-            return StatusCode(500, new { success = false, message = "Không thể tạo lịch trình cho khách đặt tour." });
+            return StatusCode(500, new { success = false, message = "Không tạo được lịch trình tour." });
         }
 
+        var total = GetOrderTotal(order);
+        if (total <= 0) total = GetDecimal(tour, "price") * quantity;
+        var originalTotal = GetOrderOriginalTotal(order);
+        if (originalTotal <= 0) originalTotal = GetDecimal(tour, "price") * quantity;
+
         var now = DateTime.UtcNow;
+        var tourOwnerId = GetTourOwnerId(tour);
+        var tourOwnerRole = await GetUserRoleAsync(tourOwnerId);
+        var ownerSoldCountAfter = await GetOwnerSoldQuantityAsync(tourOwnerId) + quantity;
+        var commissionPercent = IsSalesRole(tourOwnerRole) ? await GetTourSalesCommissionPercentAsync(tourOwnerId, ownerSoldCountAfter) : 0m;
+        var servicePercent = IsCompanyRole(tourOwnerRole) ? await GetUserServicePercentAsync(tourOwnerId) : 0m;
+        var commissionAmount = CalculatePercentAmount(originalTotal, commissionPercent);
+        var serviceAmount = CalculatePercentAmount(originalTotal, servicePercent);
+        var discountAmount = Math.Max(0, originalTotal - total);
+        var tourSalesName = string.IsNullOrWhiteSpace(tourOwnerId)
+            ? TextAny(tour, "tour_sales_name", "tourSalesName", "sales_name", "salesName")
+            : await GetUserDisplayNameAsync(tourOwnerId);
+        if (string.IsNullOrWhiteSpace(tourSalesName)) tourSalesName = "Sales";
+
         await _repo.UpdateAsync("tour_orders", id, new Dictionary<string, object?>
         {
             ["status"] = "Đã bán",
             ["seller_id"] = access.userId,
+            ["sellerId"] = access.userId,
+            ["tour_sales_id"] = tourOwnerId,
+            ["tourSalesId"] = tourOwnerId,
+            ["tour_sales_name"] = tourSalesName,
+            ["tourSalesName"] = tourSalesName,
+            ["owner_role"] = tourOwnerRole,
+            ["ownerRole"] = tourOwnerRole,
+            ["commission_percent"] = commissionPercent,
+            ["commissionPercent"] = commissionPercent,
+            ["commission_amount"] = commissionAmount,
+            ["commissionAmount"] = commissionAmount,
+            ["commission_base_total"] = originalTotal,
+            ["commissionBaseTotal"] = originalTotal,
+            ["service_fee_percent"] = servicePercent,
+            ["serviceFeePercent"] = servicePercent,
+            ["service_percent"] = servicePercent,
+            ["servicePercent"] = servicePercent,
+            ["service_fee_amount"] = serviceAmount,
+            ["serviceFeeAmount"] = serviceAmount,
+            ["service_amount"] = serviceAmount,
+            ["serviceAmount"] = serviceAmount,
+            ["original_total_price"] = originalTotal,
+            ["originalTotalPrice"] = originalTotal,
+            ["discount_amount"] = discountAmount,
+            ["discountAmount"] = discountAmount,
             ["sold_at"] = now,
             ["schedule_id"] = scheduleId,
             ["auto_schedule_created"] = true,
@@ -388,9 +568,6 @@ public sealed class TourSalesApiController : ApiControllerBase
         var customerName = FirstText(order, "customer_name", "customerName");
         var tourName = FirstText(order, "tour_name", "tourName");
         if (string.IsNullOrWhiteSpace(tourName)) tourName = Text(tour, "name");
-        var total = GetOrderTotal(order);
-        if (total <= 0) total = GetDecimal(tour, "price") * quantity;
-
         var emailError = await _emailNotificationService.SendTourSoldSuccessAsync(
             customerEmail,
             customerName,
@@ -404,8 +581,8 @@ public sealed class TourSalesApiController : ApiControllerBase
         {
             success = true,
             message = string.IsNullOrWhiteSpace(emailError)
-                ? "Đã bán tour, tạo lịch trình cho khách và gửi email xác nhận"
-                : "Đã bán tour và tạo lịch trình cho khách",
+                ? "Đã bán tour, tạo lịch trình và gửi email"
+                : "Đã bán tour và tạo lịch trình",
             emailSent = string.IsNullOrWhiteSpace(emailError),
             emailWarning = emailError
         });
@@ -422,7 +599,7 @@ public sealed class TourSalesApiController : ApiControllerBase
         }
 
         var order = await _repo.GetByIdAsync("tour_orders", id);
-        if (order is null) return NotFound(new { success = false, message = "Không tìm thấy đơn bán tour" });
+        if (order is null) return NotFound(new { success = false, message = "Không tìm thấy đơn tour" });
 
         if (string.Equals(Text(order, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase))
         {
@@ -451,7 +628,7 @@ public sealed class TourSalesApiController : ApiControllerBase
         }
 
         var ok = await _repo.DeleteAsync("tour_orders", id);
-        return ok ? Ok(new { success = true, message = "Đã xóa đơn bán tour" }) : NotFound(new { success = false, message = "Không tìm thấy đơn bán tour" });
+        return ok ? Ok(new { success = true, message = "Đã xoá đơn tour" }) : NotFound(new { success = false, message = "Không tìm thấy đơn tour" });
     }
 
     private async Task CleanupCanceledToursAndOrdersAsync()
@@ -480,13 +657,32 @@ public sealed class TourSalesApiController : ApiControllerBase
         var current = await CurrentUserAsync();
         if (!current.ok) return (false, current.error, null, null, null);
 
-        var role = current.authUser?.GetValueOrDefault("role")?.ToString() ?? "User";
+        var role = current.authUser?.GetValueOrDefault("role")?.ToString() ?? "Free";
         if (!IsTourRole(role))
         {
-            return (false, StatusCode(403, new { success = false, message = "Chỉ Admin hoặc Tour Sales mới được truy cập trang bán tour." }), role, current.userId, current.authUser);
+            return (false, StatusCode(403, new { success = false, message = "Chỉ Admin, Sales hoặc Business mới được truy cập trang bán tour." }), role, current.userId, current.authUser);
         }
 
         return (true, null, role, current.userId, current.authUser);
+    }
+
+    private bool RequestIsCompanyPage()
+    {
+        var page = Request.Query["page"].ToString();
+        return string.Equals(page, "business", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task<List<Dictionary<string, object?>>> FilterToursByOwnerRoleAsync(List<Dictionary<string, object?>> tours, string requiredRole)
+    {
+        var filtered = new List<Dictionary<string, object?>>();
+        foreach (var tour in tours)
+        {
+            var ownerId = GetTourOwnerId(tour);
+            if (string.IsNullOrWhiteSpace(ownerId)) continue;
+            var ownerRole = await GetUserRoleAsync(ownerId);
+            if (string.Equals(ownerRole, requiredRole, StringComparison.OrdinalIgnoreCase)) filtered.Add(tour);
+        }
+        return filtered;
     }
 
     private async Task HydrateTourSalesAsync(List<Dictionary<string, object?>> tours, string? role, string? currentUserId)
@@ -498,14 +694,19 @@ public sealed class TourSalesApiController : ApiControllerBase
             .ToList();
 
         var userNames = new Dictionary<string, string>(StringComparer.Ordinal);
+        var userRoles = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var ownerId in ownerIds)
         {
             userNames[ownerId] = await GetUserDisplayNameAsync(ownerId);
+            userRoles[ownerId] = await GetUserRoleAsync(ownerId);
         }
 
         foreach (var tour in tours)
         {
             var ownerId = GetTourOwnerId(tour);
+            var ownerRole = !string.IsNullOrWhiteSpace(ownerId) && userRoles.TryGetValue(ownerId, out var roleName)
+                ? roleName
+                : string.Empty;
             var oldName = TextAny(tour, "tour_sales_name", "tourSalesName");
             var manualSalesName = GetBool(tour, "tour_sales_manual_name", "tourSalesManualName");
             var storedSalesName = TextAny(tour, "tour_sales_name", "tourSalesName", "sales_name", "salesName");
@@ -514,12 +715,14 @@ public sealed class TourSalesApiController : ApiControllerBase
                 : !string.IsNullOrWhiteSpace(ownerId) && userNames.TryGetValue(ownerId, out var name)
                     ? name
                     : storedSalesName;
-            if (string.IsNullOrWhiteSpace(salesName)) salesName = "Tour Sales";
+            if (string.IsNullOrWhiteSpace(salesName)) salesName = "Sales";
 
             tour["tour_sales_id"] = ownerId;
             tour["tourSalesId"] = ownerId;
             tour["tour_sales_name"] = salesName;
             tour["tourSalesName"] = salesName;
+            tour["owner_role"] = ownerRole;
+            tour["ownerRole"] = ownerRole;
             tour["can_edit"] = CanEditTour(role, currentUserId, tour);
             tour["canEdit"] = tour["can_edit"];
 
@@ -531,7 +734,9 @@ public sealed class TourSalesApiController : ApiControllerBase
                     ["tour_sales_id"] = ownerId,
                     ["tourSalesId"] = ownerId,
                     ["tour_sales_name"] = salesName,
-                    ["tourSalesName"] = salesName
+                    ["tourSalesName"] = salesName,
+                    ["owner_role"] = ownerRole,
+                    ["ownerRole"] = ownerRole
                 });
             }
         }
@@ -556,10 +761,26 @@ public sealed class TourSalesApiController : ApiControllerBase
     private static bool CanEditTour(string? role, string? userId, Dictionary<string, object?> tour)
     {
         if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)) return true;
+        return IsOwnedByCurrentSales(tour, userId);
+    }
+
+    private static bool IsOwnedByCurrentSales(Dictionary<string, object?> tour, string? userId)
+    {
         var ownerId = GetTourOwnerId(tour);
         return !string.IsNullOrWhiteSpace(userId)
             && !string.IsNullOrWhiteSpace(ownerId)
             && string.Equals(ownerId, userId, StringComparison.Ordinal);
+    }
+
+    private static bool IsOrderOwnedByCurrentSales(Dictionary<string, object?> order, string? userId, ISet<string> ownedTourIds)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return false;
+
+        var tourId = TextAny(order, "tour_id", "tourId");
+        if (!string.IsNullOrWhiteSpace(tourId) && ownedTourIds.Contains(tourId)) return true;
+
+        var orderOwnerId = TextAny(order, "tour_sales_id", "tourSalesId", "created_by", "createdBy");
+        return !string.IsNullOrWhiteSpace(orderOwnerId) && string.Equals(orderOwnerId, userId, StringComparison.Ordinal);
     }
 
     private static string GetTourOwnerId(Dictionary<string, object?> tour)
@@ -582,7 +803,10 @@ public sealed class TourSalesApiController : ApiControllerBase
         return string.Empty;
     }
 
-    private static bool IsTourRole(string? role) => string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) || string.Equals(role, "Tour Sales", StringComparison.OrdinalIgnoreCase);
+    private static bool IsTourRole(string? role) => IsAdminRole(role) || IsSalesRole(role) || IsCompanyRole(role);
+    private static bool IsAdminRole(string? role) => string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+    private static bool IsSalesRole(string? role) => string.Equals(role, "Sales", StringComparison.OrdinalIgnoreCase) || string.Equals(role, "Tour Sales", StringComparison.OrdinalIgnoreCase);
+    private static bool IsCompanyRole(string? role) => string.Equals(role, "Business", StringComparison.OrdinalIgnoreCase) || string.Equals(role, "Company", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsTourSoldOut(Dictionary<string, object?> tour)
     {
@@ -648,8 +872,327 @@ public sealed class TourSalesApiController : ApiControllerBase
         return string.Empty;
     }
     private static int GetInt(Dictionary<string, object?> row, string key) => int.TryParse(row.GetValueOrDefault(key)?.ToString(), out var value) ? value : 0;
+    private static int GetIntAny(Dictionary<string, object?>? row, params string[] keys)
+    {
+        if (row is null) return 0;
+        foreach (var key in keys)
+        {
+            if (int.TryParse(row.GetValueOrDefault(key)?.ToString(), out var value)) return value;
+        }
+        return 0;
+    }
     private static decimal GetDecimal(Dictionary<string, object?> row, string key) => decimal.TryParse(row.GetValueOrDefault(key)?.ToString(), out var value) ? value : 0;
-    private static decimal GetOrderTotal(Dictionary<string, object?> order) => decimal.TryParse(order.GetValueOrDefault("total_price")?.ToString(), out var value) ? value : 0;
+    private static decimal GetDecimalAny(Dictionary<string, object?> row, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (decimal.TryParse(row.GetValueOrDefault(key)?.ToString(), out var value)) return value;
+        }
+        return 0;
+    }
+
+    private static decimal GetOrderTotal(Dictionary<string, object?> order) => GetDecimalAny(order, "total_price", "totalPrice");
+
+    private static bool IsCompanyOrder(Dictionary<string, object?> order)
+    {
+        return IsCompanyRole(TextAny(order, "owner_role", "ownerRole"));
+    }
+
+    private static decimal GetCompanyOriginalDeducted(Dictionary<string, object?> order)
+    {
+        return IsCompanyOrder(order) ? GetOrderOriginalTotal(order) : 0m;
+    }
+
+    private static decimal GetOrderOriginalTotal(Dictionary<string, object?> order)
+    {
+        var original = GetDecimalAny(order, "original_total_price", "originalTotalPrice", "commission_base_total", "commissionBaseTotal");
+        if (original > 0) return original;
+        var total = GetOrderTotal(order);
+        var discount = GetDecimalAny(order, "discount_amount", "discountAmount");
+        if (discount > 0) return total + discount;
+        return total;
+    }
+
+    private static decimal GetOrderDiscountAmount(Dictionary<string, object?> order)
+    {
+        var stored = GetDecimalAny(order, "discount_amount", "discountAmount");
+        if (stored > 0) return stored;
+        var original = GetOrderOriginalTotal(order);
+        var total = GetOrderTotal(order);
+        return Math.Max(0, original - total);
+    }
+
+    private static decimal NormalizePercent(decimal value, decimal fallback = 0m)
+    {
+        if (value < 0) return fallback;
+        if (value > 100) return 100m;
+        return value;
+    }
+
+    private static decimal CalculatePercentAmount(decimal originalTotal, decimal percent)
+    {
+        var safeTotal = Math.Max(0, originalTotal);
+        var safePercent = NormalizePercent(percent);
+        return Math.Round(safeTotal * safePercent / 100m, 0, MidpointRounding.AwayFromZero);
+    }
+
+    private static decimal GetOrderCommissionPercent(Dictionary<string, object?> order)
+    {
+        foreach (var key in new[] { "commission_percent", "commissionPercent" })
+        {
+            if (order.TryGetValue(key, out var raw) && decimal.TryParse(raw?.ToString(), out var value))
+            {
+                return NormalizePercent(value, 8m);
+            }
+        }
+        return 8m;
+    }
+
+    private static decimal GetOrderCommissionAmount(Dictionary<string, object?> order)
+    {
+        if (!string.Equals(Text(order, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase)) return 0;
+        var stored = GetDecimalAny(order, "commission_amount", "commissionAmount");
+        if (stored > 0) return stored;
+        return CalculatePercentAmount(GetOrderOriginalTotal(order), GetOrderCommissionPercent(order));
+    }
+
+    private static decimal GetOrderServicePercent(Dictionary<string, object?> order)
+    {
+        return NormalizePercent(GetDecimalAny(order, "service_fee_percent", "serviceFeePercent", "service_percent", "servicePercent"));
+    }
+
+    private static decimal GetOrderServiceAmount(Dictionary<string, object?> order)
+    {
+        if (!string.Equals(Text(order, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase)) return 0;
+        var stored = GetDecimalAny(order, "service_fee_amount", "serviceFeeAmount", "service_amount", "serviceAmount");
+        if (stored > 0) return stored;
+        return CalculatePercentAmount(GetOrderOriginalTotal(order), GetOrderServicePercent(order));
+    }
+
+    private sealed record SalesLevelSetting(int Level, decimal CommissionPercent, decimal OfferDiscountPercent);
+
+    private async Task<(int Level, decimal Percent, int NextTarget)> GetTourSalesLevelAsync(string? userId, int soldCount)
+    {
+        var automatic = GetSalesLevel(soldCount);
+        var user = await GetUserDocumentAsync(userId);
+        var storedLevel = GetIntAny(user, "commission_level", "commissionLevel", "sales_level", "salesLevel");
+        var level = storedLevel > 0 ? ClampSalesLevel(storedLevel) : automatic.Level;
+        var setting = GetSalesLevelSetting(await GetSalesLevelSettingsAsync(), level);
+        return (level, setting.CommissionPercent, automatic.NextTarget);
+    }
+
+    private async Task<List<SalesLevelSetting>> GetSalesLevelSettingsAsync()
+    {
+        Dictionary<string, object?>? doc = null;
+        try
+        {
+            doc = await _repo.GetByIdAsync(SalesLevelSettingsCollection, SalesLevelSettingsDocumentId);
+        }
+        catch
+        {
+            doc = null;
+        }
+
+        if (doc?.GetValueOrDefault("levels") is IEnumerable<object?> rawLevels)
+        {
+            var parsed = rawLevels
+                .OfType<Dictionary<string, object?>>()
+                .Select(item => new SalesLevelSetting(
+                    ClampSalesLevel(GetIntAny(item, "level")),
+                    NormalizePercent(GetDecimalAny(item, "commission_percent", "commissionPercent"), DefaultSalesLevelSetting(ClampSalesLevel(GetIntAny(item, "level"))).CommissionPercent),
+                    NormalizePercent(GetDecimalAny(item, "offer_discount_percent", "offerDiscountPercent"))
+                ))
+                .ToList();
+            if (parsed.Count > 0) return NormalizeSalesLevelSettings(parsed);
+        }
+
+        return NormalizeSalesLevelSettings(Array.Empty<SalesLevelSetting>());
+    }
+
+    private static List<SalesLevelSetting> NormalizeSalesLevelSettings(IEnumerable<SalesLevelSetting> settings)
+    {
+        var map = settings
+            .GroupBy(item => ClampSalesLevel(item.Level))
+            .ToDictionary(group => group.Key, group => group.Last());
+
+        return Enumerable.Range(1, 5)
+            .Select(level => map.TryGetValue(level, out var item)
+                ? new SalesLevelSetting(level, NormalizePercent(item.CommissionPercent, DefaultSalesLevelSetting(level).CommissionPercent), NormalizePercent(item.OfferDiscountPercent))
+                : DefaultSalesLevelSetting(level))
+            .ToList();
+    }
+
+    private static SalesLevelSetting DefaultSalesLevelSetting(int level) => ClampSalesLevel(level) switch
+    {
+        2 => new SalesLevelSetting(2, 12m, 0m),
+        3 => new SalesLevelSetting(3, 15m, 0m),
+        4 => new SalesLevelSetting(4, 18m, 0m),
+        5 => new SalesLevelSetting(5, 20m, 0m),
+        _ => new SalesLevelSetting(1, 8m, 0m)
+    };
+
+    private static SalesLevelSetting GetSalesLevelSetting(IReadOnlyCollection<SalesLevelSetting> settings, int level)
+    {
+        var safeLevel = ClampSalesLevel(level);
+        return settings.FirstOrDefault(item => item.Level == safeLevel) ?? DefaultSalesLevelSetting(safeLevel);
+    }
+
+    private static int ClampSalesLevel(int level)
+    {
+        if (level < 1) return 1;
+        if (level > 5) return 5;
+        return level;
+    }
+
+    private async Task<decimal> GetTourSalesCommissionPercentAsync(string? userId, int? soldCountOverride = null)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return 0m;
+        var role = await GetUserRoleAsync(userId);
+        if (!IsSalesRole(role)) return 0m;
+        var soldCount = soldCountOverride ?? await GetOwnerSoldQuantityAsync(userId);
+        var level = await GetTourSalesLevelAsync(userId, soldCount);
+        var settings = await GetSalesLevelSettingsAsync();
+        var fallback = GetSalesLevelSetting(settings, level.Level).CommissionPercent;
+        var user = await GetUserDocumentAsync(userId);
+        if (user is null) return fallback;
+        foreach (var key in new[] { "commission_percent", "commissionPercent" })
+        {
+            if (user.TryGetValue(key, out var raw) && decimal.TryParse(raw?.ToString(), out var manual))
+            {
+                return NormalizePercent(manual, fallback);
+            }
+        }
+        return fallback;
+    }
+
+    private async Task<decimal> GetUserServicePercentAsync(string? userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return 0m;
+        var role = await GetUserRoleAsync(userId);
+        if (!IsCompanyRole(role)) return 0m;
+        var user = await GetUserDocumentAsync(userId);
+        if (user is null) return 0m;
+        return NormalizePercent(GetDecimalAny(user, "service_fee_percent", "serviceFeePercent", "service_percent", "servicePercent"));
+    }
+
+    private async Task<Dictionary<string, object?>?> GetUserDocumentAsync(string? userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return null;
+        Dictionary<string, object?>? user = null;
+        try
+        {
+            user = await _repo.GetByIdAsync("users", userId);
+        }
+        catch
+        {
+            user = null;
+        }
+        user ??= await _chatService.GetUserByIdAsync(userId);
+        return user;
+    }
+
+    private async Task<string> GetUserRoleAsync(string? userId)
+    {
+        var user = await GetUserDocumentAsync(userId);
+        var role = TextAny(user, "role", "userRole");
+        if (string.Equals(role, "Tour Sales", StringComparison.OrdinalIgnoreCase)) return "Sales";
+        if (string.Equals(role, "User", StringComparison.OrdinalIgnoreCase)) return "Free";
+        if (string.Equals(role, "Company", StringComparison.OrdinalIgnoreCase)) return "Business";
+        return string.IsNullOrWhiteSpace(role) ? "Free" : role;
+    }
+
+    private static (int Level, decimal Percent, int NextTarget) GetSalesLevel(int soldCount)
+    {
+        if (soldCount >= 300) return (5, 20m, 300);
+        if (soldCount >= 200) return (4, 18m, 300);
+        if (soldCount >= 120) return (3, 15m, 200);
+        if (soldCount >= 50) return (2, 12m, 120);
+        return (1, 8m, 50);
+    }
+
+    private async Task<int> GetOwnerSoldQuantityAsync(string? ownerId)
+    {
+        if (string.IsNullOrWhiteSpace(ownerId)) return 0;
+        var orders = await _repo.GetAllAsync("tour_orders", limit: 1000);
+        return orders
+            .Where(o => string.Equals(Text(o, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase))
+            .Where(o => string.Equals(TextAny(o, "tour_sales_id", "tourSalesId", "created_by", "createdBy", "seller_id", "sellerId"), ownerId, StringComparison.Ordinal))
+            .Sum(o => Math.Max(1, GetInt(o, "quantity")));
+    }
+
+    private async Task AttachBusinessAmountsAsync(Dictionary<string, object?> order, string? ownerId, string? ownerRole)
+    {
+        var originalTotal = GetOrderOriginalTotal(order);
+        var isSold = string.Equals(Text(order, "status"), "Đã bán", StringComparison.OrdinalIgnoreCase);
+        var soldCount = await GetOwnerSoldQuantityAsync(ownerId);
+        var level = await GetTourSalesLevelAsync(ownerId, soldCount);
+        var commissionPercent = IsSalesRole(ownerRole) ? await GetTourSalesCommissionPercentAsync(ownerId, soldCount) : 0m;
+        var servicePercent = IsCompanyRole(ownerRole) ? await GetUserServicePercentAsync(ownerId) : 0m;
+        var commissionAmount = isSold ? CalculatePercentAmount(originalTotal, commissionPercent) : 0;
+        var serviceAmount = isSold ? CalculatePercentAmount(originalTotal, servicePercent) : 0;
+        order["owner_role"] = ownerRole ?? string.Empty;
+        order["ownerRole"] = ownerRole ?? string.Empty;
+        order["sales_level"] = level.Level;
+        order["salesLevel"] = level.Level;
+        order["sales_sold_count"] = soldCount;
+        order["salesSoldCount"] = soldCount;
+        order["commission_percent"] = commissionPercent;
+        order["commissionPercent"] = commissionPercent;
+        order["commission_amount"] = commissionAmount;
+        order["commissionAmount"] = commissionAmount;
+        order["commission_base_total"] = originalTotal;
+        order["commissionBaseTotal"] = originalTotal;
+        order["service_fee_percent"] = servicePercent;
+        order["serviceFeePercent"] = servicePercent;
+        order["service_percent"] = servicePercent;
+        order["servicePercent"] = servicePercent;
+        order["service_fee_amount"] = serviceAmount;
+        order["serviceFeeAmount"] = serviceAmount;
+        order["service_amount"] = serviceAmount;
+        order["serviceAmount"] = serviceAmount;
+        order["discount_amount"] = GetOrderDiscountAmount(order);
+        order["discountAmount"] = GetOrderDiscountAmount(order);
+    }
+
+    private async Task AttachTourSalesToOrdersAsync(List<Dictionary<string, object?>> orders, List<Dictionary<string, object?>> tours, string? role, string? currentUserId)
+    {
+        var tourMap = tours
+            .Where(t => !string.IsNullOrWhiteSpace(Text(t, "id")))
+            .ToDictionary(t => Text(t, "id"), t => t, StringComparer.OrdinalIgnoreCase);
+        var isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+
+        foreach (var order in orders)
+        {
+            var ownerId = string.Empty;
+            var tourId = TextAny(order, "tour_id", "tourId");
+            if (!string.IsNullOrWhiteSpace(tourId) && tourMap.TryGetValue(tourId, out var tour))
+            {
+                ownerId = GetTourOwnerId(tour);
+                var salesName = string.IsNullOrWhiteSpace(ownerId)
+                    ? TextAny(tour, "tour_sales_name", "tourSalesName", "sales_name", "salesName")
+                    : await GetUserDisplayNameAsync(ownerId);
+                if (string.IsNullOrWhiteSpace(salesName)) salesName = "Sales";
+                var ownerRole = await GetUserRoleAsync(ownerId);
+
+                order["tour_sales_id"] = ownerId;
+                order["tourSalesId"] = ownerId;
+                order["tour_sales_name"] = salesName;
+                order["tourSalesName"] = salesName;
+                order["owner_role"] = ownerRole;
+                order["ownerRole"] = ownerRole;
+            }
+            else
+            {
+                ownerId = TextAny(order, "tour_sales_id", "tourSalesId", "seller_id", "sellerId");
+            }
+
+            var resolvedOwnerRole = TextAny(order, "owner_role", "ownerRole");
+            if (string.IsNullOrWhiteSpace(resolvedOwnerRole)) resolvedOwnerRole = await GetUserRoleAsync(ownerId);
+            order["can_sell"] = isAdmin || (!string.IsNullOrWhiteSpace(ownerId) && string.Equals(ownerId, currentUserId, StringComparison.Ordinal));
+            order["canSell"] = order["can_sell"];
+            await AttachBusinessAmountsAsync(order, ownerId, resolvedOwnerRole);
+        }
+    }
 }
 
 public sealed class TourUpsertRequest

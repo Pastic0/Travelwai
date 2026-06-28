@@ -122,7 +122,7 @@ public sealed class PlansController : ApiControllerBase
 
         if (!string.IsNullOrWhiteSpace(provinceName) && selectedProvince is null)
         {
-            return BadRequest(new { success = false, detail = "Tỉnh/thành đã chọn không tồn tại trong danh sách 34 tỉnh thành." });
+            return BadRequest(new { success = false, detail = "Tỉnh/thành không có trong danh sách 34 tỉnh thành." });
         }
 
         if (selectedProvince is not null)
@@ -130,7 +130,7 @@ public sealed class PlansController : ApiControllerBase
             var selectedProvinceTags = PlanCatalog.ToStringList(selectedProvince.GetValueOrDefault("tags"));
             if (!PlanCatalog.MatchesRequiredTags(selectedProvinceTags, requiredTags, matchAll))
             {
-                return BadRequest(new { success = false, detail = "Tỉnh/thành đã chọn không phù hợp với trạng thái kế hoạch." });
+                return BadRequest(new { success = false, detail = "Tỉnh/thành không khớp với trạng thái kế hoạch." });
             }
             provinceName = selectedProvince.GetValueOrDefault("name")?.ToString() ?? selectedProvince.GetValueOrDefault("province_name")?.ToString() ?? provinceName;
         }
@@ -230,7 +230,7 @@ public sealed class PlansController : ApiControllerBase
         }
 
         var users = await SearchUsersWithSameStatusAsync(current.userId!, statusKey ?? status);
-        return Ok(new { success = true, data = users, message = "Đã tìm người phù hợp" });
+        return Ok(new { success = true, data = users, message = "Đã tìm người" });
     }
 
     [HttpPost("plans/{planId}/join")]
@@ -342,7 +342,7 @@ public sealed class PlansController : ApiControllerBase
         var existingConversationId = plan.GetValueOrDefault("conversation_id")?.ToString();
         if (!string.IsNullOrWhiteSpace(existingConversationId))
         {
-            return Ok(new { success = true, conversation_id = existingConversationId, schedule_id = scheduleId, message = "Nhóm của kế hoạch đã tồn tại" });
+            return Ok(new { success = true, conversation_id = existingConversationId, schedule_id = scheduleId, message = "Nhóm kế hoạch đã có" });
         }
 
         var otherMembers = members.Where(id => !string.Equals(id, current.userId, StringComparison.Ordinal)).ToList();

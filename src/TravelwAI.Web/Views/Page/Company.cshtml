@@ -1,0 +1,192 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Business - TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-paper-plane.png" type="image/png" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-28-plan-queue-countdown-v6" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-28-plan-queue-countdown-v6" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-28-plan-queue-countdown-v6" />
+<link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-28-plan-queue-countdown-v6" />
+</head>
+<body class="tour-admin-page tour-sales-page business-page" data-page="business">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "business")
+
+  <main class="tour-admin-shell">
+    <section class="tour-admin-hero">
+      <div>
+        <span class="eyebrow">Bảng điều khiển Business</span>
+        <h1>Business TravelwAI</h1>
+      </div>
+      <div class="tour-actions page-hero-actions sales-hero-actions">
+        <button type="button" id="tourCommissionBtn" class="tour-offer-btn" style="display:none" onclick="openTourCommissionModal()">
+          <svg class="tour-offer-btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8"></path>
+            <path d="M2 8h20v4H2z"></path>
+            <path d="M12 8v13"></path>
+            <path d="M12 8H8.5A2.5 2.5 0 1 1 12 5.5V8z"></path>
+            <path d="M12 8h3.5A2.5 2.5 0 1 0 12 5.5V8z"></path>
+          </svg>
+          <span>Hoa hồng</span>
+        </button>
+        <span class="management-page-switcher" data-admin-page-switcher>
+          <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/admin" style="display:none;text-decoration:none">Admin</a>
+          <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/tour-sales" style="display:none;text-decoration:none">Sales</a>
+          <a class="btn-soft btn-page-link admin-role-page-link management-page-link is-current" href="/business" style="display:none;text-decoration:none" aria-current="page">Business</a>
+          <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/manage" style="display:none;text-decoration:none">Manage</a>
+        </span>
+      </div>
+    </section>
+
+    <section class="dashboard-grid" id="tourStats">
+      <article class="stat-card"><span>Tổng tour</span><strong id="statTours">0</strong></article>
+      <article class="stat-card"><span>Tour đang bán</span><strong id="statActiveTours">0</strong></article>
+      <article class="stat-card"><span>Đã bán</span><strong id="statSold">0</strong></article>
+      <article class="stat-card" id="statRevenueCard" role="button" tabindex="0" onclick="openRevenueDetailModal()"><span>Doanh thu</span><strong id="statRevenue">0đ</strong></article>
+    </section>
+
+    <section class="management-panel">
+      <div class="panel-header-row sales-list-header">
+        <div>
+          <h2>Danh sách tour</h2>
+        </div>
+        <div class="sales-list-actions">
+          <button class="btn-primary btn-add-tour btn-add-tour-icon" type="button" onclick="openTourModal()" title="Thêm tour" aria-label="Thêm tour"><svg class="btn-add-tour-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg><span>Thêm tour</span></button>
+          <div class="tour-search-box tour-search-box-small">
+            <input id="tourSearchInput" type="search" placeholder="Tìm tour..." autocomplete="off" />
+            <button class="btn-soft btn-clear-tour-search" id="clearTourSearch" type="button">Xóa</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap table-scroll-5">
+        <table>
+          <thead>
+            <tr>
+              <th>Tour</th>
+              <th>Điểm đến</th>
+              <th>Thời gian</th>
+              <th>Giá</th>
+              <th>Chỗ</th>
+              <th>Trạng thái</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="tourTableBody">
+            <tr><td colspan="7" class="empty-line">Đang tải tour...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="management-panel" style="margin-top:20px">
+      <div class="panel-header-row sales-list-header">
+        <div>
+          <h2>Đơn bán tour</h2>
+        </div>
+        <div class="sales-list-actions order-list-actions">
+          <div class="tour-search-box tour-search-box-small">
+            <input id="orderSearchInput" type="search" placeholder="Tìm đơn bán tour..." autocomplete="off" />
+            <button class="btn-soft btn-clear-tour-search" id="clearOrderSearch" type="button">Xóa</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Khách hàng</th>
+              <th>Tour</th>
+              <th>Tài khoản</th>
+              <th>Số lượng</th>
+              <th>Tổng tiền</th>
+              <th>Trạng thái</th>
+              <th>Ngày tạo</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="orderTableBody">
+            <tr><td colspan="8" class="empty-line">Đang tải đơn...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="form-modal" id="tourModal">
+    <form class="form-card" id="tourForm">
+      <h2 id="tourModalTitle">Thêm tour</h2>
+      <input type="hidden" id="tourId" />
+      <div class="form-grid">
+        <div class="form-group"><label>Tên tour</label><input id="tourName" required placeholder="VD: Tour Đà Lạt 3 ngày 2 đêm" /></div>
+        <div class="form-group"><label>Tài khoản</label><input id="tourSalesName" readonly /></div>
+        <div class="form-group"><label>Điểm đến</label><input id="tourDestination" placeholder="VD: Đà Lạt" /></div>
+        <div class="form-group"><label>Thời lượng</label><input id="tourDuration" placeholder="VD: 3 ngày 2 đêm" /></div>
+        <div class="form-group"><label>Từ ngày</label><input id="tourStartDate" type="date" /></div>
+        <div class="form-group"><label>Đến ngày</label><input id="tourEndDate" type="date" /></div>
+        <div class="form-group"><label>Giá</label><input id="tourPrice" type="number" min="0" step="1000" /></div>
+        <div class="form-group"><label>Tổng chỗ</label><input id="tourSlots" type="number" min="0" /></div>
+        <div class="form-group"><label>Đã bán</label><input id="tourSold" type="number" min="0" /></div>
+        <div class="form-group"><label>Trạng thái</label><select id="tourStatus"><option>Đang bán</option><option>Tạm dừng</option><option>Đã bán</option></select></div>
+        <div class="form-group full"><label>Ảnh URL</label><div class="image-url-field"><input id="tourImage" placeholder="/main_site_image/back1.png hoặc link ảnh" /><button class="image-upload-icon" id="tourImageUploadButton" type="button" title="Đính kèm tệp ảnh" aria-label="Đính kèm tệp ảnh">📎</button><input id="tourImageFile" type="file" accept="image/*" hidden /></div><small class="form-help" id="tourImageFileName"></small></div>
+        <div class="form-group full"><label>Mô tả</label><textarea id="tourDescription" rows="3"></textarea></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closeTourModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Lưu tour</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="form-modal tour-offer-modal" id="tourCommissionModal">
+    <div class="form-card tour-offer-card">
+      <div class="tour-offer-modal-header">
+        <div><h2>Hoa hồng tour</h2></div>
+        <button type="button" class="tour-offer-close" onclick="closeTourCommissionModal()" aria-label="Đóng">&times;</button>
+      </div>
+      <div class="tour-offer-progress-wrap">
+        <div class="tour-offer-progress-info">
+          <strong id="tourCommissionLevelText">0%</strong>
+          <span id="tourCommissionTotalText">0đ</span>
+        </div>
+        <div class="tour-offer-progress-bar"><span id="tourCommissionProgressFill"></span></div>
+      </div>
+      <div class="tour-offer-invite-list" id="tourCommissionLevelList"></div>
+    </div>
+  </div>
+
+  <div class="form-modal tour-offer-modal" id="revenueDetailModal">
+    <div class="form-card tour-offer-card">
+      <div class="tour-offer-modal-header">
+        <div><h2>Chi tiết doanh thu</h2></div>
+        <button type="button" class="tour-offer-close" onclick="closeRevenueDetailModal()" aria-label="Đóng">&times;</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Doanh thu gốc</th><th>Ưu đãi</th><th>Hoa hồng</th><th>Dịch vụ</th><th>Doanh thu Business</th></tr>
+          </thead>
+          <tbody id="revenueDetailBody"><tr><td colspan="5" class="empty-line">Chưa có dữ liệu.</td></tr></tbody>
+        </table>
+      </div>
+      <div class="tour-offer-invite-list" id="revenueDetailSummary"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="tourToast"></div>
+
+  <script src="/script/accounts.js?v=2026-06-28-plan-queue-countdown-v6"></script>
+  <script src="/script/management_nav.js?v=2026-06-28-plan-queue-countdown-v6"></script>
+  <script src="/script/image_upload_optimizer.js?v=2026-06-28-plan-queue-countdown-v6"></script>
+  <script src="/script/tour_sales.js?v=2026-06-28-plan-queue-countdown-v6"></script>
+  <script src="/script/travelwai_contact_panel.js?v=2026-06-28-plan-queue-countdown-v6"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-06-28-plan-queue-countdown-v6"></script>
+    <script src="/script/theme_toggle.js?v=2026-06-28-plan-queue-countdown-v6"></script>
+</body>
+</html>
+
+

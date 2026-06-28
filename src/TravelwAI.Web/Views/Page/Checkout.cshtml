@@ -1,0 +1,55 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Thanh toán - TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-paper-plane.png" type="image/png" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+</head>
+<body class="tour-admin-page checkout-page" data-page="checkout">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "checkout")
+
+  <main class="tour-admin-shell checkout-shell">
+    <section class="tour-admin-hero">
+      <div>
+        <span class="eyebrow">TravelwAI Pay</span>
+        <h1>Thanh toán</h1>
+      </div>
+      <div class="tour-actions page-hero-actions">
+        <a class="btn-soft btn-page-link" href="/cart" style="text-decoration:none">Giỏ hàng</a>
+      </div>
+    </section>
+
+    <section class="checkout-grid">
+      <article class="management-panel checkout-summary-card">
+        <div class="panel-header-row"><div><h2>Thông tin đơn</h2></div></div>
+        <div id="checkoutSummary" class="checkout-summary-box">Đang tải...</div>
+      </article>
+      <article class="management-panel checkout-pay-card">
+        <div class="panel-header-row"><div><h2>Thanh toán</h2></div></div>
+        <div class="checkout-pay-box">
+          <button class="btn-primary checkout-pay-button" type="button" id="checkoutPayButton">Thanh toán</button>
+          <button class="btn-soft checkout-confirm-button" type="button" id="checkoutConfirmPaymentButton" hidden>Xác nhận thanh toán</button>
+          <a class="btn-soft checkout-back-button" href="/home">Về trang chính</a>
+        </div>
+        <p class="checkout-status" id="checkoutStatus"></p>
+      </article>
+    </section>
+  </main>
+
+  <div class="toast" id="tourToast"></div>
+  <script src="/script/accounts.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/checkout.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/travelwai_contact_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/theme_toggle.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+</body>
+</html>

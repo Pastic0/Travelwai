@@ -15,6 +15,8 @@ public sealed class TourOfferService
     public const string InviteCollection = "tour_offer_invites";
     public const string PostOfferCollection = "post_tour_offers";
     public const int PostOfferDiscountPercent = 5;
+    private const string SalesLevelSettingsCollection = "sales_level_settings";
+    private const string SalesLevelSettingsDocumentId = "default";
 
     private readonly IDataRepository _repo;
     private readonly IAuthRepository _authRepository;
@@ -46,9 +48,12 @@ public sealed class TourOfferService
 
         var progress = Math.Min(MaxInvitesForDiscount, accepted.Count);
         var inviteDiscountPercent = progress * DiscountPerAcceptedInvite;
-        var postOffer = await GetActivePostOfferAsync(userId);
+        var canUsePostOffer = await CanUsePostOfferAsync(userId);
+        var postOffer = canUsePostOffer ? await GetActivePostOfferAsync(userId) : null;
         var postOfferDiscountPercent = postOffer is null ? 0 : PostOfferDiscountPercent;
-        var discountPercent = inviteDiscountPercent + postOfferDiscountPercent;
+        var automaticDiscountPercent = inviteDiscountPercent + postOfferDiscountPercent;
+        var adminOfferDiscountPercent = await GetAdminOfferDiscountOverrideAsync(userId);
+        var discountPercent = adminOfferDiscountPercent ?? automaticDiscountPercent;
 
         return new Dictionary<string, object?>
         {
@@ -58,6 +63,9 @@ public sealed class TourOfferService
             ["progress"] = progress,
             ["target"] = MaxInvitesForDiscount,
             ["discount_percent"] = discountPercent,
+            ["automatic_discount_percent"] = automaticDiscountPercent,
+            ["admin_offer_discount_percent"] = adminOfferDiscountPercent ?? 0,
+            ["admin_offer_override"] = adminOfferDiscountPercent.HasValue,
             ["invite_discount_percent"] = inviteDiscountPercent,
             ["post_offer_discount_percent"] = postOfferDiscountPercent,
             ["post_offer_active"] = postOffer is not null,
@@ -82,7 +90,8 @@ public sealed class TourOfferService
 
     public async Task<Dictionary<string, object?>> GetPostOfferStatusAsync(string userId)
     {
-        var postOffer = await GetActivePostOfferAsync(userId);
+        var canUsePostOffer = await CanUsePostOfferAsync(userId);
+        var postOffer = canUsePostOffer ? await GetActivePostOfferAsync(userId) : null;
         var active = postOffer is not null;
         return new Dictionary<string, object?>
         {
@@ -93,7 +102,7 @@ public sealed class TourOfferService
             ["target"] = 1,
             ["progress"] = active ? 1 : 0,
             ["message"] = active
-                ? "Bạn đang có ưu đãi 5% cho lần đặt tour tiếp theo."
+                ? "Bạn có ưu đãi 5% cho đơn tour tiếp theo."
                 : "Tạo bài viết để nhận ưu đãi 5% cho lần đặt tour tiếp theo."
         };
     }
@@ -101,16 +110,21 @@ public sealed class TourOfferService
     public async Task<BookingDiscountResult> GetBookingDiscountAsync(string userId)
     {
         var inviteDiscountPercent = await GetDiscountPercentAsync(userId);
-        var postOffer = await GetActivePostOfferAsync(userId);
+        var canUsePostOffer = await CanUsePostOfferAsync(userId);
+        var postOffer = canUsePostOffer ? await GetActivePostOfferAsync(userId) : null;
         var postOfferDiscountPercent = postOffer is null ? 0 : PostOfferDiscountPercent;
-        var discountPercent = inviteDiscountPercent + postOfferDiscountPercent;
+        var automaticDiscountPercent = inviteDiscountPercent + postOfferDiscountPercent;
+        var adminOfferDiscountPercent = await GetAdminOfferDiscountOverrideAsync(userId);
+        var discountPercent = adminOfferDiscountPercent ?? automaticDiscountPercent;
         var source = discountPercent <= 0
             ? string.Empty
-            : inviteDiscountPercent > 0 && postOfferDiscountPercent > 0
-                ? "Mời bạn + Bài viết"
-                : postOfferDiscountPercent > 0
-                    ? "Bài viết"
-                    : "Mời bạn";
+            : adminOfferDiscountPercent.HasValue
+                ? "Admin"
+                : inviteDiscountPercent > 0 && postOfferDiscountPercent > 0
+                    ? "Mời bạn + Bài viết"
+                    : postOfferDiscountPercent > 0
+                        ? "Bài viết"
+                        : "Mời bạn";
 
         return new BookingDiscountResult(
             discountPercent,
@@ -148,6 +162,18 @@ public sealed class TourOfferService
         await _repo.DeleteAsync(PostOfferCollection, id);
     }
 
+    private async Task<bool> CanUsePostOfferAsync(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return false;
+        var user = await _repo.GetByIdAsync("users", userId);
+        if (user is null) return true;
+        var role = TextAny(user, "role", "userRole");
+        if (string.Equals(role, "User", StringComparison.OrdinalIgnoreCase)) role = "Free";
+        if (string.Equals(role, "Company", StringComparison.OrdinalIgnoreCase)) role = "Business";
+        return !string.Equals(role, "Free", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(role, "VIP", StringComparison.OrdinalIgnoreCase);
+    }
+
     public async Task<Dictionary<string, object?>> InviteAsync(HttpRequest request, string inviterId, string inviterEmail, string? inviterName, string invitedEmail)
     {
         var normalizedInvitedEmail = NormalizeEmail(invitedEmail);
@@ -160,7 +186,7 @@ public sealed class TourOfferService
         if (!string.IsNullOrWhiteSpace(normalizedInviterEmail)
             && string.Equals(normalizedInviterEmail, normalizedInvitedEmail, StringComparison.OrdinalIgnoreCase))
         {
-            return new Dictionary<string, object?> { ["success"] = false, ["message"] = "Không thể tự mời chính tài khoản của mình." };
+            return new Dictionary<string, object?> { ["success"] = false, ["message"] = "Không thể tự mời chính mình." };
         }
 
         if (await _authRepository.EmailExistsAsync(normalizedInvitedEmail))
@@ -229,7 +255,7 @@ public sealed class TourOfferService
             ? $"Gmail này đã đăng ký từ mã mời {inviteCode}."
             : string.IsNullOrWhiteSpace(emailError)
                 ? $"Đã gửi mã mời {inviteCode} đến Gmail. Mã có hiệu lực trong {InviteExpirationMinutes} phút."
-                : $"Đã tạo mã mời {inviteCode} nhưng chưa gửi được email. Mã có hiệu lực trong {InviteExpirationMinutes} phút. Lỗi: {emailError}";
+                : $"Đã tạo mã {inviteCode} nhưng chưa gửi được email. Mã có hiệu lực trong {InviteExpirationMinutes} phút. Lỗi: {emailError}";
 
         return new Dictionary<string, object?>
         {
@@ -361,6 +387,100 @@ public sealed class TourOfferService
         }
     }
 
+
+    private sealed record SalesLevelSetting(int Level, int CommissionPercent, int OfferDiscountPercent);
+
+    private async Task<int?> GetAdminOfferDiscountOverrideAsync(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId)) return null;
+        var user = await _repo.GetByIdAsync("users", userId);
+        if (user is null) return null;
+
+        if (IsSalesRole(TextAny(user, "role", "userRole")))
+        {
+            var level = ClampSalesLevel(TryInt(user.GetValueOrDefault("offer_level")) ?? TryInt(user.GetValueOrDefault("offerLevel")) ?? TryInt(user.GetValueOrDefault("sales_level")) ?? TryInt(user.GetValueOrDefault("salesLevel")) ?? 1);
+            var settings = await GetSalesLevelSettingsAsync();
+            return ClampPercent(TryInt(user.GetValueOrDefault("offer_discount_percent")) ?? TryInt(user.GetValueOrDefault("offerDiscountPercent")) ?? GetSalesLevelSetting(settings, level).OfferDiscountPercent);
+        }
+
+        if (!IsTruthy(user.GetValueOrDefault("admin_offer_override")) && !IsTruthy(user.GetValueOrDefault("adminOfferOverride"))) return null;
+        var value = TryInt(user.GetValueOrDefault("admin_offer_discount_percent"))
+            ?? TryInt(user.GetValueOrDefault("adminOfferDiscountPercent"))
+            ?? TryInt(user.GetValueOrDefault("offer_discount_percent"))
+            ?? TryInt(user.GetValueOrDefault("offerDiscountPercent"))
+            ?? 0;
+        return Math.Clamp(value, 0, 100);
+    }
+
+    private async Task<List<SalesLevelSetting>> GetSalesLevelSettingsAsync()
+    {
+        Dictionary<string, object?>? doc = null;
+        try
+        {
+            doc = await _repo.GetByIdAsync(SalesLevelSettingsCollection, SalesLevelSettingsDocumentId);
+        }
+        catch
+        {
+            doc = null;
+        }
+
+        if (doc?.GetValueOrDefault("levels") is IEnumerable<object?> rawLevels)
+        {
+            var parsed = rawLevels
+                .OfType<Dictionary<string, object?>>()
+                .Select(item => new SalesLevelSetting(
+                    ClampSalesLevel(TryInt(item.GetValueOrDefault("level")) ?? 1),
+                    ClampPercent(TryInt(item.GetValueOrDefault("commission_percent")) ?? TryInt(item.GetValueOrDefault("commissionPercent")) ?? DefaultSalesLevelSetting(ClampSalesLevel(TryInt(item.GetValueOrDefault("level")) ?? 1)).CommissionPercent),
+                    ClampPercent(TryInt(item.GetValueOrDefault("offer_discount_percent")) ?? TryInt(item.GetValueOrDefault("offerDiscountPercent")) ?? DefaultSalesLevelSetting(ClampSalesLevel(TryInt(item.GetValueOrDefault("level")) ?? 1)).OfferDiscountPercent)
+                ))
+                .ToList();
+            if (parsed.Count > 0) return NormalizeSalesLevelSettings(parsed);
+        }
+
+        return NormalizeSalesLevelSettings(Array.Empty<SalesLevelSetting>());
+    }
+
+    private static List<SalesLevelSetting> NormalizeSalesLevelSettings(IEnumerable<SalesLevelSetting> settings)
+    {
+        var map = settings
+            .GroupBy(item => ClampSalesLevel(item.Level))
+            .ToDictionary(group => group.Key, group => group.Last());
+
+        return Enumerable.Range(1, 5)
+            .Select(level => map.TryGetValue(level, out var item)
+                ? new SalesLevelSetting(level, ClampPercent(item.CommissionPercent), ClampPercent(item.OfferDiscountPercent))
+                : DefaultSalesLevelSetting(level))
+            .ToList();
+    }
+
+    private static SalesLevelSetting DefaultSalesLevelSetting(int level) => ClampSalesLevel(level) switch
+    {
+        2 => new SalesLevelSetting(2, 12, 0),
+        3 => new SalesLevelSetting(3, 15, 0),
+        4 => new SalesLevelSetting(4, 18, 0),
+        5 => new SalesLevelSetting(5, 20, 0),
+        _ => new SalesLevelSetting(1, 8, 0)
+    };
+
+    private static SalesLevelSetting GetSalesLevelSetting(IReadOnlyCollection<SalesLevelSetting> settings, int level)
+    {
+        var safeLevel = ClampSalesLevel(level);
+        return settings.FirstOrDefault(item => item.Level == safeLevel) ?? DefaultSalesLevelSetting(safeLevel);
+    }
+
+    private static int ClampSalesLevel(int level) => Math.Clamp(level, 1, 5);
+    private static int ClampPercent(int value) => Math.Clamp(value, 0, 100);
+    private static bool IsSalesRole(string? role) => string.Equals(role, "Sales", StringComparison.OrdinalIgnoreCase) || string.Equals(role, "Tour Sales", StringComparison.OrdinalIgnoreCase);
+    private static string TextAny(Dictionary<string, object?> row, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            var value = Text(row, key);
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+        }
+        return string.Empty;
+    }
+
     private async Task<Dictionary<string, object?>?> GetActivePostOfferAsync(string userId)
     {
         if (string.IsNullOrWhiteSpace(userId)) return null;
@@ -457,7 +577,7 @@ public sealed class TourOfferService
             Bấm link bên dưới để đăng ký tài khoản:
             {inviteLink}
 
-            Mã mời có hiệu lực trong {InviteExpirationMinutes} phút. Nếu quá thời gian này hoặc Gmail đã có tài khoản, mã sẽ hết hạn.
+            Mã mời có hiệu lực trong {InviteExpirationMinutes} phút. Gmail đã có tài khoản sẽ không nhận ưu đãi.
 
             TravelwAI
             """;
@@ -549,6 +669,8 @@ public sealed class TourOfferService
 
     private static string NormalizeEmail(string? email) => (email ?? string.Empty).Trim().ToLowerInvariant();
     private static string Text(Dictionary<string, object?> row, string key) => row.TryGetValue(key, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
+    private static int? TryInt(object? value) => int.TryParse(value?.ToString(), out var i) ? i : null;
+    private static bool IsTruthy(object? value) => value is bool b ? b : bool.TryParse(value?.ToString(), out var parsed) && parsed;
     private static DateTime? TryDate(object? raw)
     {
         if (raw is null) return null;

@@ -18,7 +18,7 @@
     id: "travelwai-ai",
     displayName: "Quản lý TravelwAI",
     avatar: "travelwai-manager-avatar.webp",
-    welcome: `Xin chào, bạn có thể nhắn trực tiếp với Admin TravelwAI qua Gmail ${SUPPORT_ADMIN_EMAIL}. Nhập nội dung rồi bấm Gửi, hệ thống sẽ mở cuộc trò chuyện với Admin.`
+    welcome: "Xin chào, hệ thống sẽ mở hội thoại nhắn tin với Admin chính TravelwAI."
   };
 
   function getPanel() {
@@ -240,32 +240,44 @@
     const normalized = normalizeForSearch(text);
     if (!normalized) return null;
 
+  if (window.TravelwAIPageCommands && typeof window.TravelwAIPageCommands.parseManagerCommand === "function") {
+    const command = window.TravelwAIPageCommands.parseManagerCommand(text);
+    if (command && command.type === "navigate") return command;
+    if (command) return null;
+  }
+
     if (/dang\s*nhap|login/.test(normalized)) {
-      return { type: "navigate", url: "/login", reply: "Mình chuyển bạn qua trang Đăng nhập." };
+      return { type: "navigate", url: "/login", reply: "Đang mở trang Đăng nhập." };
     }
 
     if (/dang\s*ky|tao\s*tai\s*khoan|register|sign\s*up|signup/.test(normalized)) {
-      return { type: "navigate", url: "/signup", reply: "Mình chuyển bạn qua trang Đăng ký." };
+      return { type: "navigate", url: "/signup", reply: "Đang mở trang Đăng ký." };
     }
 
     if (/quen\s*mat\s*khau|khoi\s*phuc\s*mat\s*khau|lay\s*lai\s*mat\s*khau|forgot\s*password|reset\s*password/.test(normalized)) {
-      return { type: "navigate", url: "/forgot-password", reply: "Mình chuyển bạn qua trang Quên mật khẩu." };
+      return { type: "navigate", url: "/forgot-password", reply: "Đang mở trang Quên mật khẩu." };
     }
 
     const rules = [
-      { url: "/schedule", reply: "Mình chuyển bạn đến trang Lịch trình.", patterns: [/lap\s*lich\s*trinh/, /tao\s*lich\s*trinh/, /lich\s*trinh/] },
-      { url: "/plans", reply: "Mình chuyển bạn đến trang Kế hoạch.", patterns: [/lap\s*ke\s*hoach/, /tao\s*ke\s*hoach/, /ke\s*hoach/] },
-      { url: "/provinces", reply: "Mình chuyển bạn đến Bản đồ Việt Nam.", patterns: [/ban\s*do/, /tinh\s*thanh/, /34\s*tinh/, /viet\s*nam/] },
-      { url: "/posts", reply: "Mình chuyển bạn đến trang Bài viết.", patterns: [/bai\s*viet/, /tin\s*du\s*lich/, /kham\s*pha\s*bai/] },
-      { url: "/tours", reply: "Mình chuyển bạn đến trang Tour du lịch.", patterns: [/tour\s*du\s*lich/, /dat\s*tour/, /xem\s*tour/] },
-      { url: "/tour-sales", reply: "Mình chuyển bạn đến trang Tài khoản.", patterns: [/tour\s*sales/, /ban\s*tour/, /don\s*ban\s*tour/, /sales/] },
-      { url: "/admin", reply: "Mình chuyển bạn đến trang Admin.", patterns: [/admin/, /quan\s*tri/, /quan\s*ly\s*he\s*thong/] },
-      { url: "/messaging?admin=1", reply: `Mình mở Tin nhắn với Admin ${SUPPORT_ADMIN_EMAIL}.`, patterns: [/tin\s*nhan/, /nhan\s*tin/, /messaging/, /chat/] },
-      { url: "/profile", reply: "Mình chuyển bạn đến trang Hồ sơ.", patterns: [/ho\s*so/, /thong\s*tin\s*ca\s*nhan/, /tai\s*khoan/, /doi\s*ten/] },
-      { url: "/notifications", reply: "Mình chuyển bạn đến trang Thông báo.", patterns: [/thong\s*bao/, /notification/] },
-      { url: "/contact", reply: "Bạn đang ở chatbot Admin rồi. Cứ nhắn nội dung cần hỗ trợ tại đây nhé.", patterns: [/phan\s*hoi/, /lien\s*he/, /gop\s*y/, /ho\s*tro/] },
-      { url: "/home", reply: "Mình chuyển bạn về trang chủ.", patterns: [/trang\s*chu/, /home/] },
-      { url: "/landing", reply: "Mình chuyển bạn về trang giới thiệu TravelwAI.", patterns: [/landing/, /gioi\s*thieu/, /trang\s*gioi\s*thieu/] }
+      { url: "/pricing", reply: "Đang mở Bảng giá.", patterns: [/bang\s*gia/, /pricing/, /gia\s*goi/, /goi\s*tai\s*khoan/, /mua\s*goi/] },
+      { url: "/cart", reply: "Đang mở Giỏ hàng.", patterns: [/gio\s*hang/, /cart/] },
+      { url: "/checkout", reply: "Đang mở Thanh toán.", patterns: [/thanh\s*toan/, /checkout/, /xac\s*nhan\s*thanh\s*toan/, /qr\s*thanh\s*toan/] },
+      { url: "/manage", reply: "Đang mở Manage.", patterns: [/manage/, /quan\s*ly\s*goi/, /quan\s*ly\s*don\s*goi/, /don\s*goi/] },
+      { url: "/business", reply: "Đang mở Business.", patterns: [/business/, /trang\s*business/, /doanh\s*nghiep/, /kinh\s*doanh/] },
+      { url: "/contact", reply: "Đang mở Liên hệ.", patterns: [/trang\s*lien\s*he/, /contact\s*page/, /lien\s*he\s*travelwai/] },
+      { url: "/schedule", reply: "Đang mở trang Lịch trình.", patterns: [/lap\s*lich\s*trinh/, /tao\s*lich\s*trinh/, /lich\s*trinh/] },
+      { url: "/plans", reply: "Đang mở trang Kế hoạch.", patterns: [/lap\s*ke\s*hoach/, /tao\s*ke\s*hoach/, /ke\s*hoach/] },
+      { url: "/provinces", reply: "Đang mở Bản đồ Việt Nam.", patterns: [/ban\s*do/, /tinh\s*thanh/, /34\s*tinh/, /viet\s*nam/] },
+      { url: "/posts", reply: "Đang mở trang Bài viết.", patterns: [/bai\s*viet/, /tin\s*du\s*lich/, /kham\s*pha\s*bai/] },
+      { url: "/tours", reply: "Đang mở trang Tour du lịch.", patterns: [/tour\s*du\s*lich/, /dat\s*tour/, /xem\s*tour/] },
+      { url: "/tour-sales", reply: "Đang mở trang Sales.", patterns: [/sales/, /ban\s*tour/, /don\s*ban\s*tour/, /sales/] },
+      { url: "/admin", reply: "Đang mở trang Admin.", patterns: [/admin/, /quan\s*tri/, /quan\s*ly\s*he\s*thong/] },
+      { url: "/messaging?admin=1", reply: `Đang mở Tin nhắn với Admin ${SUPPORT_ADMIN_EMAIL}.`, patterns: [/tin\s*nhan/, /nhan\s*tin/, /messaging/, /chat/] },
+      { url: "/profile", reply: "Đang mở trang Hồ sơ.", patterns: [/ho\s*so/, /thong\s*tin\s*ca\s*nhan/, /tai\s*khoan/, /doi\s*ten/] },
+      { url: "/notifications", reply: "Đang mở trang Thông báo.", patterns: [/thong\s*bao/, /notification/] },
+      { url: "/messaging?admin=1", reply: "Đang mở hội thoại với Admin.", patterns: [/phan\s*hoi/, /lien\s*he/, /gop\s*y/, /ho\s*tro/] },
+      { url: "/home", reply: "Đang mở trang chủ.", patterns: [/trang\s*chu/, /home/] },
+      { url: "/landing", reply: "Đang mở giới thiệu TravelwAI.", patterns: [/landing/, /gioi\s*thieu/, /trang\s*gioi\s*thieu/] }
     ];
 
     return rules.find((rule) => rule.patterns.some((pattern) => pattern.test(normalized))) || null;
@@ -283,17 +295,22 @@
     const normalized = normalizeForSearch(text);
 
     if (/dang\s*xuat|thoat\s*tai\s*khoan|log\s*out/.test(normalized)) {
-      return { type: "logout", reply: "Mình sẽ đăng xuất tài khoản cho bạn." };
+      return { type: "logout", reply: "Đang đăng xuất tài khoản." };
     }
 
     if (/doi\s*mat\s*khau|doi\s*password|change\s*password/.test(normalized)) {
-      return { type: "navigate", url: "/profile", password: true, reply: "Mình chuyển bạn đến Hồ sơ để đổi mật khẩu." };
+      return { type: "navigate", url: "/profile", password: true, reply: "Đang mở Hồ sơ để đổi mật khẩu." };
+    }
+
+    if (window.TravelwAIPageCommands && typeof window.TravelwAIPageCommands.parseManagerCommand === "function") {
+      const command = window.TravelwAIPageCommands.parseManagerCommand(text);
+      if (command) return command;
     }
 
     if (/(co|có)?\s*trang\s*nao|danh\s*sach\s*trang|menu|chuc\s*nang|huong\s*dan\s*(web|website)?/.test(normalized)) {
       return {
         type: "info",
-        reply: "TravelwAI có các trang: Đăng nhập, Đăng ký, Trang chủ, Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Bài viết, Tour du lịch, Hồ sơ, Thông báo, Tài khoản Sales và Admin. Bạn nhắn tên trang, mình sẽ mở ngay."
+        reply: "Các trang TravelwAI: Đăng nhập, Đăng ký, Quên mật khẩu, Đặt lại mật khẩu, Trang chủ, Giới thiệu, Bản đồ Việt Nam, Chi tiết tỉnh, Lịch trình, Kế hoạch, Bảng giá, Giỏ hàng, Thanh toán, Hồ sơ, Nhắn tin, Hỗ trợ Admin, Liên hệ, Thông báo, Bài viết, Tour du lịch, Sales, Business, Admin, Manage. Nhắn: mở [tên trang], tới trang [tên trang] hoặc chi tiết trang [tên trang]."
       };
     }
 
@@ -314,17 +331,17 @@
         if (confirmedTarget.password) {
           sessionStorage.setItem("travelwaiOpenProfilePassword", "1");
         }
-        if (confirmedTarget.url && confirmedTarget.url !== "/contact") {
+        if (confirmedTarget.url) {
           setTimeout(() => { window.location.href = confirmedTarget.url; }, 650);
         }
         return true;
       }
-      appendLocalManagerReply("Bạn nhắn tên trang hoặc chức năng muốn mở, ví dụ: đăng nhập, bản đồ, lịch trình, tour du lịch, nhắn tin, đổi mật khẩu.");
+      appendLocalManagerReply("Dùng cú pháp: tới trang [tên trang], qua trang [tên trang] hoặc chi tiết trang [tên trang].");
       return true;
     }
 
     if (needsFullMessagingCommand(text)) {
-      appendLocalManagerReply("Mình mở trang Nhắn tin để thực hiện đúng chức năng trò chuyện hoặc kết bạn cho bạn.");
+      appendLocalManagerReply("Đang mở trang Nhắn tin.");
       try {
         localStorage.setItem(AI_PENDING_PROMPT_KEY, JSON.stringify({ assistant: "travelwai", prompt: text }));
       } catch (_) {}
@@ -353,7 +370,7 @@
       sessionStorage.setItem("travelwaiOpenProfilePassword", "1");
     }
 
-    if (target.url && target.url !== "/contact") {
+    if (target.url) {
       setTimeout(() => { window.location.href = target.url; }, 650);
     }
     return true;
@@ -404,14 +421,14 @@
     const input = document.getElementById("supportAdminAiInput");
     const text = (input?.value || "").trim();
     if (!text) {
-      setSupportStatus("Nhập nội dung cần nhắn cho Admin trước.", "error");
+      setSupportStatus("Nhập nội dung cần nhắn cho Admin chính trước.", "error");
       input?.focus();
       return;
     }
 
     const token = getToken();
     if (!token) {
-      setSupportStatus("Bạn cần đăng nhập để nhắn tin với Admin.", "error");
+      setSupportStatus("Bạn cần đăng nhập để nhắn tin với Admin chính.", "error");
       try { localStorage.setItem(ADMIN_PENDING_MESSAGE_KEY, text); } catch (_) {}
       setTimeout(() => { window.location.href = "/login"; }, 800);
       return;
@@ -429,7 +446,7 @@
     saveStoredMessages([...storedBeforeSend, userMessage]);
     appendMessage(userMessage);
     if (input) input.value = "";
-    setSupportStatus(`Đang mở Tin nhắn với Admin ${SUPPORT_ADMIN_EMAIL}...`, "success");
+    setSupportStatus(`Đang mở Tin nhắn với Admin chính ${SUPPORT_ADMIN_EMAIL}...`, "success");
     openAdminMessaging(text);
   }
 
@@ -445,15 +462,7 @@
       event.preventDefault();
       event.stopPropagation();
     }
-    const panel = getPanel();
-    if (!panel) {
-      window.location.href = "/messaging?admin=1";
-      return;
-    }
-    panel.classList.add("open");
-    panel.setAttribute("aria-hidden", "false");
-    await initializePanelContent();
-    setTimeout(() => document.getElementById("supportAdminAiInput")?.focus(), 120);
+    openAdminMessaging("");
   }
 
   function closePanel() {

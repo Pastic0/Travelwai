@@ -1,3 +1,21 @@
+const trackedProvinceDetailViews = new Set();
+
+function trackProvinceDetailView(provinceName, source = 'province-detail-page') {
+    const name = (provinceName || '').toString().trim();
+    if (!name) return;
+    const key = `${source}|${name.toLowerCase()}`;
+    if (trackedProvinceDetailViews.has(key)) return;
+    trackedProvinceDetailViews.add(key);
+
+    fetch('/api/analytics/province-view', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provinceName: name, source }),
+        credentials: 'same-origin',
+        keepalive: true
+    }).catch(() => {});
+}
+
 document.addEventListener('DOMContentLoaded', function() {
 
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -17,6 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const renderedProvinceName = document.querySelector('.province-name')?.textContent?.trim();
 
     if (serverRendered && renderedProvinceName && typeof window.getStaticProvinceInfoFromLocal34 === 'function') {
+        trackProvinceDetailView(renderedProvinceName, 'province-detail-page');
         const localInfo = window.getStaticProvinceInfoFromLocal34(renderedProvinceName);
         renderProvinceStaticDetailSections(localInfo);
     }
@@ -111,6 +130,7 @@ function askAiAboutCurrentProvince() {
     const description = button?.dataset?.description || (document.querySelector('.province-detail-lead') || document.querySelector('.province-description'))?.textContent?.trim() || '';
     const prompt = `Khám phá văn hoá, lịch sử, di tích và lễ hội nổi bật ở ${provinceName}.`;
     const context = buildProvinceDetailGuideContext(provinceName, description);
+    trackProvinceDetailView(provinceName, 'province-detail-ai-button');
 
     try {
         localStorage.setItem('travelwai-ai-pending-prompt', JSON.stringify({
@@ -238,6 +258,7 @@ function renderProvinceStaticDetailSections(province) {
 
 function displayProvinceData(province) {
     const provinceName = province.province_name || province.name || 'Tỉnh/thành';
+    trackProvinceDetailView(provinceName, 'province-detail-page');
     fadeInElement(document.querySelector('.province-name'), provinceName);
     fadeInElement(document.querySelector('.province-detail-lead') || document.querySelector('.province-description'), province.description || 'Thông tin đang được cập nhật.');
     renderProvinceStaticDetailSections(province);

@@ -4,7 +4,13 @@ let tourSearchQuery = "";
 let orderSearchQuery = "";
 let currentTourUserId = "";
 let currentTourUserName = localStorage.getItem("username") || localStorage.getItem("userEmail") || "";
+let currentTourUserRole = localStorage.getItem("userRole") || "";
 let availableTourSalesAccounts = [];
+let lastTourDashboardData = {};
+let tourCommissionRefreshTimer = null;
+let lastRevenueDetailOrders = [];
+let lastRevenueDetailData = {};
+let revenueTreeOpenState = {};
 
 function money(value) {
   const n = Number(value || 0);
@@ -18,6 +24,10 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function escapeJsValue(value) {
+  return escapeHtml(JSON.stringify(String(value ?? "")));
 }
 
 function tourActionIcon(type) {
@@ -35,12 +45,61 @@ function tourIconButton(className, iconType, label, onClick) {
 }
 
 function roleIsAdmin() {
-  return (localStorage.getItem("userRole") || "").toLowerCase() === "admin";
+  return (currentTourUserRole || localStorage.getItem("userRole") || "").trim().toLowerCase() === "admin";
+}
+
+function roleIsTourSales() {
+  const role = (currentTourUserRole || localStorage.getItem("userRole") || "").trim().toLowerCase();
+  return role === "sales" || role === "tour sales";
+}
+
+function roleIsBusiness() {
+  const role = (currentTourUserRole || localStorage.getItem("userRole") || "").trim().toLowerCase();
+  return role === "business" || role === "company";
+}
+
+function currentManagementPage() {
+  return String(document.body?.dataset?.page || "").trim().toLowerCase();
+}
+
+function pageIsBusiness() {
+  const page = currentManagementPage();
+  return page === "business" || page === "company";
+}
+
+function pageIsSales() {
+  return currentManagementPage() === "tour-sales";
+}
+
+function normalizeOwnerRole(value) {
+  return String(value || "").trim().toLowerCase().replace(/[_-]+/g, " ");
+}
+
+function ownerRoleIsBusiness(item) {
+  const role = normalizeOwnerRole(getValue(item, "owner_role", "ownerRole", "owner_role_name", "ownerRoleName"));
+  return role === "business" || role === "company";
+}
+
+function ownerRoleIsSales(item) {
+  const role = normalizeOwnerRole(getValue(item, "owner_role", "ownerRole", "owner_role_name", "ownerRoleName"));
+  return role === "sales" || role === "tour sales" || (!role && !ownerRoleIsBusiness(item));
+}
+
+function updateAdminRolePageLinks() {
+  const isAdmin = roleIsAdmin();
+  document.querySelectorAll(".admin-role-page-link").forEach(link => {
+    link.style.display = isAdmin ? "inline-flex" : "none";
+  });
+}
+
+function managementPageApiSuffix() {
+  const page = currentManagementPage();
+  return page ? `?page=${encodeURIComponent(page)}` : "";
 }
 
 function showToast(message) {
   const toast = document.getElementById("tourToast");
-  if (!toast) return alert(message);
+  if (!toast) return window.TravelwAIToast(message);
   toast.textContent = message;
   toast.classList.add("show");
   setTimeout(() => toast.classList.remove("show"), 2600);
@@ -49,7 +108,7 @@ function showToast(message) {
 async function readJson(response) {
   if (!response) throw new Error("Không có phản hồi từ máy chủ");
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.success === false) throw new Error(data.message || data.detail || "Thao tác thất bại");
+  if (!response.ok || data.success === false) throw new Error(data.message || data.detail || "Không thực hiện được");
   return data;
 }
 
@@ -66,8 +125,12 @@ function numberValue(item, ...keys) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function getNumberValue(item, ...keys) {
+  return numberValue(item, ...keys);
+}
+
 function getTourSalesName(tour) {
-  return getValue(tour, "tour_sales_name", "tourSalesName", "sales_name", "salesName", "seller_name", "sellerName") || "Tour Sales";
+  return getValue(tour, "tour_sales_name", "tourSalesName", "sales_name", "salesName", "seller_name", "sellerName") || "Sales";
 }
 
 function getTourOwnerId(tour) {
@@ -91,12 +154,18 @@ function getOrderTourSalesName(order) {
   if (storedName) return storedName;
   const tourId = getOrderTourId(order);
   const tour = travelwaiTours.find(item => String(item?.id || item?.Id || "") === tourId);
-  return tour ? getTourSalesName(tour) : "Tour Sales";
+  return tour ? getTourSalesName(tour) : "Sales";
 }
 
 function canSellOrder(order) {
   if (roleIsAdmin()) return true;
   if (order?.can_sell === true || order?.canSell === true) return true;
+  const ownerId = getOrderTourOwnerId(order);
+  return !!ownerId && !!currentTourUserId && ownerId === currentTourUserId;
+}
+
+function canViewOrder(order) {
+  if (roleIsAdmin()) return true;
   const ownerId = getOrderTourOwnerId(order);
   return !!ownerId && !!currentTourUserId && ownerId === currentTourUserId;
 }
@@ -116,9 +185,19 @@ function getAccountName(account) {
   return getValue(account, "username", "displayName", "display_name", "name", "email") || "Tài khoản";
 }
 
+function normalizeRoleText(value) {
+  return String(value || "").trim().toLowerCase().replace(/[_-]+/g, " ");
+}
+
+function accountIsBusiness(account) {
+  const role = normalizeRoleText(account?.role || "");
+  return role === "sales" || role === "tour sales" || role === "business" || role === "company";
+}
+
 function setAvailableTourSalesAccounts(accounts) {
   availableTourSalesAccounts = (Array.isArray(accounts) ? accounts : [])
-    .filter(account => getAccountId(account));
+    .filter(account => getAccountId(account))
+    .filter(account => accountIsBusiness(account));
 }
 
 async function getAvailableTourSalesAccounts() {
@@ -202,22 +281,127 @@ async function setupTourSalesField(tour) {
   field.classList.toggle("tour-sales-admin-editable", isAdmin);
 }
 
-function renderOrderTotal(order) {
-  const total = numberValue(order, "total_price", "totalPrice");
-  const original = numberValue(order, "original_total_price", "originalTotalPrice") || total;
-  const discountPercent = Math.max(0, Math.min(25, numberValue(order, "discount_percent", "discountPercent")));
-  const discountAmount = numberValue(order, "discount_amount", "discountAmount") || Math.max(0, original - total);
+function orderIsSold(order) {
+  return String(order?.status || "").trim().toLowerCase() === "đã bán";
+}
 
-  if (!discountPercent || discountAmount <= 0 || original <= total) {
-    return money(total);
+function getOrderCommissionPercent(order) {
+  for (const key of ["commission_percent", "commissionPercent"]) {
+    if (order && order[key] !== undefined && order[key] !== null && order[key] !== "") {
+      const percent = Number(order[key]);
+      if (Number.isFinite(percent) && percent >= 0) return Math.min(100, percent);
+    }
   }
+  return 8;
+}
 
-  return `
-    <div class="order-total-discount">
-      <small>${money(original)}</small>
-      <strong>${money(total)}</strong>
-      <em>Đã trừ ${discountPercent}% · ${money(discountAmount)}</em>
-    </div>`;
+function getOrderOriginalTotal(order) {
+  const original = numberValue(order, "original_total_price", "originalTotalPrice", "commission_base_total", "commissionBaseTotal");
+  if (original > 0) return original;
+  const total = numberValue(order, "total_price", "totalPrice");
+  const discount = numberValue(order, "discount_amount", "discountAmount");
+  return total + Math.max(0, discount);
+}
+
+function getOrderCommissionAmount(order) {
+  if (!orderIsSold(order)) return 0;
+  const stored = numberValue(order, "commission_amount", "commissionAmount");
+  if (stored > 0) return stored;
+  const original = getOrderOriginalTotal(order);
+  return Math.round(Math.max(0, original) * getOrderCommissionPercent(order) / 100);
+}
+
+function getOrderServicePercent(order) {
+  return Math.max(0, Math.min(100, numberValue(order, "service_fee_percent", "serviceFeePercent", "service_percent", "servicePercent")));
+}
+
+function getOrderServiceAmount(order) {
+  if (!orderIsSold(order)) return 0;
+  const stored = numberValue(order, "service_fee_amount", "serviceFeeAmount", "service_amount", "serviceAmount");
+  if (stored > 0) return stored;
+  return Math.round(Math.max(0, getOrderOriginalTotal(order)) * getOrderServicePercent(order) / 100);
+}
+
+function getOrderDiscountAmount(order) {
+  const stored = numberValue(order, "discount_amount", "discountAmount");
+  if (stored > 0) return stored;
+  const total = numberValue(order, "total_price", "totalPrice");
+  const original = getOrderOriginalTotal(order) || total;
+  return Math.max(0, original - total);
+}
+
+function getOrderBusinessOriginalDeducted(order) {
+  return ownerRoleIsBusiness(order) ? getOrderOriginalTotal(order) : 0;
+}
+
+function getOrderBusinessRevenue(order) {
+  if (!orderIsSold(order) || !ownerRoleIsBusiness(order)) return 0;
+  return Math.max(0, getOrderOriginalTotal(order) - getOrderServiceAmount(order));
+}
+
+function getOrderAdminSourceTotal(order) {
+  if (!orderIsSold(order)) return 0;
+  const original = getOrderOriginalTotal(order);
+  const discount = getOrderDiscountAmount(order);
+  if (ownerRoleIsBusiness(order)) {
+    return getOrderServiceAmount(order) - discount;
+  }
+  return original - discount - getOrderCommissionAmount(order);
+}
+
+function getOrderSourceLabel(order) {
+  const role = ownerRoleIsBusiness(order) ? "Business" : "Sales";
+  const name = getOrderTourSalesName(order);
+  return `${role} - ${name}`;
+}
+
+function getOrderSourceKey(order) {
+  const ownerId = getOrderTourOwnerId(order);
+  return `${ownerRoleIsBusiness(order) ? "business" : "sales"}:${ownerId || getOrderTourSalesName(order)}`;
+}
+
+function getOrderSourceAmountForCurrentRole(order) {
+  if (roleIsAdmin()) return getOrderAdminSourceTotal(order);
+  if (roleIsBusiness()) return getOrderBusinessTotal(order);
+  if (roleIsTourSales()) return getOrderTourSalesTotal(order);
+  return numberValue(order, "total_price", "totalPrice");
+}
+
+function getOrderBusinessReceivedTotal(order) {
+  if (ownerRoleIsBusiness(order)) return getOrderBusinessTotal(order);
+  return getOrderTourSalesTotal(order);
+}
+
+function getOrderCustomerName(order) {
+  return getValue(order, "customer_name", "customerName", "buyer_name", "buyerName", "user_name", "userName", "email", "customer_email", "customerEmail") || "Khách hàng";
+}
+
+function getOrderTourName(order) {
+  return getValue(order, "tour_name", "tourName", "name") || "Tour";
+}
+
+function getOrderAdminNetTotal(order) {
+  const original = getOrderOriginalTotal(order);
+  const discount = getOrderDiscountAmount(order);
+  const commission = getOrderCommissionAmount(order);
+  const service = getOrderServiceAmount(order);
+  const companyOriginal = getOrderBusinessOriginalDeducted(order);
+  return original - discount - commission + service - companyOriginal;
+}
+
+function getOrderTourSalesTotal(order) {
+  return getOrderCommissionAmount(order);
+}
+
+function getOrderBusinessTotal(order) {
+  return Math.max(0, getOrderOriginalTotal(order) - getOrderServiceAmount(order));
+}
+
+function renderOrderTotal(order) {
+  if (roleIsAdmin()) return money(getOrderAdminNetTotal(order));
+  if (roleIsTourSales()) return money(getOrderTourSalesTotal(order));
+  if (roleIsBusiness()) return money(getOrderBusinessTotal(order));
+  return money(numberValue(order, "total_price", "totalPrice"));
 }
 
 function normalizeDateValue(value) {
@@ -331,6 +515,14 @@ function getOrderSearchText(order) {
     order?.originalTotalPrice,
     order?.discount_percent,
     order?.discountPercent,
+    order?.commission_percent,
+    order?.commissionPercent,
+    order?.commission_amount,
+    order?.commissionAmount,
+    order?.service_fee_percent,
+    order?.serviceFeePercent,
+    order?.service_fee_amount,
+    order?.serviceFeeAmount,
     order?.status,
     tourTimeText(order),
     order?.created_at,
@@ -339,9 +531,18 @@ function getOrderSearchText(order) {
 }
 
 function filterToursForCurrentPage(tours) {
-  const isTourSalesPage = document.body?.dataset?.page === "tour-sales";
-  let visibleTours = tours.filter(tour => !tourIsCanceled(tour));
-  if (isTourSalesPage) visibleTours = visibleTours.filter(tour => !tourIsSoldOut(tour));
+  const isAdmin = roleIsAdmin();
+  let visibleTours = Array.isArray(tours) ? [...tours] : [];
+  if (!isAdmin) visibleTours = visibleTours.filter(tour => !tourIsCanceled(tour));
+
+  if (pageIsBusiness()) {
+    visibleTours = isAdmin
+      ? visibleTours.filter(tour => ownerRoleIsBusiness(tour))
+      : visibleTours.filter(tour => roleIsBusiness() && canEditTour(tour) && !tourIsSoldOut(tour));
+  } else if (pageIsSales() && !isAdmin) {
+    visibleTours = visibleTours.filter(tour => roleIsTourSales() && canEditTour(tour) && !tourIsSoldOut(tour));
+  }
+
   const query = normalizeSearchText(tourSearchQuery);
   if (query) visibleTours = visibleTours.filter(tour => getTourSearchText(tour).includes(query));
   return visibleTours;
@@ -405,16 +606,28 @@ async function uploadTourImageFile(file) {
 }
 
 async function loadTourSalesPage() {
-  const adminLink = document.getElementById("adminPanelLink");
-  if (adminLink && roleIsAdmin()) adminLink.style.display = "inline-flex";
+  updateAdminRolePageLinks();
+  const commissionBtn = document.getElementById("tourCommissionBtn");
+  if (commissionBtn) commissionBtn.style.display = (!roleIsAdmin() && roleIsTourSales()) ? "inline-flex" : "none";
   await Promise.all([loadTourDashboard(), loadTours(), loadOrders()]);
+  updateAdminRolePageLinks();
 }
 
 async function loadTourDashboard() {
   try {
-    const response = await authenticatedFetch("/api/tour-sales/dashboard");
+    const response = await authenticatedFetch(`/api/tour-sales/dashboard${managementPageApiSuffix()}`);
     const result = await readJson(response);
+    currentTourUserId = result.current_user_id || result.currentUserId || currentTourUserId;
+    currentTourUserRole = result.role || result.current_user_role || result.currentUserRole || currentTourUserRole;
+    currentTourUserName = result.current_user_name || result.currentUserName || currentTourUserName || localStorage.getItem("username") || localStorage.getItem("userEmail") || "";
+    updateAdminRolePageLinks();
     const data = result.data || {};
+    lastTourDashboardData = data;
+    const revenueLabel = document.getElementById("statRevenue")?.previousElementSibling;
+    const showCommission = !roleIsAdmin() && roleIsTourSales();
+    const commissionBtn = document.getElementById("tourCommissionBtn");
+    if (commissionBtn) commissionBtn.style.display = showCommission ? "inline-flex" : "none";
+    if (revenueLabel) revenueLabel.textContent = showCommission ? "Hoa hồng tour" : "Doanh thu";
     setText("statTours", data.tours || 0);
     setText("statActiveTours", data.activeTours || 0);
     setText("statSold", data.sold || 0);
@@ -429,10 +642,12 @@ async function loadTours() {
   const body = document.getElementById("tourTableBody");
   if (body) body.innerHTML = `<tr><td colspan="7" class="empty-line">Đang tải tour...</td></tr>`;
   try {
-    const response = await authenticatedFetch("/api/tour-sales/tours");
+    const response = await authenticatedFetch(`/api/tour-sales/tours${managementPageApiSuffix()}`);
     const result = await readJson(response);
     currentTourUserId = result.current_user_id || result.currentUserId || currentTourUserId;
+    currentTourUserRole = result.role || result.current_user_role || result.currentUserRole || currentTourUserRole;
     currentTourUserName = result.current_user_name || result.currentUserName || currentTourUserName || localStorage.getItem("username") || localStorage.getItem("userEmail") || "";
+    updateAdminRolePageLinks();
     travelwaiTours = Array.isArray(result.data) ? result.data : [];
     renderTours();
   } catch (error) {
@@ -449,7 +664,8 @@ function renderTours() {
   const hasSearch = normalizeSearchText(tourSearchQuery).length > 0;
 
   if (!visibleTours.length) {
-    body.innerHTML = `<tr><td colspan="7" class="empty-line">${hasSearch ? "Không tìm thấy tour phù hợp." : "Chưa có tour đang bán."}</td></tr>`;
+    const emptyText = roleIsAdmin() ? "Chưa có tour." : "Chưa có tour đang bán.";
+    body.innerHTML = `<tr><td colspan="7" class="empty-line">${hasSearch ? "Không tìm thấy tour." : emptyText}</td></tr>`;
     return;
   }
 
@@ -491,8 +707,11 @@ async function loadOrders() {
   if (!body) return;
   body.innerHTML = `<tr><td colspan="8" class="empty-line">Đang tải đơn...</td></tr>`;
   try {
-    const response = await authenticatedFetch("/api/tour-sales/orders");
+    const response = await authenticatedFetch(`/api/tour-sales/orders${managementPageApiSuffix()}`);
     const result = await readJson(response);
+    currentTourUserId = result.current_user_id || result.currentUserId || currentTourUserId;
+    currentTourUserRole = result.role || result.current_user_role || result.currentUserRole || currentTourUserRole;
+    updateAdminRolePageLinks();
     travelwaiOrders = Array.isArray(result.data) ? result.data : [];
     renderOrders();
   } catch (error) {
@@ -501,17 +720,26 @@ async function loadOrders() {
   }
 }
 
+function filterOrdersForCurrentPage(orders) {
+  const source = Array.isArray(orders) ? orders : [];
+  if (roleIsAdmin()) {
+    return pageIsBusiness() ? source.filter(order => ownerRoleIsBusiness(order)) : source;
+  }
+  return source.filter(order => canViewOrder(order));
+}
+
 function renderOrders() {
   const body = document.getElementById("orderTableBody");
   if (!body) return;
 
   const query = normalizeSearchText(orderSearchQuery);
+  const visibleOrders = filterOrdersForCurrentPage(travelwaiOrders);
   const sourceRows = query
-    ? travelwaiOrders.filter(order => getOrderSearchText(order).includes(query))
-    : travelwaiOrders;
+    ? visibleOrders.filter(order => getOrderSearchText(order).includes(query))
+    : visibleOrders;
 
   if (!sourceRows.length) {
-    body.innerHTML = `<tr><td colspan="8" class="empty-line">${query ? "Không tìm thấy đơn bán tour phù hợp." : "Chưa có khách đặt tour."}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" class="empty-line">${query ? "Không tìm thấy đơn tour." : "Chưa có khách đặt tour."}</td></tr>`;
     return;
   }
 
@@ -549,6 +777,291 @@ function renderOrders() {
   }).join("");
 }
 
+async function loadTourCommissionStatus(silent = false) {
+  try {
+    const response = await authenticatedFetch("/api/tour-sales/commission");
+    const result = await readJson(response);
+    renderTourCommissionStatus(result);
+  } catch (error) {
+    if (!silent) showToast(error.message);
+  }
+}
+
+function renderTourCommissionStatus(result) {
+  const percent = Math.max(0, Math.min(100, Number(result?.commission_percent ?? result?.commissionPercent ?? 8)));
+  const level = Number(result?.sales_level ?? result?.salesLevel ?? 1) || 1;
+  const soldCount = Number(result?.sales_sold_count ?? result?.salesSoldCount ?? 0) || 0;
+  const data = result?.data || {};
+  const commission = getNumberValue(data, "commission", "commission_amount", "commissionAmount");
+  const progressFill = document.getElementById("tourCommissionProgressFill");
+  const levelText = document.getElementById("tourCommissionLevelText");
+  const totalText = document.getElementById("tourCommissionTotalText");
+  const list = document.getElementById("tourCommissionLevelList");
+
+  if (levelText) levelText.textContent = `Cấp ${level}`;
+  if (totalText) totalText.textContent = money(commission);
+  if (progressFill) progressFill.style.width = `${Math.max(20, Math.min(100, level * 20))}%`;
+
+  if (!list) return;
+  list.innerHTML = `
+    <div class="tour-offer-invite-item accepted">
+      <span>Cấp ${level}</span>
+      <strong>${percent}%</strong>
+    </div>
+    <div class="tour-offer-invite-item accepted">
+      <span>Đã bán</span>
+      <strong>${soldCount}</strong>
+    </div>`;
+}
+
+async function openTourCommissionModal() {
+  document.getElementById("tourCommissionModal")?.classList.add("open");
+  await loadTourCommissionStatus(false);
+  clearInterval(tourCommissionRefreshTimer);
+  tourCommissionRefreshTimer = setInterval(() => {
+    if (document.getElementById("tourCommissionModal")?.classList.contains("open")) {
+      loadTourCommissionStatus(true);
+    }
+  }, 10000);
+}
+
+function closeTourCommissionModal() {
+  document.getElementById("tourCommissionModal")?.classList.remove("open");
+  clearInterval(tourCommissionRefreshTimer);
+  tourCommissionRefreshTimer = null;
+}
+
+async function loadAdminRevenueDetailData() {
+  const detail = {
+    data: lastTourDashboardData || {},
+    orders: Array.isArray(travelwaiOrders) ? travelwaiOrders : []
+  };
+
+  if (!roleIsAdmin()) return detail;
+
+  try {
+    const [dashboardResponse, ordersResponse] = await Promise.all([
+      authenticatedFetch("/api/tour-sales/dashboard"),
+      authenticatedFetch("/api/tour-sales/orders")
+    ]);
+    const dashboardResult = await readJson(dashboardResponse);
+    const ordersResult = await readJson(ordersResponse);
+    detail.data = dashboardResult.data || detail.data;
+    detail.orders = Array.isArray(ordersResult.data) ? ordersResult.data : detail.orders;
+  } catch (error) {
+    console.warn("Không tải được chi tiết doanh thu toàn hệ thống", error);
+  }
+
+  return detail;
+}
+
+function getRevenueDetailSoldOrders(orders) {
+  const source = Array.isArray(orders) ? orders : [];
+  if (roleIsAdmin()) return source.filter(orderIsSold);
+  return filterOrdersForCurrentPage(source).filter(orderIsSold);
+}
+
+function revenueTreeKey(...parts) {
+  return parts.map(part => String(part ?? "").replace(/\s+/g, " ").trim()).join("::");
+}
+
+function revenueTreeToggleButton(key, isOpen) {
+  return `<button type="button" class="revenue-tree-toggle" onclick="event.stopPropagation();toggleRevenueTreeNode(${escapeJsValue(key)})" aria-label="${isOpen ? "Đóng" : "Mở"}">${isOpen ? "-" : "+"}</button>`;
+}
+
+function toggleRevenueTreeNode(key) {
+  revenueTreeOpenState[key] = !revenueTreeOpenState[key];
+  renderRevenueDetail(lastRevenueDetailData, lastRevenueDetailOrders);
+}
+
+function revenueTreeRow(key, label, amount, childHtml = "", extraClass = "") {
+  const isOpen = !!revenueTreeOpenState[key];
+  return `
+    <div class="tour-offer-invite-item accepted revenue-tree-row ${extraClass}" role="button" tabindex="0" onclick="toggleRevenueTreeNode(${escapeJsValue(key)})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRevenueTreeNode(${escapeJsValue(key)})}">
+      <span class="tour-offer-invite-main"><b>${escapeHtml(label)}</b></span>
+      <strong>${money(amount)}</strong>
+      ${revenueTreeToggleButton(key, isOpen)}
+    </div>
+    ${isOpen ? childHtml : ""}`;
+}
+
+function revenueInlineMeta(text) {
+  return text ? `<small class="revenue-tree-inline-meta"> · ${escapeHtml(text)}</small>` : "";
+}
+
+function revenuePlainRow(label, amount, smallText = "", extraClass = "") {
+  const small = revenueInlineMeta(smallText);
+  return `
+    <div class="tour-offer-invite-item accepted ${extraClass}">
+      <span class="tour-offer-invite-main"><b>${escapeHtml(label)}</b>${small}</span>
+      <strong>${money(amount)}</strong>
+    </div>`;
+}
+
+function revenueRootLabel(type) {
+  if (type === "admin") return "Admin";
+  if (type === "business") return "Business";
+  return "Sales";
+}
+
+function revenueRootOrders(type, soldOrders) {
+  if (type === "admin") return soldOrders;
+  if (type === "business") return soldOrders.filter(ownerRoleIsBusiness);
+  return soldOrders.filter(ownerRoleIsSales);
+}
+
+function revenueRootAmount(type, soldOrders, netRevenue, companyRevenue) {
+  if (type === "admin") return Number(netRevenue || 0);
+  const rows = revenueRootOrders(type, soldOrders);
+  if (type === "business") return rows.reduce((sum, order) => sum + getOrderBusinessTotal(order), 0) || Number(companyRevenue || 0);
+  return rows.reduce((sum, order) => sum + getOrderTourSalesTotal(order), 0);
+}
+
+function getRevenueBusinessName(order) {
+  return getOrderTourSalesName(order) || (ownerRoleIsBusiness(order) ? "Business" : "Sales");
+}
+
+function getRevenueBusinessRoleText(order) {
+  return ownerRoleIsBusiness(order) ? "Business" : "Sales";
+}
+
+function getRevenueBusinessGroups(rootType, orders) {
+  const groups = new Map();
+  orders.forEach(order => {
+    const sourceKey = getOrderSourceKey(order);
+    const key = revenueTreeKey("business", rootType, sourceKey);
+    const current = groups.get(key) || {
+      key,
+      rootType,
+      name: getRevenueBusinessName(order),
+      roleText: getRevenueBusinessRoleText(order),
+      amount: 0,
+      orders: []
+    };
+    current.amount += rootType === "admin" ? getOrderAdminSourceTotal(order) : getOrderBusinessReceivedTotal(order);
+    current.orders.push(order);
+    groups.set(key, current);
+  });
+  return Array.from(groups.values()).sort((a, b) => a.name.localeCompare(b.name, "vi"));
+}
+
+function renderRevenueOrderRows(group) {
+  const rows = group.orders
+    .map(order => {
+      const tourName = getOrderTourName(order);
+      const customer = getOrderCustomerName(order);
+      const quantity = numberValue(order, "quantity", "qty", "count");
+      const quantityText = quantity > 0 ? `${quantity} vé` : "";
+      const smallParts = [customer, quantityText].filter(Boolean).join(" · ");
+      const amount = group.rootType === "admin" ? getOrderAdminSourceTotal(order) : getOrderBusinessReceivedTotal(order);
+      return revenuePlainRow(tourName, amount, smallParts, "revenue-tree-level-3");
+    })
+    .join("");
+  return rows || `<div class="tour-offer-invite-item revenue-tree-level-3"><span>Chưa có dữ liệu.</span><strong>0đ</strong></div>`;
+}
+
+function renderRevenueBusinessRows(rootType, orders) {
+  const groups = getRevenueBusinessGroups(rootType, orders);
+  if (!groups.length) return `<div class="tour-offer-invite-item revenue-tree-level-2"><span>Chưa có dữ liệu.</span><strong>0đ</strong></div>`;
+  return groups.map(group => {
+    const childHtml = `<div class="revenue-tree-children revenue-tree-level-3-wrap">${renderRevenueOrderRows(group)}</div>`;
+    const label = group.name;
+    const small = group.roleText;
+    const isOpen = !!revenueTreeOpenState[group.key];
+    return `
+      <div class="tour-offer-invite-item accepted revenue-tree-row revenue-tree-level-2" role="button" tabindex="0" onclick="toggleRevenueTreeNode(${escapeJsValue(group.key)})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRevenueTreeNode(${escapeJsValue(group.key)})}">
+        <span class="tour-offer-invite-main"><b>${escapeHtml(label)}</b>${revenueInlineMeta(small)}</span>
+        <strong>${money(group.amount)}</strong>
+        ${revenueTreeToggleButton(group.key, isOpen)}
+      </div>
+      ${isOpen ? childHtml : ""}`;
+  }).join("");
+}
+
+function renderRevenueAdminTree(orders, netRevenue, companyRevenue) {
+  const soldOrders = getRevenueDetailSoldOrders(orders);
+  const rootTypes = ["admin", "business", "sales"];
+  return rootTypes.map(type => {
+    const key = revenueTreeKey("root", type);
+    const rootOrders = revenueRootOrders(type, soldOrders);
+    const amount = revenueRootAmount(type, soldOrders, netRevenue, companyRevenue);
+    const childHtml = `<div class="revenue-tree-children revenue-tree-level-2-wrap">${renderRevenueBusinessRows(type, rootOrders)}</div>`;
+    return revenueTreeRow(key, revenueRootLabel(type), amount, childHtml);
+  }).join("");
+}
+
+function renderRevenueSingleRoleTree(type, soldOrders, fallbackAmount = 0) {
+  const key = revenueTreeKey("root", "self", type);
+  const amount = revenueRootAmount(type, soldOrders, 0, fallbackAmount);
+  const childHtml = `<div class="revenue-tree-children revenue-tree-level-2-wrap">${renderRevenueBusinessRows(type, soldOrders)}</div>`;
+  return revenueTreeRow(key, revenueRootLabel(type), amount, childHtml);
+}
+
+function renderRevenueBusinessTree(soldOrders, companyRevenue) {
+  return renderRevenueSingleRoleTree("business", soldOrders, companyRevenue);
+}
+
+function renderRevenueSalesTree(soldOrders) {
+  return renderRevenueSingleRoleTree("sales", soldOrders, 0);
+}
+
+function renderRevenueSourceRows(orders, netRevenue, companyRevenue) {
+  const soldOrders = getRevenueDetailSoldOrders(orders);
+  if (roleIsAdmin()) return renderRevenueAdminTree(orders, netRevenue, companyRevenue);
+  if (roleIsBusiness()) return renderRevenueBusinessTree(soldOrders, companyRevenue);
+  return renderRevenueSalesTree(soldOrders);
+}
+
+function openRevenueSourceDetail(sourceKey) {
+  toggleRevenueTreeNode(sourceKey);
+}
+
+function renderRevenueDetail(dataOverride = null, ordersOverride = null) {
+  const body = document.getElementById("revenueDetailBody");
+  const summary = document.getElementById("revenueDetailSummary");
+  if (!body) return;
+  const data = dataOverride || lastTourDashboardData || {};
+  const orders = Array.isArray(ordersOverride) ? ordersOverride : travelwaiOrders;
+  lastRevenueDetailData = data || {};
+  lastRevenueDetailOrders = Array.isArray(orders) ? orders : [];
+  const grossRevenue = getNumberValue(data, "grossRevenue", "gross_revenue");
+  const discountDeducted = getNumberValue(data, "discountDeducted", "discount_deducted");
+  const commissionDeducted = getNumberValue(data, "commissionDeducted", "commission_deducted", "commission");
+  const serviceFee = getNumberValue(data, "serviceFee", "service_fee", "serviceDeducted", "service_deducted");
+  const companyOriginalDeducted = getNumberValue(data, "companyOriginalDeducted", "company_original_deducted", "companyGrossDeducted", "company_gross_deducted");
+  const storedBusinessRevenue = getNumberValue(data, "companyRevenue", "company_revenue");
+  const companyRevenue = storedBusinessRevenue || Math.max(0, companyOriginalDeducted - serviceFee);
+  const rawRevenue = getValue(data, "revenue");
+  const netRevenue = rawRevenue !== "" ? Number(rawRevenue || 0) : (grossRevenue - discountDeducted - commissionDeducted + serviceFee - companyOriginalDeducted);
+
+  body.innerHTML = `
+    <tr>
+      <td><strong>${money(grossRevenue)}</strong></td>
+      <td><strong>${money(discountDeducted)}</strong></td>
+      <td><strong>${money(commissionDeducted)}</strong></td>
+      <td><strong>${money(serviceFee)}</strong></td>
+      <td><strong>${money(companyRevenue)}</strong></td>
+    </tr>`;
+
+  if (summary) {
+    summary.innerHTML = renderRevenueSourceRows(orders, netRevenue, companyRevenue);
+  }
+}
+
+async function openRevenueDetailModal() {
+  if (!roleIsAdmin() && roleIsTourSales()) {
+    openTourCommissionModal();
+    return;
+  }
+  const detail = await loadAdminRevenueDetailData();
+  renderRevenueDetail(detail.data, detail.orders);
+  document.getElementById("revenueDetailModal")?.classList.add("open");
+}
+
+function closeRevenueDetailModal() {
+  document.getElementById("revenueDetailModal")?.classList.remove("open");
+}
+
 async function openTourModal(tour = null) {
   const modal = document.getElementById("tourModal");
   if (!modal) return;
@@ -580,7 +1093,7 @@ function closeTourModal() {
 function editTour(id) {
   const tour = travelwaiTours.find(t => String(t.id) === String(id));
   if (!tour) return showToast("Không tìm thấy tour");
-  if (!canEditTour(tour)) return showToast("Tour Sales chỉ được sửa tour của họ.");
+  if (!canEditTour(tour)) return showToast("Sales chỉ được sửa tour của họ.");
   openTourModal(tour);
 }
 
@@ -657,8 +1170,8 @@ async function submitTourForm(event) {
 
 async function deleteTour(id) {
   const tour = travelwaiTours.find(t => String(t.id) === String(id));
-  if (tour && !canEditTour(tour)) return showToast("Tour Sales chỉ được xóa tour của họ.");
-  if (!confirm("Xóa tour này?")) return;
+  if (tour && !canEditTour(tour)) return showToast("Sales chỉ được xóa tour của họ.");
+  if (!await window.TravelwAIConfirm("Xóa tour này?")) return;
   try {
     const response = await authenticatedFetch(`/api/tour-sales/tours/${encodeURIComponent(id)}`, { method: "DELETE" });
     const result = await readJson(response);
@@ -672,8 +1185,8 @@ async function deleteTour(id) {
 
 async function sellBookedOrder(id) {
   const order = travelwaiOrders.find(item => String(item.id || item.Id || "") === String(id));
-  if (order && !canSellOrder(order)) return showToast("Tour này thuộc Tour Sales khác, bạn không thể bán.");
-  if (!confirm("Xác nhận bán đơn này? Sau khi bán thành công, hệ thống mới tạo lịch trình cho khách.")) return;
+  if (order && !canSellOrder(order)) return showToast("Tour thuộc Sales khác.");
+  if (!await window.TravelwAIConfirm("Xác nhận bán đơn này? Sau khi bán thành công, hệ thống mới tạo lịch trình cho khách.")) return;
   try {
     const response = await authenticatedFetch(`/api/tour-sales/orders/${encodeURIComponent(id)}/sell`, { method: "POST" });
     const result = await readJson(response);
@@ -686,11 +1199,11 @@ async function sellBookedOrder(id) {
 }
 
 async function deleteTourOrder(id) {
-  if (!confirm("Xóa đơn bán tour này?")) return;
+  if (!await window.TravelwAIConfirm("Xóa đơn bán tour này?")) return;
   try {
     const response = await authenticatedFetch(`/api/tour-sales/orders/${encodeURIComponent(id)}`, { method: "DELETE" });
     const result = await readJson(response);
-    showToast(result.message || "Đã xóa đơn bán tour");
+    showToast(result.message || "Đã xoá đơn tour");
     await loadTourSalesPage();
     if (typeof loadAdminDashboard === "function") loadAdminDashboard();
   } catch (error) {
@@ -720,12 +1233,14 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   setupTourSearch();
   setupOrderSearch();
-  if (document.body.dataset.page === "tour-sales") {
+  document.getElementById("statRevenueCard")?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openRevenueDetailModal();
+    }
+  });
+  if (document.body.dataset.page === "tour-sales" || document.body.dataset.page === "business") {
     loadTourSalesPage();
-    setInterval(() => {
-      if (document.getElementById("tourModal")?.classList.contains("open")) return;
-      loadTourSalesPage();
-    }, 30000);
   }
 });
 
@@ -739,5 +1254,11 @@ window.editTour = editTour;
 window.deleteTour = deleteTour;
 window.sellBookedOrder = sellBookedOrder;
 window.deleteTourOrder = deleteTourOrder;
+window.openTourCommissionModal = openTourCommissionModal;
+window.closeTourCommissionModal = closeTourCommissionModal;
+window.openRevenueDetailModal = openRevenueDetailModal;
+window.closeRevenueDetailModal = closeRevenueDetailModal;
+window.openRevenueSourceDetail = openRevenueSourceDetail;
 
 window.renderOrders = renderOrders;
+window.updateAdminRolePageLinks = updateAdminRolePageLinks;

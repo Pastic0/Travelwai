@@ -8,13 +8,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin TravelwAI</title>
   <link rel="icon" href="/logo/travelwai-paper-plane.png" type="image/png" />
-  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-23-landing-tools-footer-dark-v4" />
-<link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-23-landing-tools-footer-dark-v4" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-28-admin-analytics-popup-text-v27" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-28-admin-analytics-popup-text-v27" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-28-admin-analytics-popup-text-v27" />
+<link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-28-admin-analytics-popup-text-v27" />
 </head>
 <body class="tour-admin-page admin-page" data-page="admin">
-  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "tour-sales")
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "admin")
 
   <main class="tour-admin-shell">
     <section class="tour-admin-hero">
@@ -22,9 +23,11 @@
         <span class="eyebrow">Quản trị hệ thống</span>
         <h1>Admin TravelwAI</h1>
       </div>
-      <div class="tour-actions page-hero-actions">
-        <button class="btn-soft btn-page-refresh" type="button" onclick="loadAdminPage()">Tải lại</button>
-        <a class="btn-soft btn-page-link" href="/tour-sales" style="text-decoration:none">Trang Sales</a>
+      <div class="tour-actions page-hero-actions sales-hero-actions management-page-switcher" data-admin-page-switcher>
+        <a class="btn-soft btn-page-link admin-role-page-link management-page-link is-current" href="/admin" style="display:none;text-decoration:none" aria-current="page">Admin</a>
+        <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/tour-sales" style="display:none;text-decoration:none">Sales</a>
+        <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/business" style="display:none;text-decoration:none">Business</a>
+        <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/manage" style="display:none;text-decoration:none">Manage</a>
       </div>
     </section>
 
@@ -41,11 +44,13 @@
 
     <div class="tabs">
       <button class="tab-btn active" data-tab="accounts" type="button">Tài khoản</button>
+      <button class="tab-btn" data-tab="account-plans" type="button">Gói tài khoản</button>
       <button class="tab-btn" data-tab="tours" type="button">Tour</button>
       <button class="tab-btn" data-tab="schedules" type="button">Lịch trình</button>
       <button class="tab-btn" data-tab="plan-statuses" type="button">Trạng thái</button>
       <button class="tab-btn" data-tab="province-tags" type="button">Tỉnh thành</button>
       <button class="tab-btn" data-tab="posts" type="button">Bài viết</button>
+      <button class="tab-btn" data-tab="analytics" type="button">Thống kê</button>
     </div>
 
     <section class="management-panel admin-tab-panel" id="tab-accounts">
@@ -54,7 +59,7 @@
           <h2>Quản lý tài khoản</h2>
         </div>
         <div class="sales-list-actions admin-panel-search-actions admin-account-list-actions">
-          <button class="btn-primary btn-add-tour btn-change-avatar" id="changeAiAvatarButton" type="button">Thay đổi avatar</button>
+          <button class="btn-primary btn-add-tour btn-change-avatar" id="changeAiAvatarButton" type="button" title="Thay đổi avatar AI" aria-label="Thay đổi avatar AI">⚙️</button>
           <input id="aiAvatarFile" type="file" accept="image/*" hidden />
           <div class="tour-search-box tour-search-box-small">
             <input id="accountSearchInput" type="search" placeholder="Tìm tài khoản..." autocomplete="off" />
@@ -77,6 +82,34 @@
           <tbody id="accountTableBody"><tr><td colspan="6" class="empty-line">Đang tải...</td></tr></tbody>
         </table>
       </div>
+    </section>
+
+
+    <section class="management-panel admin-tab-panel" id="tab-account-plans" style="display:none">
+      <div class="panel-header-row">
+        <div>
+          <h2>Bảng giá</h2>
+        </div>
+      </div>
+      <form id="accountPlanSettingsForm">
+        <div class="table-wrap table-scroll-5">
+          <table class="account-plan-settings-table">
+            <thead>
+              <tr>
+                <th>Gói</th>
+                <th>Giá</th>
+                <th>Dòng phụ</th>
+                <th>Quyền lợi</th>
+                <th>Thu phí</th>
+              </tr>
+            </thead>
+            <tbody id="accountPlanSettingsBody"><tr><td colspan="5" class="empty-line">Đang tải bảng giá...</td></tr></tbody>
+          </table>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-primary" type="submit">Lưu bảng giá</button>
+        </div>
+      </form>
     </section>
 
     <section class="management-panel admin-tab-panel" id="tab-tours" style="display:none">
@@ -172,6 +205,43 @@
       </div>
     </section>
 
+
+    <section class="management-panel admin-tab-panel" id="tab-analytics" style="display:none">
+      <div class="panel-header-row">
+        <div>
+          <h2>Thống kê</h2>
+        </div>
+        <div class="sales-list-actions admin-panel-search-actions">
+          <button class="btn-primary btn-admin-add-action" id="adminAnalyticsAiButton" type="button">AI thống kê</button>
+          <button class="btn-soft btn-clear-tour-search" id="adminAnalyticsRefreshButton" type="button">Tải lại</button>
+        </div>
+      </div>
+
+      <div class="admin-analytics-block">
+        <h3>Thống kê tháng</h3>
+        <div class="dashboard-grid admin-analytics-grid">
+          <article class="stat-card admin-analytics-card" data-analytics-detail="province" role="button" tabindex="0"><span>Tỉnh được tìm nhiều nhất</span><strong id="analyticsMonthTopProvince">0</strong></article>
+          <article class="stat-card admin-analytics-card" data-analytics-detail="budget" role="button" tabindex="0"><span>Ngân sách phổ biến</span><strong id="analyticsMonthBudgetRange">0</strong></article>
+          <article class="stat-card admin-analytics-card" data-analytics-detail="tour" role="button" tabindex="0"><span>Loại tour đặt nhiều nhất</span><strong id="analyticsMonthTopTour">0</strong></article>
+          <article class="stat-card admin-analytics-card" data-analytics-detail="group" role="button" tabindex="0"><span>Nhóm người dùng</span><strong id="analyticsMonthGroupSize">0</strong></article>
+        </div>
+      </div>
+
+      <div class="admin-analytics-block">
+        <h3>Thống kê năm theo từng tháng</h3>
+        <div class="table-wrap table-scroll-5 admin-analytics-year-wrap">
+          <table>
+            <thead>
+              <tr><th>Tháng</th><th>Tỉnh được tìm nhiều nhất</th><th>Ngân sách phổ biến</th><th>Loại tour đặt nhiều nhất</th><th>Nhóm người dùng</th></tr>
+            </thead>
+            <tbody id="analyticsYearMonthBody"><tr><td colspan="5" class="empty-line">Đang tải thống kê...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="admin-analytics-ai-card" id="adminAnalyticsSummary">Bấm AI thống kê để tạo nhận xét.</div>
+    </section>
+
     <section class="management-panel admin-tab-panel" id="tab-posts" style="display:none">
       <div class="panel-header-row">
         <div>
@@ -203,8 +273,13 @@
       <div class="form-grid">
         <div class="form-group"><label>Email</label><input id="accountEmail" disabled /></div>
         <div class="form-group"><label>Tên hiển thị</label><input id="accountUsername" /></div>
-        <div class="form-group"><label>Vai trò</label><select id="accountRole"><option>User</option><option>Tour Sales</option><option>Admin</option></select></div>
-        <div class="form-group"><label>Ưu đãi</label><input id="accountOfferDiscount" disabled /></div>
+        <div class="form-group full"><label>Vai trò</label><select id="accountRole"><option>Free</option><option>VIP</option><option>Premium</option><option>Sales</option><option>Business</option><option>Admin</option></select></div>
+        <div class="form-group"><label>Hoa hồng</label><input id="accountCommissionPercent" type="number" min="0" max="100" step="1" /></div>
+        <div class="form-group"><label>Cấp hoa hồng</label><select id="accountSalesLevel"><option value="1">Cấp 1</option><option value="2">Cấp 2</option><option value="3">Cấp 3</option><option value="4">Cấp 4</option><option value="5">Cấp 5</option></select></div>
+        <div class="form-group"><label>Ưu đãi</label><input id="accountOfferDiscount" type="number" min="0" max="100" step="1" /></div>
+        <div class="form-group"><label>Cấp ưu đãi</label><select id="accountOfferLevel"><option value="1">Cấp 1</option><option value="2">Cấp 2</option><option value="3">Cấp 3</option><option value="4">Cấp 4</option><option value="5">Cấp 5</option></select></div>
+        <div class="form-group"><label>Dịch vụ</label><input id="accountServicePercent" type="number" min="0" max="100" step="1" /></div>
+        <div class="form-group"><label>Cấp dịch vụ</label><select id="accountServiceLevel"><option value="1">Cấp 1</option><option value="2">Cấp 2</option><option value="3">Cấp 3</option><option value="4">Cấp 4</option><option value="5">Cấp 5</option></select></div>
         <div class="form-group full account-lock-group">
           <label class="account-lock-toggle" for="accountLocked">
             <input id="accountLocked" type="checkbox" />
@@ -222,11 +297,30 @@
 
   <div class="form-modal" id="aiAvatarModal">
     <div class="form-card ai-avatar-card">
-      <h2>Thay đổi avatar AI</h2>
+      <h2 class="ai-avatar-icon-title" title="Thay đổi avatar AI" aria-label="Thay đổi avatar AI">⚙️</h2>
       <div class="ai-avatar-actions">
         <button class="btn-primary btn-add-tour" type="button" onclick="chooseAiAvatar('travelwai')">Quản lý TravelwAI</button>
         <button class="btn-primary btn-add-tour" type="button" onclick="chooseAiAvatar('travelwinne')">Hướng dẫn viên Travelwinne</button>
       </div>
+      <div class="ai-avatar-section-title">Cấu hình từng cấp</div>
+      <form id="salesLevelSettingsForm">
+        <div class="table-wrap sales-level-settings-wrap">
+          <table class="sales-level-settings-table">
+            <thead>
+              <tr>
+                <th>Cấp</th>
+                <th>Ưu đãi</th>
+                <th>Hoa hồng</th>
+                <th>Dịch vụ</th>
+              </tr>
+            </thead>
+            <tbody id="salesLevelSettingsGrid"></tbody>
+          </table>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-primary" type="submit">Lưu cấu hình</button>
+        </div>
+      </form>
       <div class="modal-actions">
         <button class="btn-soft" type="button" onclick="closeAiAvatarModal()">Đóng</button>
       </div>
@@ -332,10 +426,10 @@
         <div class="form-group"><label>Tài khoản</label><select id="postAuthor" required><option value="">Chọn tài khoản</option></select></div>
         <div class="form-group"><label>Trạng thái</label><select id="postStatus"><option>Hiển thị</option><option>Ẩn</option></select></div>
         <div class="form-group"><label>Tỉnh thành</label><input id="postProvince" placeholder="Ví dụ: Huế, Hà Nội" /></div>
-        <div class="form-group full"><label>Từ khóa tour phù hợp</label><input id="postTourKeywords" placeholder="Ví dụ: Huế, Festival, di sản" /></div>
+        <div class="form-group full"><label>Từ khóa tour</label><input id="postTourKeywords" placeholder="Ví dụ: Huế, Festival, di sản" /></div>
         <div class="form-group full"><label>Tóm tắt</label><textarea id="postSummary" rows="3"></textarea></div>
         <div class="form-group full"><label>Nội dung</label><div class="content-ai-field"><textarea id="postContent" rows="5"></textarea><button class="ai-content-button" id="postAiButton" type="button" formnovalidate title="Tạo tiêu đề, tóm tắt và nội dung văn hoá lịch sử thật từ lễ hội/ngày lễ" aria-label="Tạo tiêu đề, tóm tắt và nội dung văn hoá lịch sử bằng AI">✨</button></div></div>
-        <div class="form-group full"><label>Ảnh minh hoạ</label><div class="image-url-field image-url-field-textarea"><textarea id="postImageUrls" rows="2" placeholder="Mỗi dòng một URL ảnh"></textarea><button class="image-upload-icon" id="postImageUploadButton" type="button" title="Đính kèm tệp ảnh" aria-label="Đính kèm tệp ảnh">📎</button><input id="postImageFiles" type="file" accept="image/*" multiple hidden /></div><small class="form-help">Có thể nhập URL ảnh hoặc đính kèm nhiều tệp bằng nút trong ô.</small><div class="post-image-preview" id="postImagePreview"></div></div>
+        <div class="form-group full"><label>Ảnh minh hoạ</label><div class="image-url-field image-url-field-textarea"><textarea id="postImageUrls" rows="2" placeholder="Mỗi dòng một URL ảnh"></textarea><button class="image-upload-icon" id="postImageUploadButton" type="button" title="Đính kèm tệp ảnh" aria-label="Đính kèm tệp ảnh">📎</button><input id="postImageFiles" type="file" accept="image/*" multiple hidden /></div><small class="form-help">Nhập URL ảnh hoặc đính kèm ảnh bằng nút trong ô.</small><div class="post-image-preview" id="postImagePreview"></div></div>
       </div>
       <div class="modal-actions">
         <button class="btn-soft" type="button" onclick="closePostModal()">Đóng</button>
@@ -344,15 +438,30 @@
     </form>
   </div>
 
+  <div class="form-modal" id="adminAnalyticsDetailModal">
+    <div class="form-card admin-analytics-detail-card">
+      <h2 id="adminAnalyticsDetailTitle">Chi tiết thống kê</h2>
+      <div class="admin-analytics-detail-wrap">
+        <div class="admin-analytics-detail-list" id="adminAnalyticsDetailBody">
+          <div class="empty-line">Chưa có dữ liệu.</div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closeAdminAnalyticsDetailModal()">Đóng</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="tourToast"></div>
 
-  <script src="/script/accounts.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-  <script src="/script/image_upload_optimizer.js?v=2026-06-25-admin-chat-upload-fix-v1"></script>
-  <script src="/script/tour_sales.js?v=2026-06-25-admin-chat-upload-fix-v1"></script>
-  <script src="/script/admin_panel.js?v=2026-06-25-admin-chat-upload-fix-v1"></script>
-  <script src="/script/travelwai_contact_panel.js?v=2026-06-25-admin-chat-upload-fix-v1"></script>
-  <script src="/script/travelwai_notification_panel.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
-    <script src="/script/theme_toggle.js?v=2026-06-23-landing-tools-footer-dark-v4"></script>
+  <script src="/script/accounts.js?v=2026-06-28-admin-analytics-popup-text-v27"></script>
+  <script src="/script/management_nav.js?v=2026-06-28-admin-analytics-popup-text-v27"></script>
+  <script src="/script/image_upload_optimizer.js?v=2026-06-28-admin-analytics-popup-text-v27"></script>
+  <script src="/script/tour_sales.js?v=2026-06-28-admin-analytics-popup-text-v27"></script>
+  <script src="/script/admin_panel.js?v=2026-06-28-admin-analytics-popup-text-v27"></script>
+  <script src="/script/travelwai_contact_panel.js?v=2026-06-28-admin-analytics-popup-text-v27"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-06-28-admin-analytics-popup-text-v27"></script>
+    <script src="/script/theme_toggle.js?v=2026-06-28-admin-analytics-popup-text-v27"></script>
 </body>
 </html>
 

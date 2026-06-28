@@ -9,6 +9,7 @@ namespace TravelwAI.Web.Controllers.Api;
 public sealed class TravelController : ApiControllerBase
 {
     private const string ProvinceTravelTagsCollection = "province_travel_tags";
+    private const string ProvinceSearchEventsCollection = "province_search_events";
     private readonly ITravelService _travelService;
     private readonly IDataRepository _repo;
 
@@ -23,6 +24,7 @@ public sealed class TravelController : ApiControllerBase
     {
         var current = await CurrentUserAsync();
         if (!current.ok) return current.error!;
+        await TrackProvinceSearchAsync(provinceName, current.userId, "province-api");
         var province = await _travelService.GetProvinceByNameAsync(provinceName);
         if (province is null)
         {
@@ -41,11 +43,38 @@ public sealed class TravelController : ApiControllerBase
         return Ok(new { success = true, data = province, message = "Da tai thong tin tinh/thanh" });
     }
 
+    [HttpPost("analytics/province-view")]
+    public async Task<IActionResult> TrackProvinceView([FromBody] ProvinceViewTrackRequest request)
+    {
+        var current = await CurrentUserAsync();
+        if (!current.ok) return current.error!;
+        if (request is null) return BadRequest(new { success = false, message = "Thiếu tên tỉnh/thành" });
+
+        var provinceName = request.ProvinceName?.Trim();
+        if (string.IsNullOrWhiteSpace(provinceName))
+        {
+            provinceName = request.Province?.Trim() ?? request.Name?.Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(provinceName))
+        {
+            return BadRequest(new { success = false, message = "Thiếu tên tỉnh/thành" });
+        }
+
+        var source = string.IsNullOrWhiteSpace(request.Source)
+            ? "province-detail"
+            : request.Source!.Trim();
+
+        await TrackProvinceSearchAsync(provinceName, current.userId, source);
+        return Ok(new { success = true, message = "Đã ghi nhận lượt xem tỉnh/thành" });
+    }
+
     [HttpGet("provinces/{provinceId}/with-destinations")]
     public async Task<IActionResult> GetProvinceWithDestinations(string provinceId)
     {
         var current = await CurrentUserAsync();
         if (!current.ok) return current.error!;
+        await TrackProvinceSearchAsync(provinceId, current.userId, "province-detail-api");
         var data = await _travelService.GetProvinceWithDestinationsAsync(provinceId);
         if (data is null) return NotFound(new { success = false, detail = "Khong tim thay tinh/thanh" });
 
@@ -57,6 +86,28 @@ public sealed class TravelController : ApiControllerBase
         }
 
         return Ok(new { success = true, data, message = "Da tai tinh/thanh cung diem den" });
+    }
+
+    private async Task TrackProvinceSearchAsync(string provinceName, string? userId, string source = "province-map")
+    {
+        var name = (provinceName ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(name)) return;
+        try
+        {
+            await _repo.AddAsync(ProvinceSearchEventsCollection, new Dictionary<string, object?>
+            {
+                ["province_name"] = name,
+                ["provinceName"] = name,
+                ["user_id"] = userId ?? string.Empty,
+                ["userId"] = userId ?? string.Empty,
+                ["source"] = source,
+                ["created_at"] = DateTime.UtcNow,
+                ["updated_at"] = DateTime.UtcNow
+            });
+        }
+        catch
+        {
+        }
     }
 
     private async Task<List<string>> GetProvincePlanTagsAsync(string requestedName, Dictionary<string, object?>? province)
@@ -90,4 +141,12 @@ public sealed class TravelController : ApiControllerBase
             ? new List<string>()
             : PlanCatalog.CleanTags(PlanCatalog.ToStringList(match.GetValueOrDefault("tags")));
     }
+}
+
+public sealed class ProvinceViewTrackRequest
+{
+    public string? ProvinceName { get; set; }
+    public string? Province { get; set; }
+    public string? Name { get; set; }
+    public string? Source { get; set; }
 }

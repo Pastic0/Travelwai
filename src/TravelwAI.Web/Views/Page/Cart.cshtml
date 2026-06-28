@@ -1,0 +1,50 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Giỏ hàng - TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-paper-plane.png" type="image/png" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-06-28-admin-analytics-budget-number-v25" />
+</head>
+<body class="tour-admin-page cart-page" data-page="cart">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "cart")
+
+  <main class="tour-admin-shell">
+    <section class="tour-admin-hero">
+      <div>
+        <span class="eyebrow">Thanh toán TravelwAI</span>
+        <h1>Giỏ hàng</h1>
+      </div>
+    </section>
+
+    <section class="management-panel">
+      <div class="panel-header-row sales-list-header">
+        <div><h2>Sản phẩm chờ thanh toán</h2></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Sản phẩm</th><th>Loại</th><th>Số lượng</th><th>Tổng tiền</th><th>Trạng thái</th><th>Thao tác</th></tr>
+          </thead>
+          <tbody id="cartTableBody"><tr><td colspan="6" class="empty-line">Đang tải giỏ hàng...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="tourToast"></div>
+  <script src="/script/accounts.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/cart.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/travelwai_contact_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+  <script src="/script/theme_toggle.js?v=2026-06-28-admin-analytics-budget-number-v25"></script>
+</body>
+</html>

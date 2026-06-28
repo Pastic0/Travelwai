@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -7,18 +8,29 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using TravelwAI.Business.Interfaces;
+using TravelwAI.Data.Interfaces;
 using TravelwAI.Models.Requests;
+using TravelwAI.Web.Services;
 
 namespace TravelwAI.Web.Controllers.Api;
 
 [Route("api")]
 public sealed class ChatController : ApiControllerBase
 {
+    private sealed class AiChatQuotaWindow
+    {
+        public DateTime WindowStartUtc { get; set; } = DateTime.UtcNow;
+        public int Count { get; set; }
+    }
+
+    private const string ProvinceSearchEventsCollection = "province_search_events";
+    private static readonly ConcurrentDictionary<string, AiChatQuotaWindow> AiChatQuota = new(StringComparer.Ordinal);
     private readonly IChatService _chatService;
     private readonly IFriendService _friendService;
     private readonly IFileStorageService _fileStorage;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
+    private readonly IDataRepository _repo;
 
     public ChatController(
         IAuthService authService,
@@ -26,13 +38,15 @@ public sealed class ChatController : ApiControllerBase
         IFriendService friendService,
         IFileStorageService fileStorage,
         IHttpClientFactory httpClientFactory,
-        IConfiguration configuration) : base(authService)
+        IConfiguration configuration,
+        IDataRepository repo) : base(authService)
     {
         _chatService = chatService;
         _friendService = friendService;
         _fileStorage = fileStorage;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
+        _repo = repo;
     }
 
     [HttpPost("ai/chat")]
@@ -43,6 +57,18 @@ public sealed class ChatController : ApiControllerBase
         if (string.IsNullOrWhiteSpace(request.Message))
         {
             return BadRequest(new { success = false, detail = "Bạn chưa nhập nội dung để hỏi AI." });
+        }
+
+        var current = await CurrentUserAsync();
+        var isGuest = !current.ok;
+        if (current.ok)
+        {
+            var quotaError = TryConsumeAiChatQuota(current.userId!, current.authUser);
+            if (quotaError is not null) return quotaError;
+            if (assistantMode == "guide")
+            {
+                await TrackProvinceMentionsFromAiAsync(request.Message, current.userId);
+            }
         }
 
         if (assistantMode != "guide")
@@ -58,9 +84,6 @@ public sealed class ChatController : ApiControllerBase
                 });
             }
         }
-
-        var current = await CurrentUserAsync();
-        var isGuest = !current.ok;
 
         if (isGuest && assistantMode != "guide")
         {
@@ -88,7 +111,7 @@ public sealed class ChatController : ApiControllerBase
         const int aiMaxTokens = 130;
         var systemPrompt = assistantMode == "guide"
             ? "Bạn là Hướng dẫn viên Travelwinne, chuyên tư vấn du lịch, văn hoá và lịch sử Việt Nam. Chỉ trả lời bằng tiếng Việt đơn giản. Không dùng markdown, không gạch đầu dòng, không emoji, không ký hiệu lạ. Thứ tự nguồn bắt buộc: 1) Wikipedia tiếng Việt, 2) dữ liệu ứng dụng TravelwAI, 3) kiến thức chung. Nếu Wikipedia có thông tin phù hợp với câu hỏi thì phải ưu tiên trả lời theo Wikipedia trước, không tự thêm địa danh, số liệu, ngày tháng hoặc chi tiết ngoài nguồn. Nếu Wikipedia không có thông tin phù hợp nhưng dữ liệu ứng dụng có thì dùng dữ liệu ứng dụng. Chỉ khi cả Wikipedia và dữ liệu ứng dụng không có thông tin phù hợp mới được dùng kiến thức chung du lịch phổ biến của Việt Nam, trả lời an toàn, ngắn gọn và không bịa số liệu chính xác. Chỉ nói chưa đủ dữ liệu khi câu hỏi yêu cầu dữ liệu nội bộ, giá tour, tài khoản, đơn hàng hoặc thông tin quá cụ thể không có trong hệ thống. Trả lời tối đa 100 chữ, ưu tiên 3-5 câu ngắn, không bỏ dở câu. Chỉ nêu ngày tháng hoặc thời gian lễ hội khi người dùng hỏi rõ về ngày nào, khi nào, thời gian, diễn ra, tổ chức, âm lịch hoặc dương lịch. Nếu câu hỏi chỉ là khám phá, giải thích, giới thiệu, nguồn gốc, ý nghĩa hoặc điều thú vị thì tuyệt đối không nêu ngày/tháng. Khi bắt buộc nói khoảng ngày, viết dạng 1 đến 15/01 âm lịch hoặc 5 đến 8/06 dương lịch, không viết 1-15/01 và không viết 1 15/01."
-            : "Bạn là Quản lí TravelwAI, trợ lí điều hướng và hướng dẫn sử dụng toàn bộ website TravelwAI. Chỉ trả lời bằng tiếng Việt đơn giản. Không dùng markdown, không gạch đầu dòng, không emoji, không ký hiệu lạ. Hướng dẫn ngắn gọn người dùng dùng các trang Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Tour du lịch, Sales, Admin, Hồ sơ, Thông báo và Phản hồi. Khi người dùng muốn mở trang, nhắn tin, đổi mật khẩu hoặc đăng xuất, hãy xác nhận thao tác thật ngắn và giao diện sẽ tự chuyển trang nếu nhận diện được. Trả lời tối đa 100 chữ, ưu tiên 3-5 câu ngắn, không bỏ dở câu. Khi nói khoảng ngày, viết dạng 1 đến 15/01 âm lịch hoặc 5 đến 8/06 dương lịch, không viết 1-15/01 và không viết 1 15/01.";
+            : "Bạn là Quản lí TravelwAI, trợ lí điều hướng và hướng dẫn sử dụng toàn bộ website TravelwAI. Chỉ trả lời bằng tiếng Việt đơn giản. Không dùng markdown, không gạch đầu dòng, không emoji, không ký hiệu lạ. Hướng dẫn ngắn gọn người dùng dùng các trang Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Tour du lịch, Sales, Admin, Hồ sơ, Thông báo và Phản hồi. Khi người dùng muốn mở trang, chỉ nhận cú pháp tới trang [tên trang] hoặc qua trang [tên trang]. Khi người dùng muốn xem hướng dẫn trang, nhận cú pháp chi tiết trang [tên trang] hoặc chỉ ghi đúng tên trang. Nếu người dùng ghi sai cú pháp mở trang, hãy hướng dẫn ghi đúng cú pháp thật ngắn. Với đổi mật khẩu hoặc đăng xuất, hãy xác nhận thao tác thật ngắn và giao diện sẽ tự chuyển trang nếu nhận diện được. Trả lời tối đa 100 chữ, ưu tiên 3-5 câu ngắn, không bỏ dở câu. Khi nói khoảng ngày, viết dạng 1 đến 15/01 âm lịch hoặc 5 đến 8/06 dương lịch, không viết 1-15/01 và không viết 1 15/01.";
 
         using var http = _httpClientFactory.CreateClient();
 
@@ -221,6 +244,184 @@ public sealed class ChatController : ApiControllerBase
         return Ok(new { success = true, data = new { reply = answer }, message = "AI đã trả lời" });
     }
 
+    private async Task TrackProvinceMentionsFromAiAsync(string? message, string? userId)
+    {
+        var provinceNames = FindProvinceNamesInText(message).Take(5).ToList();
+        if (provinceNames.Count == 0) return;
+
+        foreach (var provinceName in provinceNames)
+        {
+            await TrackProvinceSearchEventAsync(provinceName, userId, "ai-chat");
+        }
+    }
+
+    private async Task TrackProvinceSearchEventAsync(string provinceName, string? userId, string source)
+    {
+        var name = (provinceName ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(name)) return;
+
+        try
+        {
+            await _repo.AddAsync(ProvinceSearchEventsCollection, new Dictionary<string, object?>
+            {
+                ["province_name"] = name,
+                ["provinceName"] = name,
+                ["user_id"] = userId ?? string.Empty,
+                ["userId"] = userId ?? string.Empty,
+                ["source"] = source,
+                ["created_at"] = DateTime.UtcNow,
+                ["updated_at"] = DateTime.UtcNow
+            });
+        }
+        catch
+        {
+        }
+    }
+
+    private static IEnumerable<string> FindProvinceNamesInText(string? text)
+    {
+        var normalized = NormalizeVietnameseForSearch(text ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(normalized)) return Enumerable.Empty<string>();
+
+        normalized = Regex.Replace(normalized, @"[^a-z0-9\s]", " ");
+        normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+
+        var provinceMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var province in PlanCatalog.DefaultProvinceTags())
+        {
+            var name = province.GetValueOrDefault("name")?.ToString()
+                       ?? province.GetValueOrDefault("province_name")?.ToString()
+                       ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(name)) continue;
+
+            foreach (var alias in BuildProvinceAliasesForTracking(name))
+            {
+                var key = NormalizeVietnameseForSearch(alias);
+                key = Regex.Replace(key, @"[^a-z0-9\s]", " ");
+                key = Regex.Replace(key, @"\s+", " ").Trim();
+                if (!string.IsNullOrWhiteSpace(key) && !provinceMap.ContainsKey(key))
+                {
+                    provinceMap[key] = name;
+                }
+            }
+        }
+
+        var manualAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ha long"] = "Quảng Ninh",
+            ["co to"] = "Quảng Ninh",
+            ["yen tu"] = "Quảng Ninh",
+            ["cat ba"] = "Thành phố Hải Phòng",
+            ["do son"] = "Thành phố Hải Phòng",
+            ["ho guom"] = "Thành phố Hà Nội",
+            ["pho co ha noi"] = "Thành phố Hà Nội",
+            ["hoi an"] = "Thành phố Đà Nẵng",
+            ["my khe"] = "Thành phố Đà Nẵng",
+            ["ba na"] = "Thành phố Đà Nẵng",
+            ["nha trang"] = "Khánh Hòa",
+            ["cam ranh"] = "Khánh Hòa",
+            ["da lat"] = "Lâm Đồng",
+            ["binh thuan"] = "Lâm Đồng",
+            ["quy nhon"] = "Gia Lai",
+            ["pleiku"] = "Gia Lai",
+            ["mang den"] = "Quảng Ngãi",
+            ["ly son"] = "Quảng Ngãi",
+            ["sam son"] = "Thanh Hóa",
+            ["puluong"] = "Thanh Hóa",
+            ["pu luong"] = "Thanh Hóa",
+            ["cua lo"] = "Nghệ An",
+            ["phong nha"] = "Quảng Trị",
+            ["lang co"] = "Thành phố Huế",
+            ["phu quoc"] = "An Giang",
+            ["ha tien"] = "An Giang",
+            ["nam du"] = "An Giang",
+            ["nui sam"] = "An Giang",
+            ["can gio"] = "Thành phố Hồ Chí Minh",
+            ["vung tau"] = "Thành phố Hồ Chí Minh",
+            ["cat tien"] = "Đồng Nai",
+            ["ba den"] = "Tây Ninh",
+            ["cho noi"] = "Thành phố Cần Thơ",
+            ["ben ninh kieu"] = "Thành phố Cần Thơ",
+            ["dat mui"] = "Cà Mau",
+            ["tram chim"] = "Đồng Tháp",
+            ["sa dec"] = "Đồng Tháp",
+            ["thac ban gioc"] = "Cao Bằng",
+            ["pac bo"] = "Cao Bằng",
+            ["sa pa"] = "Lào Cai",
+            ["sapa"] = "Lào Cai",
+            ["moc chau"] = "Sơn La",
+            ["ta xua"] = "Sơn La",
+            ["tam coc"] = "Ninh Bình",
+            ["trang an"] = "Ninh Bình",
+            ["hoa lu"] = "Ninh Bình"
+        };
+
+        foreach (var item in manualAliases)
+        {
+            if (!provinceMap.ContainsKey(item.Key)) provinceMap[item.Key] = item.Value;
+        }
+
+        return provinceMap
+            .Where(item => Regex.IsMatch(normalized, $@"(^|\s){Regex.Escape(item.Key)}(\s|$)", RegexOptions.IgnoreCase))
+            .OrderByDescending(item => item.Key.Length)
+            .Select(item => item.Value)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<string> BuildProvinceAliasesForTracking(string name)
+    {
+        yield return name;
+        var normalized = NormalizeVietnameseForSearch(name);
+        if (normalized.StartsWith("thanh pho ", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return name.Replace("Thành phố ", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
+            yield return name.Replace("Thành phố", "TP", StringComparison.OrdinalIgnoreCase).Trim();
+            yield return name.Replace("Thành phố", "TP.", StringComparison.OrdinalIgnoreCase).Trim();
+        }
+        if (normalized.StartsWith("tinh ", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return name.Replace("Tỉnh ", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
+        }
+    }
+
+    private IActionResult? TryConsumeAiChatQuota(string userId, Dictionary<string, object?>? authUser)
+    {
+        var limit = GetAiChatLimitPerFiveMinutes(authUser);
+        if (limit <= 0) return null;
+
+        var now = DateTime.UtcNow;
+        var window = AiChatQuota.GetOrAdd(userId, _ => new AiChatQuotaWindow { WindowStartUtc = now, Count = 0 });
+        lock (window)
+        {
+            if ((now - window.WindowStartUtc).TotalMinutes >= 5)
+            {
+                window.WindowStartUtc = now;
+                window.Count = 0;
+            }
+
+            if (window.Count >= limit)
+            {
+                var role = NormalizeAccountRole(authUser?.GetValueOrDefault("role"));
+                var isFree = string.Equals(role, "Free", StringComparison.OrdinalIgnoreCase);
+                return StatusCode(429, new
+                {
+                    success = false,
+                    code = isFree ? "free_ai_quota_exceeded" : "ai_quota_exceeded",
+                    detail = isFree
+                        ? "Tài khoản Free đã dùng hết 3 câu hỏi trong 5 phút. Vui lòng nâng cấp gói."
+                        : $"Tài khoản {role} chỉ được hỏi chatbot AI {limit} câu trong 5 phút. Vui lòng thử lại sau.",
+                    message = isFree
+                        ? "Tài khoản Free đã dùng hết 3 câu hỏi trong 5 phút."
+                        : $"Tài khoản {role} chỉ được hỏi chatbot AI {limit} câu trong 5 phút."
+                });
+            }
+
+            window.Count++;
+        }
+
+        return null;
+    }
+
     [HttpPost("ai/schedule-plan")]
     public async Task<IActionResult> AskAiSchedulePlan([FromBody] AiSchedulePlanRequest request)
     {
@@ -230,6 +431,11 @@ public sealed class ChatController : ApiControllerBase
         if (string.IsNullOrWhiteSpace(request.Message))
         {
             return BadRequest(new { success = false, detail = "Bạn chưa nhập yêu cầu lập lịch trình cho AI." });
+        }
+
+        if (!CanCreateSchedule(current.authUser))
+        {
+            return StatusCode(403, new { success = false, detail = "Tài khoản Free chưa dùng được lịch trình. Vui lòng nâng cấp VIP hoặc Premium.", message = "Tài khoản Free chưa dùng được lịch trình." });
         }
 
         var quickEditResult = TryBuildQuickScheduleEditPatch(request);
@@ -722,62 +928,94 @@ public sealed class ChatController : ApiControllerBase
         if (string.IsNullOrWhiteSpace(normalized)) return null;
 
         static bool Match(string value, string pattern) => Regex.IsMatch(value, pattern, RegexOptions.IgnoreCase);
+        static string SyntaxReply() => "Dùng cú pháp: tới trang [tên trang], qua trang [tên trang] hoặc chi tiết trang [tên trang]. Ví dụ: tới trang Tour du lịch.";
+
+        var pages = new (string Name, string Url, string[] Aliases, string Detail)[]
+        {
+            ("Đăng nhập", "/login", new[] { "dang nhap", "login" }, "Đăng nhập vào tài khoản TravelwAI."),
+            ("Đăng ký", "/signup", new[] { "dang ky", "tao tai khoan", "register", "signup", "sign up" }, "Tạo tài khoản mới và nhập mã mời nếu có."),
+            ("Quên mật khẩu", "/forgot-password", new[] { "quen mat khau", "lay lai mat khau", "khoi phuc mat khau", "forgot password" }, "Khôi phục mật khẩu bằng email."),
+            ("Đặt lại mật khẩu", "/reset-password", new[] { "dat lai mat khau", "reset password", "reset mat khau" }, "Nhập mã khôi phục và tạo mật khẩu mới."),
+            ("Trang chủ", "/home", new[] { "trang chu", "home" }, "Trang chính sau khi đăng nhập."),
+            ("Giới thiệu", "/landing", new[] { "gioi thieu", "landing", "trang gioi thieu" }, "Xem tổng quan TravelwAI."),
+            ("Bản đồ Việt Nam", "/provinces", new[] { "ban do viet nam", "ban do", "tinh thanh", "34 tinh", "viet nam", "provinces" }, "Xem bản đồ 34 tỉnh thành và thông tin nổi bật."),
+            ("Chi tiết tỉnh", "/detail", new[] { "chi tiet tinh", "chi tiet dia phuong", "detail" }, "Xem mô tả, khu vực, điểm đến và gợi ý tham quan."),
+            ("Lịch trình", "/schedule", new[] { "lich trinh", "lap lich trinh", "tao lich trinh", "schedule" }, "Tạo và quản lý lịch trình du lịch."),
+            ("Kế hoạch", "/plans", new[] { "ke hoach", "lap ke hoach", "tao ke hoach", "plans" }, "Tạo nhóm kế hoạch và mời người đi chung."),
+            ("Nhắn tin", "/messaging", new[] { "nhan tin", "tin nhan", "chat", "messaging" }, "Nhắn tin với bạn bè, nhóm kế hoạch và Admin."),
+            ("Phản hồi", "/contact", new[] { "phan hoi", "lien he", "gop y", "ho tro", "contact" }, "Gửi góp ý, yêu cầu hỗ trợ hoặc nhắn với Admin."),
+            ("Thông báo", "/notifications", new[] { "thong bao", "notification", "notifications" }, "Xem lời mời, tin nhắn, kế hoạch và cập nhật hệ thống."),
+            ("Bài viết", "/posts", new[] { "bai viet", "tin du lich", "kham pha bai", "posts" }, "Xem và quản lý bài viết du lịch."),
+            ("Tour du lịch", "/tours", new[] { "tour du lich", "tour", "dat tour", "xem tour", "tours" }, "Xem tour, đặt tour và theo dõi ưu đãi."),
+            ("Sales", "/tour-sales", new[] { "sales", "trang sales", "ban tour", "don ban tour", "tour sales", "tour-sales" }, "Quản lý tour, đơn bán tour, hoa hồng và doanh thu."),
+            ("Business", "/business", new[] { "business", "business", "trang business" }, "Quản lý tour, đơn bán tour, doanh thu và phí dịch vụ."),
+            ("Admin", "/admin", new[] { "admin", "quan tri", "quan ly he thong", "trang admin" }, "Quản lý tài khoản, quyền, tour, bài viết và dữ liệu hệ thống."),
+            ("Hồ sơ", "/profile", new[] { "ho so", "tai khoan", "thong tin ca nhan", "doi ten", "profile" }, "Xem hồ sơ, đổi ảnh, đổi tên và đổi mật khẩu.")
+        };
+
+        string NormalizeLocal(string value) => NormalizeVietnameseForSearch(value);
+
+        (string Name, string Url, string[] Aliases, string Detail)? FindPage(string value)
+        {
+            var key = NormalizeLocal(value);
+            if (string.IsNullOrWhiteSpace(key)) return null;
+
+            foreach (var page in pages)
+            {
+                if (NormalizeLocal(page.Name) == key || page.Aliases.Any(alias => NormalizeLocal(alias) == key)) return page;
+            }
+
+            foreach (var page in pages)
+            {
+                var pageName = NormalizeLocal(page.Name);
+                if (key.Contains(pageName) || pageName.Contains(key)) return page;
+                if (page.Aliases.Any(alias => key.Contains(NormalizeLocal(alias)) || NormalizeLocal(alias).Contains(key))) return page;
+            }
+
+            return null;
+        }
+
+        string PageListText() => string.Join(", ", pages.Select(page => page.Name));
+        string DetailReply((string Name, string Url, string[] Aliases, string Detail) page) => page.Detail + " Muốn mở trang này, nhắn: tới trang " + page.Name + ".";
 
         if (Match(normalized, @"\b(dang\s*xuat|thoat\s*tai\s*khoan|log\s*out)\b"))
         {
-            return "Mình sẽ đăng xuất tài khoản cho bạn.";
+            return "Đang đăng xuất tài khoản.";
         }
 
         if (Match(normalized, @"\b(doi\s*mat\s*khau|doi\s*password|change\s*password)\b"))
         {
-            return "Mình chuyển bạn đến Hồ sơ để đổi mật khẩu.";
+            return "Đang mở Hồ sơ để đổi mật khẩu.";
         }
 
-        if (Match(normalized, @"(co\s*)?trang\s*nao|danh\s*sach\s*trang|menu|chuc\s*nang|huong\s*dan\s*(web|website)?"))
+        if (Match(normalized, @"(co\s*)?trang\s*nao|danh\s*sach\s*trang|menu|cac\s*trang|nhung\s*trang|xem\s*trang"))
         {
-            return "TravelwAI có các trang: Đăng nhập, Đăng ký, Trang chủ, Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Bài viết, Tour du lịch, Hồ sơ, Thông báo, Tài khoản Sales và Admin. Bạn nhắn tên trang, mình sẽ mở ngay.";
+            return "Các trang TravelwAI: " + PageListText() + ". " + SyntaxReply();
         }
 
-        if (Match(normalized, @"\b(dang\s*nhap|login)\b"))
+        var navigateMatch = Regex.Match(normalized, @"^(?:toi|toi\s*toi|qua|di\s*toi|chuyen\s*toi)\s+trang\s+(.+)$", RegexOptions.IgnoreCase);
+        if (navigateMatch.Success)
         {
-            return "Mình chuyển bạn qua trang Đăng nhập.";
+            var page = FindPage(navigateMatch.Groups[1].Value);
+            return page.HasValue ? "Đang mở trang " + page.Value.Name + "." : "Chưa tìm thấy trang đó. " + SyntaxReply();
         }
 
-        if (Match(normalized, @"\b(dang\s*ky|tao\s*tai\s*khoan|register|sign\s*up|signup)\b"))
+        var detailMatch = Regex.Match(normalized, @"^chi\s*tiet\s+trang\s+(.+)$", RegexOptions.IgnoreCase);
+        if (detailMatch.Success)
         {
-            return "Mình chuyển bạn qua trang Đăng ký.";
+            var page = FindPage(detailMatch.Groups[1].Value);
+            return page.HasValue ? DetailReply(page.Value) : "Chưa tìm thấy trang đó. " + SyntaxReply();
         }
 
-        if (Match(normalized, @"\b(quen\s*mat\s*khau|khoi\s*phuc\s*mat\s*khau|lay\s*lai\s*mat\s*khau|forgot\s*password|reset\s*password)\b"))
+        var directPage = FindPage(normalized);
+        if (directPage.HasValue && (NormalizeLocal(directPage.Value.Name) == normalized || directPage.Value.Aliases.Any(alias => NormalizeLocal(alias) == normalized)))
         {
-            return "Mình chuyển bạn qua trang Quên mật khẩu.";
+            return DetailReply(directPage.Value);
         }
 
-        var rules = new (string Reply, string Pattern)[]
+        if (normalized.Contains("trang") || pages.Any(page => normalized.Contains(NormalizeLocal(page.Name)) || page.Aliases.Any(alias => normalized.Contains(NormalizeLocal(alias)))))
         {
-            ("Mình chuyển bạn đến trang Lịch trình.", @"lap\s*lich\s*trinh|tao\s*lich\s*trinh|lich\s*trinh"),
-            ("Mình chuyển bạn đến trang Kế hoạch.", @"lap\s*ke\s*hoach|tao\s*ke\s*hoach|ke\s*hoach"),
-            ("Mình chuyển bạn đến Bản đồ Việt Nam.", @"ban\s*do|tinh\s*thanh|34\s*tinh|viet\s*nam"),
-            ("Mình chuyển bạn đến trang Bài viết.", @"bai\s*viet|tin\s*du\s*lich|kham\s*pha\s*bai"),
-            ("Mình chuyển bạn đến trang Tour du lịch.", @"tour\s*du\s*lich|dat\s*tour|xem\s*tour"),
-            ("Mình chuyển bạn đến trang Tài khoản.", @"tour\s*sales|ban\s*tour|don\s*ban\s*tour|sales"),
-            ("Mình chuyển bạn đến trang Admin.", @"admin|quan\s*tri|quan\s*ly\s*he\s*thong"),
-            ("Mình đang mở trang Nhắn tin.", @"tin\s*nhan|nhan\s*tin|messaging|chat"),
-            ("Mình chuyển bạn đến trang Hồ sơ.", @"ho\s*so|thong\s*tin\s*ca\s*nhan|tai\s*khoan|doi\s*ten"),
-            ("Mình chuyển bạn đến trang Thông báo.", @"thong\s*bao|notification"),
-            ("Bạn đang ở chatbot Admin rồi. Cứ nhắn nội dung cần hỗ trợ tại đây nhé.", @"phan\s*hoi|lien\s*he|gop\s*y|ho\s*tro"),
-            ("Mình chuyển bạn về trang chủ.", @"trang\s*chu|home"),
-            ("Mình chuyển bạn về trang giới thiệu TravelwAI.", @"landing|gioi\s*thieu|trang\s*gioi\s*thieu")
-        };
-
-        foreach (var rule in rules)
-        {
-            if (Match(normalized, rule.Pattern)) return rule.Reply;
-        }
-
-        if (Match(normalized, @"^(ok|oke|okay|duoc|dong\s*y|xac\s*nhan|chap\s*nhan|uh|u|co|yes|y|di|mo\s*di|chuyen\s*di|lam\s*di|tiep\s*tuc)$"))
-        {
-            return "Bạn nhắn tên trang hoặc chức năng muốn mở, ví dụ: đăng nhập, bản đồ, lịch trình, tour du lịch, nhắn tin, đổi mật khẩu.";
+            return SyntaxReply();
         }
 
         return null;
@@ -1240,6 +1478,31 @@ public sealed class ChatController : ApiControllerBase
             : Ok(new { success = true, conversation_id = id, is_group = false, message = "Đã tạo cuộc trò chuyện" });
     }
 
+    [HttpPost("support/admin-conversation")]
+    public async Task<IActionResult> CreateSupportAdminConversation()
+    {
+        var current = await CurrentUserAsync();
+        if (!current.ok) return current.error!;
+
+        var conversationId = await _chatService.CreateOrGetSupportAdminConversationAsync(current.userId!);
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return NotFound(new { success = false, detail = "Chưa tìm thấy tài khoản Admin chính để nhận hỗ trợ." });
+        }
+
+        return Ok(new { success = true, conversation_id = conversationId, message = "Đã mở hội thoại Admin chính." });
+    }
+
+    [HttpDelete("support/admin-conversation")]
+    public async Task<IActionResult> DeleteSupportAdminConversation()
+    {
+        var current = await CurrentUserAsync();
+        if (!current.ok) return current.error!;
+
+        var deleted = await _chatService.DeleteSupportAdminConversationsForUserAsync(current.userId!);
+        return Ok(new { success = true, deleted, message = "Đã xoá hội thoại hỗ trợ Admin chính." });
+    }
+
     [HttpGet("conversations/{conversationId}/messages")]
     public async Task<IActionResult> GetMessages(string conversationId, [FromQuery] int limit = 50, [FromQuery] int offset = 0)
     {
@@ -1384,18 +1647,10 @@ public sealed class ChatController : ApiControllerBase
 
         if (message.Length > 1200) message = message[..1200];
 
-        var admins = await _chatService.GetAdminUsersAsync(current.userId!);
-        var admin = admins.FirstOrDefault();
-        var adminId = admin?.GetValueOrDefault("id")?.ToString();
-        if (string.IsNullOrWhiteSpace(adminId))
-        {
-            return NotFound(new { success = false, detail = "Chưa tìm thấy tài khoản Admin để nhận hỗ trợ." });
-        }
-
-        var conversationId = await _chatService.CreateConversationAsync(current.userId!, adminId);
+        var conversationId = await _chatService.CreateOrGetSupportAdminConversationAsync(current.userId!);
         if (string.IsNullOrWhiteSpace(conversationId))
         {
-            return StatusCode(500, new { success = false, detail = "Không thể tạo cuộc trò chuyện hỗ trợ." });
+            return NotFound(new { success = false, detail = "Chưa tìm thấy tài khoản Admin chính để nhận hỗ trợ." });
         }
 
         var senderName = current.authUser?.GetValueOrDefault("username")?.ToString()
@@ -1403,7 +1658,7 @@ public sealed class ChatController : ApiControllerBase
             ?? current.authUser?.GetValueOrDefault("email")?.ToString()
             ?? "Người dùng";
 
-        var supportMessage = $"[Hỗ trợ Admin] {senderName}: {message}";
+        var supportMessage = $"[Hỗ trợ Admin chính] {senderName}: {message}";
         var messageId = await _chatService.SendMessageAsync(conversationId, current.userId!, supportMessage);
         if (messageId is null)
         {
@@ -1414,7 +1669,6 @@ public sealed class ChatController : ApiControllerBase
         {
             success = true,
             conversation_id = conversationId,
-            admin = admin,
             message = "Đã gửi tin nhắn cho Admin."
         });
     }
