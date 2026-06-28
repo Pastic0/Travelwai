@@ -910,14 +910,8 @@
         return;
       }
       if (activeMiniChatKey === "guide") {
-        const needsWikipedia = miniGuideQuestionNeedsWikipedia(text);
-        if (!needsWikipedia) {
-          pushMiniChat("assistant", buildMiniGuideConversationFallbackReply(text));
-          return;
-        }
-        return fetchMiniGuideWikipediaReply(text).then(function (wikiReply) {
-          pushMiniChat("assistant", wikiReply || buildMiniGuideNoWikipediaReply());
-        });
+        pushMiniChat("assistant", "Hướng dẫn viên đang không kết nối được máy chủ chung. Bạn thử lại sau nhé.");
+        return;
       }
       if (activeMiniChatKey === "travelwai") {
         pushMiniChat("assistant", getMiniChatManagerFallbackReply());

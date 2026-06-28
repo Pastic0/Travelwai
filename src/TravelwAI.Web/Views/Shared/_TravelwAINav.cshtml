@@ -44,7 +44,10 @@
       <img src="logo/notification-icon-white.webp" alt="Thông báo" />
       <span class="notification-badge" id="notificationBadge" style="display:none">0</span>
     </a>
-    <a id="profileIcon" href="/profile" class="icon profile">
+    <a href="/cart" class="icon cart @(activeNav == "cart" ? "current active" : null)" aria-current="@(activeNav == "cart" ? "page" : null)" aria-label="Giỏ hàng" title="Giỏ hàng">
+      <img src="logo/cart-icon-white.svg" alt="Giỏ hàng" />
+    </a>
+    <a id="profileIcon" href="/profile" class="icon profile @(activeNav == "profile" ? "current active" : null)" aria-current="@(activeNav == "profile" ? "page" : null)" aria-label="Hồ sơ" title="Hồ sơ">
       <img src="logo/profile-icon-white.webp" alt="Hồ sơ" />
     </a>
   </div>

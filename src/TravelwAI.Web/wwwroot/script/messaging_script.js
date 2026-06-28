@@ -18,7 +18,7 @@ let aiMessageSending = false;
 let outgoingFriendRequestKeys = new Set();
 let pendingAiContextByAssistant = {};
 const API_BASE_URL = "/api";
-const CLIENT_CACHE_VERSION = "2026-06-28-guide-chatbot-real-guide-v36";
+const CLIENT_CACHE_VERSION = "2026-06-28-guide-shared-logic-v37";
 const USERS_CACHE_TTL_MS = 5 * 60 * 1000;
 const FRIEND_CACHE_TTL_MS = 30 * 1000;
 const CONVERSATION_CACHE_TTL_MS = 15 * 1000;
@@ -889,7 +889,6 @@ function buildGuideLocalFallbackReply(text) {
 function buildAiContextForRequest(aiConfig, text) {
   const pendingContext = consumePendingAiContext(aiConfig.key);
   if (pendingContext) return pendingContext;
-  if (aiConfig.key === "guide") return buildGuideContextForMessage(text);
   return "";
 }
 
@@ -2661,11 +2660,9 @@ async function sendAiMessage(options = {}) {
     if (aiKey === "travelwai") {
       appendLocalAiAssistantReply(getTravelwaiManagerFallbackReply(), "travelwai");
     } else if (aiKey === "guide") {
-      const needsWikipedia = guideQuestionNeedsWikipedia(typedContent);
-      const wikiReply = needsWikipedia ? await fetchGuideWikipediaReply(typedContent) : "";
-      const guideFallback = needsWikipedia ? (wikiReply || buildGuideNoWikipediaReply()) : buildGuideConversationFallbackReply(typedContent);
+      const guideFallback = "Hướng dẫn viên đang không kết nối được máy chủ chung. Bạn thử lại sau nhé.";
       const aiMessage = {
-        id: `ai-fallback-${Date.now()}`,
+        id: `ai-error-${Date.now()}`,
         sender_id: aiConfig.user.id,
         sender_info: aiConfig.user,
         content: guideFallback,

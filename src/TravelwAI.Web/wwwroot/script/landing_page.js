@@ -304,7 +304,7 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     }
 
-    fetch("/vietnam.svg?v=2026-06-28-guide-chatbot-real-guide-v36")
+    fetch("/vietnam.svg?v=2026-06-28-guide-shared-logic-v37")
       .then(function (response) {
         if (!response.ok) throw new Error("Không tải được bản đồ Việt Nam");
         return response.text();

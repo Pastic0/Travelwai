@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Giỏ hàng">
+  <path d="M18 19h37l-4.2 20.6a6 6 0 0 1-5.9 4.9H25.2a6 6 0 0 1-5.9-4.8L14.8 15H7" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="27" cy="53" r="4.5" fill="#fff"/>
+  <circle cx="46" cy="53" r="4.5" fill="#fff"/>
+  <path d="M23 28h27" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+</svg>
