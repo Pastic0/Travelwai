@@ -410,7 +410,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 document.addEventListener("DOMContentLoaded", async function () {
   try {
-    const response = await fetch("vietnam.svg?v=2026-06-28-chatbot-local-manager-v32");
+    const response = await fetch("vietnam.svg?v=2026-06-28-guide-chatbot-real-guide-v36");
     const svgContent = await response.text();
 
     const mapContainer = document.querySelector(".map-container");

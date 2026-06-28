@@ -18,7 +18,7 @@ let aiMessageSending = false;
 let outgoingFriendRequestKeys = new Set();
 let pendingAiContextByAssistant = {};
 const API_BASE_URL = "/api";
-const CLIENT_CACHE_VERSION = "2026-06-28-chatbot-local-manager-v32";
+const CLIENT_CACHE_VERSION = "2026-06-28-guide-chatbot-real-guide-v36";
 const USERS_CACHE_TTL_MS = 5 * 60 * 1000;
 const FRIEND_CACHE_TTL_MS = 30 * 1000;
 const CONVERSATION_CACHE_TTL_MS = 15 * 1000;
@@ -605,6 +605,40 @@ function guideQuestionRequestsDate(text) {
   ].some((keyword) => normalized.includes(keyword));
 }
 
+function guideQuestionNeedsWikipedia(text) {
+  const normalized = normalizeForSearch(text || "");
+  if (!normalized) return false;
+  if (findGuideProvinceNamesFromText(text).length) return true;
+  return [
+    "dia danh", "di tich", "danh lam", "tinh thanh", "thanh pho", "le hoi", "ngay le",
+    "lich su", "van hoa", "truyen thuyet", "nguon goc", "y nghia", "nhan vat", "dan toc", "di san",
+    "bao tang", "den tho", "ngoi chua", "thap", "hoang thanh", "co do", "pho co", "lang nghe",
+    "o dau", "la gi", "khi nao", "ngay nao", "dien ra", "to chuc", "ke chuyen", "gioi thieu", "thuyet minh",
+    "hoi lim", "gio to", "tet", "quoc khanh", "trung thu", "thang long", "ha long", "nha trang", "phu quoc", "da lat", "hoi an", "hue", "sa pa", "sapa", "tam coc", "trang an"
+  ].some((keyword) => normalized.includes(keyword));
+}
+
+function buildGuideNoWikipediaReply() {
+  return "Mình chưa tìm thấy thông tin phù hợp trên Wikipedia tiếng Việt. Bạn hãy hỏi lại bằng tên địa danh, tỉnh thành, lễ hội hoặc sự kiện cụ thể hơn.";
+}
+
+function buildGuideConversationFallbackReply(text) {
+  const normalized = normalizeForSearch(text || "");
+  if (/\b(xin chao|chao|hi|hello|alo|hey)\b/i.test(normalized)) {
+    return "Chào bạn, mình là Hướng dẫn viên Travelwinne. Bạn muốn mình gợi ý lịch trình, tư vấn điểm đến hay kể về một địa danh cụ thể?";
+  }
+  if (normalized.includes("cam on") || normalized.includes("thanks")) {
+    return "Không có gì. Bạn cần mình gợi ý thêm điểm đến, lịch trình hay kinh nghiệm đi lại thì cứ nhắn tiếp nhé.";
+  }
+  if (normalized.includes("ban la ai") || normalized.includes("lam duoc gi") || normalized.includes("giup duoc gi")) {
+    return "Mình là Hướng dẫn viên Travelwinne. Mình có thể trò chuyện, gợi ý lịch trình và tra Wikipedia khi bạn hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ.";
+  }
+  if (normalized.includes("toi muon di du lich") || normalized.includes("tu van") || normalized.includes("goi y")) {
+    return "Bạn muốn đi kiểu nào: biển, núi, nghỉ dưỡng, khám phá văn hoá hay đi cùng nhóm bạn? Cho mình thêm thời gian đi, số người và ngân sách để gợi ý sát hơn.";
+  }
+  return "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Wikipedia để trả lời chính xác.";
+}
+
 function stripGuideDateText(text) {
   if (!text) return "";
   return String(text)
@@ -658,6 +692,113 @@ function findGuideProvinceNamesFromText(text) {
   return Array.from(new Set(matches)).slice(0, 3);
 }
 
+function getGuideKnownLandmarkReply(text) {
+  const normalized = normalizeForSearch(text || "");
+  if (!normalized) return "";
+
+  const knownLandmarks = [
+    {
+      keys: ["hoang thanh thang long", "thang long", "hoang thanh"],
+      reply: "Hoàng thành Thăng Long gắn với trung tâm quyền lực của kinh đô Thăng Long xưa. Đây là nơi lưu dấu nhiều lớp lịch sử của Hà Nội, từ dấu tích cung điện, nền móng kiến trúc đến hiện vật khảo cổ. Câu chuyện của nơi này nên kể theo hướng một kinh thành lâu đời, nơi các triều đại để lại dấu ấn văn hoá và lịch sử giữa lòng Thủ đô."
+    },
+    {
+      keys: ["van mieu quoc tu giam", "quoc tu giam", "van mieu"],
+      reply: "Văn Miếu - Quốc Tử Giám gắn với truyền thống hiếu học của Thăng Long - Hà Nội. Nơi này thường được nhắc đến như biểu tượng của giáo dục, khoa bảng và tinh thần trọng chữ nghĩa. Khi kể về Văn Miếu, có thể nhấn vào câu chuyện tôn vinh người học, người thầy và các giá trị văn hoá lâu đời."
+    },
+    {
+      keys: ["co loa", "thanh co loa"],
+      reply: "Cổ Loa gắn với câu chuyện kinh đô xưa và truyền thuyết An Dương Vương. Nơi này nổi bật bởi dấu tích thành cổ, không gian lịch sử và các lớp chuyện dân gian quanh nỏ thần, Mỵ Châu - Trọng Thủy. Khi kể về Cổ Loa, có thể nhấn vào sự giao thoa giữa lịch sử và truyền thuyết."
+    },
+    {
+      keys: ["ho guom", "ho hoan kiem", "hoan kiem"],
+      reply: "Hồ Gươm là không gian văn hoá tiêu biểu của Hà Nội, gắn với truyền thuyết trả gươm và hình ảnh Tháp Rùa. Câu chuyện nơi đây thường được kể như biểu tượng của ký ức đô thị, lịch sử và nhịp sống thanh bình giữa trung tâm Thủ đô."
+    }
+  ];
+
+  const match = knownLandmarks.find((item) => item.keys.some((key) => normalized.includes(key)));
+  return match ? match.reply : "";
+}
+
+
+function getGuideWikipediaSearchQuery(text) {
+  const raw = String(text || "").trim();
+  const normalized = normalizeForSearch(raw);
+  if (!normalized) return "";
+
+  const knownQueries = [
+    { keys: ["hoang thanh thang long", "thang long", "hoang thanh"], title: "Hoàng thành Thăng Long" },
+    { keys: ["van mieu quoc tu giam", "quoc tu giam", "van mieu"], title: "Văn Miếu - Quốc Tử Giám" },
+    { keys: ["co loa", "thanh co loa"], title: "Cổ Loa" },
+    { keys: ["ho guom", "ho hoan kiem", "hoan kiem"], title: "Hồ Hoàn Kiếm" }
+  ];
+  const known = knownQueries.find((item) => item.keys.some((key) => normalized.includes(key)));
+  if (known) return known.title;
+
+  return raw
+    .replace(/^(hãy|hay|cho\s+tôi|cho\s+toi|giúp\s+tôi|giup\s+toi|kể\s+chuyện|ke\s+chuyen|giới\s+thiệu|gioi\s+thieu|thuyết\s+minh|thuyet\s+minh|tìm\s+hiểu|tim\s+hieu|nói\s+về|noi\s+ve|kể\s+về|ke\s+ve)\s+/i, "")
+    .replace(/\b(ở\s+đâu|o\s+dau|là\s+gì|la\s+gi|có\s+gì|co\s+gi|như\s+thế\s+nào|nhu\s+the\s+nao)\b/gi, " ")
+    .replace(/[?!.:,;]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 100);
+}
+
+function isGuideWikipediaResultRelevant(query, title, extract) {
+  const q = normalizeForSearch(query);
+  const t = normalizeForSearch(title);
+  const e = normalizeForSearch(extract).slice(0, 1200);
+  if (!q || !t || !e) return false;
+  if (t.includes(q) || q.includes(t)) return true;
+
+  const stopWords = new Set(["ke", "chuyen", "gioi", "thieu", "thuyet", "minh", "tim", "hieu", "noi", "ve", "cho", "toi", "hay", "la", "gi", "co", "o", "dau", "nhu", "the", "nao"]);
+  const tokens = q.split(/\s+/).filter((token) => token.length >= 3 && !stopWords.has(token));
+  if (!tokens.length) return false;
+  const hits = tokens.filter((token) => t.includes(token) || e.includes(token)).length;
+  return hits >= Math.min(2, tokens.length);
+}
+
+function cleanGuideWikipediaExtract(value) {
+  return String(value || "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function trimGuideWikipediaReply(value) {
+  const text = cleanGuideWikipediaExtract(value);
+  if (!text) return "";
+  const sentences = text.match(/[^.!?。！？]+[.!?。！？]+|[^.!?。！？]+$/g) || [text];
+  const picked = [];
+  let length = 0;
+  for (const sentence of sentences) {
+    const part = sentence.trim();
+    if (!part) continue;
+    if (picked.length >= 5 || length + part.length > 850) break;
+    picked.push(part);
+    length += part.length;
+  }
+  return picked.join(" ").trim() || text.slice(0, 850).trim();
+}
+
+async function fetchGuideWikipediaReply(text) {
+  const query = getGuideWikipediaSearchQuery(text);
+  if (!query) return "";
+
+  const url = "https://vi.wikipedia.org/w/api.php?action=query&generator=search&gsrlimit=3&prop=extracts|info&exintro=1&explaintext=1&inprop=url&format=json&origin=*&gsrsearch=" + encodeURIComponent(query);
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) return "";
+    const data = await response.json().catch(() => null);
+    const pages = Object.values(data?.query?.pages || {})
+      .sort((a, b) => Number(a?.index || 99) - Number(b?.index || 99));
+    const page = pages.find((item) => isGuideWikipediaResultRelevant(query, item?.title || "", item?.extract || ""));
+    if (!page) return "";
+    return trimGuideWikipediaReply(page.extract || "");
+  } catch (_) {
+    return "";
+  }
+}
+
 function findGuideFestivalContextFromText(text, provinceNames, includeDates = true) {
   if (typeof window.getFestivalCalendarEvents34 !== "function") return "";
   const normalized = normalizeForSearch(text);
@@ -689,7 +830,9 @@ function findGuideFestivalContextFromText(text, provinceNames, includeDates = tr
 }
 
 function buildGuideContextForMessage(text) {
+  if (guideQuestionNeedsWikipedia(text)) return "";
   const includeDates = guideQuestionRequestsDate(text);
+  const knownLandmarkReply = getGuideKnownLandmarkReply(text);
   const provinceNames = findGuideProvinceNamesFromText(text);
   const provinceContexts = provinceNames
     .map((provinceName) => typeof window.getLocalProvinceInfo === "function" ? formatProvinceGuideContext(window.getLocalProvinceInfo(provinceName), includeDates) : "")
@@ -698,10 +841,49 @@ function buildGuideContextForMessage(text) {
   const festivalContext = findGuideFestivalContextFromText(text, provinceNames, includeDates);
   const parts = [];
   if (!includeDates) parts.push("Câu hỏi không hỏi thời gian, không nêu ngày/tháng trong câu trả lời.");
+  if (knownLandmarkReply) parts.push(`Thông tin địa danh khớp câu hỏi: ${knownLandmarkReply}`);
   if (provinceContexts.length) parts.push(provinceContexts.join("\n\n"));
   if (festivalContext) parts.push(`Lễ hội khớp với câu hỏi: ${festivalContext}`);
 
   return clampAiContextText(parts.join("\n\n"));
+}
+
+
+function buildGuideLocalFallbackReply(text) {
+  const knownLandmarkReply = getGuideKnownLandmarkReply(text);
+  if (knownLandmarkReply) return knownLandmarkReply;
+
+  const provinceNames = findGuideProvinceNamesFromText(text);
+  const includeDates = guideQuestionRequestsDate(text);
+  const lines = [];
+
+  provinceNames.forEach((provinceName) => {
+    const info = typeof window.getLocalProvinceInfo === "function" ? window.getLocalProvinceInfo(provinceName) : null;
+    const province = Array.isArray(window.VIETNAM_34_PROVINCES)
+      ? window.VIETNAM_34_PROVINCES.find((item) => item.name === provinceName)
+      : null;
+    const name = info?.province_name || info?.name || province?.name || provinceName;
+    const description = String(info?.description || "").trim();
+    const famousFor = Array.isArray(province?.famous_for) && province.famous_for.length
+      ? province.famous_for.slice(0, 3).join(", ")
+      : "";
+    const culture = typeof window.getProvinceCultureInfo34 === "function" ? window.getProvinceCultureInfo34(name) : null;
+    const festivalText = includeDates ? String(culture?.le_hoi_theo_thang || "").trim() : "";
+    const cultureText = String(culture?.cau_chuyen_di_tich || culture?.nhan_vat_lich_su || culture?.le_hoi_cac_dan_toc || "").trim();
+
+    const parts = [];
+    if (description) parts.push(description);
+    if (famousFor) parts.push(`Nổi bật về ${famousFor}.`);
+    if (cultureText) parts.push(cultureText.split(".").slice(0, 2).join(".").trim() + ".");
+    if (festivalText) parts.push(`Lễ hội: ${festivalText}`);
+    if (parts.length) lines.push(`${name}: ${parts.join(" ")}`);
+  });
+
+  if (lines.length) {
+    return lines.join("\n\n") + "\n\nBạn có thể hỏi tiếp về lễ hội, lịch sử, địa danh hoặc kinh nghiệm đi lại của tỉnh này.";
+  }
+
+  return "Mình chưa lấy được phản hồi AI lúc này. Bạn có thể hỏi ngắn hơn theo tên tỉnh, địa danh hoặc lễ hội, ví dụ: Đà Nẵng có gì nổi bật, Huế có lễ hội gì, Phú Quốc nên đi đâu.";
 }
 
 function buildAiContextForRequest(aiConfig, text) {
@@ -2441,7 +2623,7 @@ async function sendAiMessage(options = {}) {
     }
 
     const replyText = String(result.data?.reply || "").trim();
-    if (!replyText || /openrouter|kh[oô]ng\s*tr[aả]\s*v[eề]\s*n[oộ]i\s*dung|kh[oô]ng\s*c[oó]\s*ph[aả]n\s*h[oồ]i/i.test(replyText)) {
+    if (!replyText || /openrouter|kh[oô]ng\s*tr[aả]\s*v[eề]\s*n[oộ]i\s*dung|kh[oô]ng\s*c[oó]\s*ph[aả]n\s*h[oồ]i|qu[aá]\s*t[aả]i|gi[oớ]i\s*h[aạ]n\s*l[uư][oợ]t\s*g[oọ]i|đ[oổ]i\s*model/i.test(replyText)) {
       throw new Error("AI không có phản hồi rõ ràng.");
     }
 
@@ -2478,6 +2660,28 @@ async function sendAiMessage(options = {}) {
     }
     if (aiKey === "travelwai") {
       appendLocalAiAssistantReply(getTravelwaiManagerFallbackReply(), "travelwai");
+    } else if (aiKey === "guide") {
+      const needsWikipedia = guideQuestionNeedsWikipedia(typedContent);
+      const wikiReply = needsWikipedia ? await fetchGuideWikipediaReply(typedContent) : "";
+      const guideFallback = needsWikipedia ? (wikiReply || buildGuideNoWikipediaReply()) : buildGuideConversationFallbackReply(typedContent);
+      const aiMessage = {
+        id: `ai-fallback-${Date.now()}`,
+        sender_id: aiConfig.user.id,
+        sender_info: aiConfig.user,
+        content: guideFallback,
+        time_sent: new Date().toISOString(),
+      };
+      const latestMessages = loadStoredAiMessages(aiKey);
+      const messagesAfterReply = [...latestMessages, aiMessage];
+      saveStoredAiMessages(messagesAfterReply, aiKey);
+      if (currentConversation?.id === activeConversationIdAtSend) {
+        currentMessages = messagesAfterReply;
+        appendMessage(aiMessage);
+      } else if (options.background) {
+        showMessagingToast(`${aiConfig.displayName} đã trả lời.`, "success");
+      }
+      renderConversations(activeConversationSearchQuery);
+      updateConversationSelection();
     } else if (options.background) {
       showMessagingToast(friendlyMessage, "error");
     } else {
