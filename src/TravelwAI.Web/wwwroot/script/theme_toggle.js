@@ -654,11 +654,11 @@
   }
 
   function buildMiniGuideNoWikipediaReply() {
-    return getMiniGuideSharedLogic()?.buildNoWikipediaReply() || "Mình chưa tìm thấy nguồn khớp đủ tin cậy trên Google/Wikipedia tiếng Việt. Bạn hãy hỏi lại bằng tên địa danh, tỉnh thành, lễ hội hoặc sự kiện cụ thể hơn.";
+    return getMiniGuideSharedLogic()?.buildNoWikipediaReply() || "Mình chưa tìm được nguồn đủ khớp để nói chắc về câu hỏi này. Bạn gửi lại đúng tên địa danh, lễ hội hoặc kèm thêm tỉnh/thành nhé, mình sẽ tra sát hơn.";
   }
 
   function buildMiniGuideConversationFallbackReply(text) {
-    return getMiniGuideSharedLogic()?.buildConversationFallbackReply(text) || "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Google/Wikipedia để trả lời chính xác.";
+    return getMiniGuideSharedLogic()?.buildConversationFallbackReply(text) || "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Wikipedia để trả lời chính xác.";
   }
 
   function getMiniGuideWikipediaSearchQuery(text) {
@@ -694,7 +694,7 @@
   }
 
   function buildMiniGuideLocalFallbackReply(text) {
-    return getMiniGuideSharedLogic()?.buildLocalFallbackReply(text) || "Mình chưa lấy được nguồn đủ tin cậy lúc này. Bạn hỏi lại bằng tên cụ thể hơn hoặc thử lại sau.";
+    return getMiniGuideSharedLogic()?.buildLocalFallbackReply(text) || "Mình chưa lấy được phản hồi AI lúc này. Bạn có thể hỏi ngắn hơn theo tên tỉnh, địa danh hoặc lễ hội, ví dụ: Đà Nẵng có gì nổi bật, Huế có lễ hội gì, Phú Quốc nên đi đâu.";
   }
 
   function pushMiniChat(role, content) {
@@ -769,7 +769,10 @@
         return;
       }
       if (activeMiniChatKey === "guide") {
-        pushMiniChat("assistant", buildMiniGuideLocalFallbackReply(text) || buildMiniGuideConversationFallbackReply(text));
+        const guideFallback = miniGuideQuestionNeedsWikipedia(text)
+          ? buildMiniGuideNoWikipediaReply()
+          : (buildMiniGuideLocalFallbackReply(text) || buildMiniGuideConversationFallbackReply(text));
+        pushMiniChat("assistant", guideFallback);
         return;
       }
       if (activeMiniChatKey === "travelwai") {

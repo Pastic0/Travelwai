@@ -18,7 +18,7 @@ let aiMessageSending = false;
 let outgoingFriendRequestKeys = new Set();
 let pendingAiContextByAssistant = {};
 const API_BASE_URL = "/api";
-const CLIENT_CACHE_VERSION = "2026-06-29-guide-google-wiki-v40";
+const CLIENT_CACHE_VERSION = "2026-06-29-wiki-strict-v40";
 const USERS_CACHE_TTL_MS = 5 * 60 * 1000;
 const FRIEND_CACHE_TTL_MS = 30 * 1000;
 const CONVERSATION_CACHE_TTL_MS = 15 * 1000;
@@ -608,11 +608,11 @@ function guideQuestionNeedsWikipedia(text) {
 }
 
 function buildGuideNoWikipediaReply() {
-  return getGuideSharedLogic()?.buildNoWikipediaReply() || "Mình chưa tìm thấy nguồn khớp đủ tin cậy trên Google/Wikipedia tiếng Việt. Bạn hãy hỏi lại bằng tên địa danh, tỉnh thành, lễ hội hoặc sự kiện cụ thể hơn.";
+  return getGuideSharedLogic()?.buildNoWikipediaReply() || "Mình chưa tìm được nguồn đủ khớp để nói chắc về câu hỏi này. Bạn gửi lại đúng tên địa danh, lễ hội hoặc kèm thêm tỉnh/thành nhé, mình sẽ tra sát hơn.";
 }
 
 function buildGuideConversationFallbackReply(text) {
-  return getGuideSharedLogic()?.buildConversationFallbackReply(text) || "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Google/Wikipedia để trả lời chính xác.";
+  return getGuideSharedLogic()?.buildConversationFallbackReply(text) || "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Wikipedia để trả lời chính xác.";
 }
 
 function stripGuideDateText(text) {
@@ -661,7 +661,7 @@ function buildGuideContextForMessage(text) {
 }
 
 function buildGuideLocalFallbackReply(text) {
-  return getGuideSharedLogic()?.buildLocalFallbackReply(text) || "Mình chưa lấy được nguồn đủ tin cậy lúc này. Bạn hỏi lại bằng tên cụ thể hơn hoặc thử lại sau.";
+  return getGuideSharedLogic()?.buildLocalFallbackReply(text) || "Mình chưa lấy được phản hồi AI lúc này. Bạn có thể hỏi ngắn hơn theo tên tỉnh, địa danh hoặc lễ hội, ví dụ: Đà Nẵng có gì nổi bật, Huế có lễ hội gì, Phú Quốc nên đi đâu.";
 }
 
 function buildAiContextForRequest(aiConfig, text) {
@@ -2443,7 +2443,9 @@ async function sendAiMessage(options = {}) {
     if (aiKey === "travelwai") {
       appendLocalAiAssistantReply(getTravelwaiManagerFallbackReply(), "travelwai");
     } else if (aiKey === "guide") {
-      const guideFallback = buildGuideLocalFallbackReply(typedContent) || buildGuideConversationFallbackReply(typedContent);
+      const guideFallback = guideQuestionNeedsWikipedia(typedContent)
+        ? buildGuideNoWikipediaReply()
+        : (buildGuideLocalFallbackReply(typedContent) || buildGuideConversationFallbackReply(typedContent));
       const aiMessage = {
         id: `ai-error-${Date.now()}`,
         sender_id: aiConfig.user.id,

@@ -96,7 +96,7 @@
   }
 
   function buildNoWikipediaReply() {
-    return "Mình chưa tìm thấy nguồn khớp đủ tin cậy trên Google/Wikipedia tiếng Việt. Bạn hãy hỏi lại bằng tên địa danh, tỉnh thành, lễ hội hoặc sự kiện cụ thể hơn.";
+    return "Mình chưa tìm được nguồn đủ khớp để nói chắc về câu hỏi này. Bạn gửi lại đúng tên địa danh, lễ hội hoặc kèm thêm tỉnh/thành nhé, mình sẽ tra sát hơn.";
   }
 
   function buildConversationFallbackReply(text) {
@@ -108,12 +108,12 @@
       return "Không có gì. Bạn cần mình gợi ý thêm điểm đến, lịch trình hay kinh nghiệm đi lại thì cứ nhắn tiếp nhé.";
     }
     if (normalized.includes("ban la ai") || normalized.includes("lam duoc gi") || normalized.includes("giup duoc gi")) {
-      return "Mình là Hướng dẫn viên Travelwinne. Mình có thể trò chuyện, gợi ý lịch trình và tra Google/Wikipedia khi bạn hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ.";
+      return "Mình là Hướng dẫn viên Travelwinne. Mình có thể trò chuyện, gợi ý lịch trình và tra Wikipedia khi bạn hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ.";
     }
     if (normalized.includes("toi muon di du lich") || normalized.includes("tu van") || normalized.includes("goi y")) {
       return "Bạn muốn đi kiểu nào: biển, núi, nghỉ dưỡng, khám phá văn hoá hay đi cùng nhóm bạn? Cho mình thêm thời gian đi, số người và ngân sách để gợi ý sát hơn.";
     }
-    return "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Google/Wikipedia để trả lời chính xác.";
+    return "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Wikipedia để trả lời chính xác.";
   }
 
   function stripDateText(text) {
@@ -192,6 +192,7 @@
 
   function buildContextForMessage(text) {
     const includeDates = questionRequestsDate(text);
+    const knownLandmarkReply = getKnownLandmarkReply(text);
     const provinceNames = findProvinceNamesFromText(text);
     const provinceContexts = provinceNames
       .map(function (provinceName) { return formatProvinceContext(getProvinceInfo(provinceName), includeDates); })
@@ -199,6 +200,7 @@
     const festivalContext = findFestivalContextFromText(text, provinceNames, includeDates);
 
     const parts = [];
+    if (knownLandmarkReply) parts.push("Thông tin địa danh khớp câu hỏi: " + knownLandmarkReply);
     if (provinceContexts.length) parts.push(provinceContexts.join("\n\n"));
     if (festivalContext) parts.push("Lễ hội khớp với câu hỏi: " + festivalContext);
     if (!parts.length) return "";
@@ -208,7 +210,8 @@
   }
 
   function buildLocalFallbackReply(text) {
-    if (questionNeedsWikipedia(text)) return buildNoWikipediaReply();
+    const knownLandmarkReply = getKnownLandmarkReply(text);
+    if (knownLandmarkReply) return knownLandmarkReply;
 
     const provinceNames = findProvinceNamesFromText(text);
     const includeDates = questionRequestsDate(text);
@@ -238,7 +241,7 @@
       return lines.join("\n\n") + "\n\nBạn có thể hỏi tiếp về lễ hội, lịch sử, địa danh hoặc kinh nghiệm đi lại của tỉnh này.";
     }
 
-    return "Mình chưa lấy được nguồn đủ tin cậy lúc này. Bạn hỏi lại bằng tên cụ thể hơn hoặc thử lại sau.";
+    return "Mình chưa lấy được phản hồi AI lúc này. Bạn có thể hỏi ngắn hơn theo tên tỉnh, địa danh hoặc lễ hội, ví dụ: Đà Nẵng có gì nổi bật, Huế có lễ hội gì, Phú Quốc nên đi đâu.";
   }
 
   function getWikipediaSearchQuery(text) {
@@ -269,15 +272,19 @@
   function isWikipediaResultRelevant(query, title, extract) {
     const q = normalizeText(query);
     const t = normalizeText(title);
-    const e = normalizeText(extract).slice(0, 1200);
+    const e = normalizeText(extract).slice(0, 1600);
     if (!q || !t || !e) return false;
+    if (t === q) return true;
     if (t.includes(q) || q.includes(t)) return true;
 
-    const stopWords = new Set(["ke", "chuyen", "gioi", "thieu", "thuyet", "minh", "tim", "hieu", "noi", "ve", "cho", "toi", "hay", "la", "gi", "co", "o", "dau", "nhu", "the", "nao"]);
+    const stopWords = new Set(["ke", "chuyen", "gioi", "thieu", "thuyet", "minh", "tim", "hieu", "noi", "ve", "cho", "toi", "hay", "la", "gi", "co", "o", "dau", "nhu", "the", "nao", "le", "hoi", "lich", "su", "van", "hoa", "dia", "danh", "di", "tich"]);
     const tokens = q.split(/\s+/).filter(function (token) { return token.length >= 3 && !stopWords.has(token); });
     if (!tokens.length) return false;
-    const hits = tokens.filter(function (token) { return t.includes(token) || e.includes(token); }).length;
-    return hits >= Math.min(2, tokens.length);
+    const titleHits = tokens.filter(function (token) { return t.includes(token); }).length;
+    const sourceHits = tokens.filter(function (token) { return t.includes(token) || e.includes(token); }).length;
+    if (titleHits === tokens.length) return true;
+    if (tokens.length <= 2 && titleHits === 0) return false;
+    return sourceHits >= Math.ceil(tokens.length * 0.7);
   }
 
   function cleanWikipediaExtract(value) {
@@ -307,7 +314,7 @@
     const query = getWikipediaSearchQuery(text);
     if (!query) return "";
 
-    const url = "https://vi.wikipedia.org/w/api.php?action=query&generator=search&gsrlimit=3&prop=extracts|info&exintro=1&explaintext=1&inprop=url&format=json&origin=*&gsrsearch=" + encodeURIComponent(query);
+    const url = "https://vi.wikipedia.org/w/api.php?action=query&generator=search&gsrlimit=8&prop=extracts|info&exintro=1&explaintext=1&inprop=url&format=json&origin=*&gsrsearch=" + encodeURIComponent(query);
     try {
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) return "";
