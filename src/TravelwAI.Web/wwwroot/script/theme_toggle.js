@@ -472,7 +472,8 @@
   }
 
   function buildMiniChatHistoryForApi(key) {
-    return (miniChatHistories[key] || []).slice(-10).map(function (item) {
+    const limit = key === "guide" ? 4 : 10;
+    return (miniChatHistories[key] || []).slice(-limit).map(function (item) {
       return { role: item.role === "assistant" ? "assistant" : "user", content: item.content || "" };
     });
   }
@@ -636,208 +637,65 @@
     return "Chưa nhận diện được lệnh. Bạn có thể nhắn: đăng nhập, đăng ký, bản đồ, lịch trình, kế hoạch, bảng giá, giỏ hàng, thanh toán, tour du lịch, bài viết, nhắn tin, đổi mật khẩu hoặc đăng xuất.";
   }
 
+  function getMiniGuideSharedLogic() {
+    return window.TravelwAIGuideChatbot || null;
+  }
+
   function findMiniGuideProvinceMatches(text) {
-    const normalized = normalizeMiniChatText(text);
-    if (!normalized || !Array.isArray(window.VIETNAM_34_PROVINCES)) return [];
-
-    const matches = [];
-    window.VIETNAM_34_PROVINCES.forEach(function (province) {
-      const names = [province.name].concat(province.aliases || [], province.merged_from || [])
-        .filter(Boolean)
-        .sort(function (a, b) { return String(b).length - String(a).length; });
-
-      const found = names.some(function (name) {
-        const key = normalizeMiniChatText(name);
-        return key && (normalized.includes(key) || key.includes(normalized));
-      });
-
-      if (found && !matches.includes(province.name)) matches.push(province.name);
-    });
-
-    return matches.slice(0, 3);
+    return getMiniGuideSharedLogic()?.findProvinceNamesFromText(text) || [];
   }
 
   function getMiniGuideKnownLandmarkReply(text) {
-    const normalized = normalizeMiniChatText(text);
-    if (!normalized) return "";
-
-    const knownLandmarks = [
-      {
-        keys: ["hoang thanh thang long", "thang long", "hoang thanh"],
-        reply: "Hoàng thành Thăng Long gắn với trung tâm quyền lực của kinh đô Thăng Long xưa. Đây là nơi lưu dấu nhiều lớp lịch sử của Hà Nội, từ dấu tích cung điện, nền móng kiến trúc đến hiện vật khảo cổ. Câu chuyện của nơi này nên kể theo hướng một kinh thành lâu đời, nơi các triều đại để lại dấu ấn văn hoá và lịch sử giữa lòng Thủ đô."
-      },
-      {
-        keys: ["van mieu quoc tu giam", "quoc tu giam", "van mieu"],
-        reply: "Văn Miếu - Quốc Tử Giám gắn với truyền thống hiếu học của Thăng Long - Hà Nội. Nơi này thường được nhắc đến như biểu tượng của giáo dục, khoa bảng và tinh thần trọng chữ nghĩa. Khi kể về Văn Miếu, có thể nhấn vào câu chuyện tôn vinh người học, người thầy và các giá trị văn hoá lâu đời."
-      },
-      {
-        keys: ["co loa", "thanh co loa"],
-        reply: "Cổ Loa gắn với câu chuyện kinh đô xưa và truyền thuyết An Dương Vương. Nơi này nổi bật bởi dấu tích thành cổ, không gian lịch sử và các lớp chuyện dân gian quanh nỏ thần, Mỵ Châu - Trọng Thủy. Khi kể về Cổ Loa, có thể nhấn vào sự giao thoa giữa lịch sử và truyền thuyết."
-      },
-      {
-        keys: ["ho guom", "ho hoan kiem", "hoan kiem"],
-        reply: "Hồ Gươm là không gian văn hoá tiêu biểu của Hà Nội, gắn với truyền thuyết trả gươm và hình ảnh Tháp Rùa. Câu chuyện nơi đây thường được kể như biểu tượng của ký ức đô thị, lịch sử và nhịp sống thanh bình giữa trung tâm Thủ đô."
-      }
-    ];
-
-    const match = knownLandmarks.find(function (item) {
-      return item.keys.some(function (key) { return normalized.includes(key); });
-    });
-    return match ? match.reply : "";
+    return getMiniGuideSharedLogic()?.getKnownLandmarkReply(text) || "";
   }
 
-
   function miniGuideQuestionNeedsWikipedia(text) {
-    const normalized = normalizeMiniChatText(text || "");
-    if (!normalized) return false;
-    if (findMiniGuideProvinceMatches(text).length) return true;
-    return [
-      "dia danh", "di tich", "danh lam", "tinh thanh", "thanh pho", "le hoi", "ngay le",
-      "lich su", "van hoa", "truyen thuyet", "nguon goc", "y nghia", "nhan vat", "dan toc", "di san",
-      "bao tang", "den tho", "ngoi chua", "thap", "hoang thanh", "co do", "pho co", "lang nghe",
-      "o dau", "la gi", "khi nao", "ngay nao", "dien ra", "to chuc", "ke chuyen", "gioi thieu", "thuyet minh",
-      "hoi lim", "gio to", "tet", "quoc khanh", "trung thu", "thang long", "ha long", "nha trang", "phu quoc", "da lat", "hoi an", "hue", "sa pa", "sapa", "tam coc", "trang an"
-    ].some(function (keyword) { return normalized.includes(keyword); });
+    return !!getMiniGuideSharedLogic()?.questionNeedsWikipedia(text);
   }
 
   function buildMiniGuideNoWikipediaReply() {
-    return "Mình chưa tìm thấy thông tin phù hợp trên Wikipedia tiếng Việt. Bạn hãy hỏi lại bằng tên địa danh, tỉnh thành, lễ hội hoặc sự kiện cụ thể hơn.";
+    return getMiniGuideSharedLogic()?.buildNoWikipediaReply() || "Mình chưa tìm thấy thông tin phù hợp trên Wikipedia tiếng Việt. Bạn hãy hỏi lại bằng tên địa danh, tỉnh thành, lễ hội hoặc sự kiện cụ thể hơn.";
   }
 
   function buildMiniGuideConversationFallbackReply(text) {
-    const normalized = normalizeMiniChatText(text || "");
-    if (/\b(xin chao|chao|hi|hello|alo|hey)\b/i.test(normalized)) {
-      return "Chào bạn, mình là Hướng dẫn viên Travelwinne. Bạn muốn mình gợi ý lịch trình, tư vấn điểm đến hay kể về một địa danh cụ thể?";
-    }
-    if (normalized.includes("cam on") || normalized.includes("thanks")) {
-      return "Không có gì. Bạn cần mình gợi ý thêm điểm đến, lịch trình hay kinh nghiệm đi lại thì cứ nhắn tiếp nhé.";
-    }
-    if (normalized.includes("ban la ai") || normalized.includes("lam duoc gi") || normalized.includes("giup duoc gi")) {
-      return "Mình là Hướng dẫn viên Travelwinne. Mình có thể trò chuyện, gợi ý lịch trình và tra Wikipedia khi bạn hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ.";
-    }
-    if (normalized.includes("toi muon di du lich") || normalized.includes("tu van") || normalized.includes("goi y")) {
-      return "Bạn muốn đi kiểu nào: biển, núi, nghỉ dưỡng, khám phá văn hoá hay đi cùng nhóm bạn? Cho mình thêm thời gian đi, số người và ngân sách để gợi ý sát hơn.";
-    }
-    return "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Wikipedia để trả lời chính xác.";
+    return getMiniGuideSharedLogic()?.buildConversationFallbackReply(text) || "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Wikipedia để trả lời chính xác.";
   }
 
   function getMiniGuideWikipediaSearchQuery(text) {
-    const raw = String(text || "").trim();
-    const normalized = normalizeMiniChatText(raw);
-    if (!normalized) return "";
-
-    const knownQueries = [
-      { keys: ["hoang thanh thang long", "thang long", "hoang thanh"], title: "Hoàng thành Thăng Long" },
-      { keys: ["van mieu quoc tu giam", "quoc tu giam", "van mieu"], title: "Văn Miếu - Quốc Tử Giám" },
-      { keys: ["co loa", "thanh co loa"], title: "Cổ Loa" },
-      { keys: ["ho guom", "ho hoan kiem", "hoan kiem"], title: "Hồ Hoàn Kiếm" }
-    ];
-    const known = knownQueries.find(function (item) {
-      return item.keys.some(function (key) { return normalized.includes(key); });
-    });
-    if (known) return known.title;
-
-    return raw
-      .replace(/^(hãy|hay|cho\s+tôi|cho\s+toi|giúp\s+tôi|giup\s+toi|kể\s+chuyện|ke\s+chuyen|giới\s+thiệu|gioi\s+thieu|thuyết\s+minh|thuyet\s+minh|tìm\s+hiểu|tim\s+hieu|nói\s+về|noi\s+ve|kể\s+về|ke\s+ve)\s+/i, "")
-      .replace(/\b(ở\s+đâu|o\s+dau|là\s+gì|la\s+gi|có\s+gì|co\s+gi|như\s+thế\s+nào|nhu\s+the\s+nao)\b/gi, " ")
-      .replace(/[?!.:,;]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 100);
+    return getMiniGuideSharedLogic()?.getWikipediaSearchQuery(text) || "";
   }
 
   function isMiniGuideWikipediaResultRelevant(query, title, extract) {
-    const q = normalizeMiniChatText(query);
-    const t = normalizeMiniChatText(title);
-    const e = normalizeMiniChatText(extract).slice(0, 1200);
-    if (!q || !t || !e) return false;
-    if (t.includes(q) || q.includes(t)) return true;
-
-    const stopWords = new Set(["ke", "chuyen", "gioi", "thieu", "thuyet", "minh", "tim", "hieu", "noi", "ve", "cho", "toi", "hay", "la", "gi", "co", "o", "dau", "nhu", "the", "nao"]);
-    const tokens = q.split(/\s+/).filter(function (token) { return token.length >= 3 && !stopWords.has(token); });
-    if (!tokens.length) return false;
-    const hits = tokens.filter(function (token) { return t.includes(token) || e.includes(token); }).length;
-    return hits >= Math.min(2, tokens.length);
+    return !!getMiniGuideSharedLogic()?.isWikipediaResultRelevant(query, title, extract);
   }
 
   function cleanMiniGuideWikipediaExtract(value) {
-    return String(value || "")
-      .replace(/\[[^\]]*\]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
+    return getMiniGuideSharedLogic()?.cleanWikipediaExtract(value) || "";
   }
 
   function trimMiniGuideWikipediaReply(value) {
-    const text = cleanMiniGuideWikipediaExtract(value);
-    if (!text) return "";
-    const sentences = text.match(/[^.!?。！？]+[.!?。！？]+|[^.!?。！？]+$/g) || [text];
-    const picked = [];
-    let length = 0;
-    for (const sentence of sentences) {
-      const part = sentence.trim();
-      if (!part) continue;
-      if (picked.length >= 5 || length + part.length > 850) break;
-      picked.push(part);
-      length += part.length;
-    }
-    return picked.join(" ").trim() || text.slice(0, 850).trim();
+    return getMiniGuideSharedLogic()?.trimWikipediaReply(value) || "";
   }
 
   async function fetchMiniGuideWikipediaReply(text) {
-    const query = getMiniGuideWikipediaSearchQuery(text);
-    if (!query) return "";
+    return await (getMiniGuideSharedLogic()?.fetchWikipediaReply(text) || "");
+  }
 
-    const url = "https://vi.wikipedia.org/w/api.php?action=query&generator=search&gsrlimit=3&prop=extracts|info&exintro=1&explaintext=1&inprop=url&format=json&origin=*&gsrsearch=" + encodeURIComponent(query);
-    try {
-      const response = await fetch(url, { cache: "no-store" });
-      if (!response.ok) return "";
-      const data = await response.json().catch(function () { return null; });
-      const pages = Object.values(data?.query?.pages || {})
-        .sort(function (a, b) { return Number(a?.index || 99) - Number(b?.index || 99); });
-      const page = pages.find(function (item) {
-        return isMiniGuideWikipediaResultRelevant(query, item?.title || "", item?.extract || "");
-      });
-      if (!page) return "";
-      return trimMiniGuideWikipediaReply(page.extract || "");
-    } catch (_) {
-      return "";
-    }
+  function miniGuideQuestionRequestsDate(text) {
+    return !!getMiniGuideSharedLogic()?.questionRequestsDate(text);
+  }
+
+  function stripMiniGuideDateText(text) {
+    return getMiniGuideSharedLogic()?.stripDateText(text) || "";
+  }
+
+  function buildMiniGuideContextForMessage(text) {
+    return getMiniGuideSharedLogic()?.buildContextForMessage(text) || "";
   }
 
   function buildMiniGuideLocalFallbackReply(text) {
-    const knownLandmarkReply = getMiniGuideKnownLandmarkReply(text);
-    if (knownLandmarkReply) return knownLandmarkReply;
-
-    const provinceNames = findMiniGuideProvinceMatches(text);
-    const lines = [];
-
-    provinceNames.forEach(function (provinceName) {
-      const info = typeof window.getLocalProvinceInfo === "function" ? window.getLocalProvinceInfo(provinceName) : null;
-      const province = Array.isArray(window.VIETNAM_34_PROVINCES)
-        ? window.VIETNAM_34_PROVINCES.find(function (item) { return item.name === provinceName; })
-        : null;
-      const name = info?.province_name || info?.name || province?.name || provinceName;
-      const description = String(info?.description || "").trim();
-      const famousFor = Array.isArray(province?.famous_for) && province.famous_for.length
-        ? province.famous_for.slice(0, 3).join(", ")
-        : "";
-      const culture = typeof window.getProvinceCultureInfo34 === "function" ? window.getProvinceCultureInfo34(name) : null;
-      const cultureText = culture?.cau_chuyen_di_tich || culture?.nhan_vat_lich_su || culture?.le_hoi_cac_dan_toc || "";
-
-      const parts = [];
-      if (description) parts.push(description);
-      if (famousFor) parts.push(`Nổi bật về ${famousFor}.`);
-      if (cultureText) parts.push(String(cultureText).split(".").slice(0, 2).join(".").trim() + ".");
-      if (parts.length) lines.push(`${name}: ${parts.join(" ")}`);
-    });
-
-    if (lines.length) {
-      return lines.join("\n\n") + "\n\nBạn có thể hỏi tiếp về lễ hội, lịch sử, địa danh hoặc kinh nghiệm đi lại của tỉnh này.";
-    }
-
-    return "Mình chưa lấy được phản hồi AI lúc này. Bạn có thể hỏi ngắn hơn theo tên tỉnh, địa danh hoặc lễ hội, ví dụ: Đà Nẵng có gì nổi bật, Huế có lễ hội gì, Phú Quốc nên đi đâu.";
+    return getMiniGuideSharedLogic()?.buildLocalFallbackReply(text) || "Mình chưa lấy được phản hồi AI lúc này. Bạn có thể hỏi ngắn hơn theo tên tỉnh, địa danh hoặc lễ hội, ví dụ: Đà Nẵng có gì nổi bật, Huế có lễ hội gì, Phú Quốc nên đi đâu.";
   }
-
 
   function pushMiniChat(role, content) {
     if (!miniChatHistories[activeMiniChatKey]) miniChatHistories[activeMiniChatKey] = [];
@@ -887,7 +745,8 @@
       body: JSON.stringify({
         message: text,
         assistant: config.mode,
-        history: buildMiniChatHistoryForApi(activeMiniChatKey)
+        history: buildMiniChatHistoryForApi(activeMiniChatKey),
+        context: activeMiniChatKey === "guide" ? buildMiniGuideContextForMessage(text) : ""
       })
     }).then(function (response) {
       return response.json().catch(function () { return {}; }).then(function (result) {
@@ -910,7 +769,7 @@
         return;
       }
       if (activeMiniChatKey === "guide") {
-        pushMiniChat("assistant", "Hướng dẫn viên đang không kết nối được máy chủ chung. Bạn thử lại sau nhé.");
+        pushMiniChat("assistant", buildMiniGuideLocalFallbackReply(text) || buildMiniGuideConversationFallbackReply(text));
         return;
       }
       if (activeMiniChatKey === "travelwai") {

@@ -195,7 +195,7 @@ public sealed class ChatController : ApiControllerBase
         var appName = GetOpenRouterConfigValue("AppName", "OPENROUTER_APP_NAME", "TravelwAI");
         var openRouterEndpoint = BuildOpenRouterChatCompletionsUri();
         var systemPrompt = assistantMode == "guide"
-            ? "Bạn là Hướng dẫn viên Travelwinne. Trò chuyện tự nhiên, thân thiện như một hướng dẫn viên du lịch Việt Nam. Chỉ trả lời bằng tiếng Việt đơn giản, không markdown, không gạch đầu dòng, không emoji. Với câu hỏi cần thông tin chính xác, chỉ dùng THÔNG TIN NỀN TỪ NGUỒN TIN CẬY được hệ thống đưa vào: ưu tiên Wikipedia tiếng Việt, nếu Wikipedia không có thì dùng nguồn thay thế như Wikivoyage tiếng Việt hoặc dữ liệu TravelwAI. Hãy dùng nguồn để tự diễn giải đúng ý người dùng, không chép nguyên văn toàn đoạn, không mở đầu bằng Theo Wikipedia hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh hoặc lễ hội thì chỉ tập trung đúng mảng đó; nếu người dùng hỏi nhiều mảng cùng lúc thì trả lời đủ các mảng được hỏi, không tự chọn sai chủ đề. Nếu không có nguồn nền phù hợp, hãy nói chưa đủ nguồn và hỏi lại tên cụ thể. Tuyệt đối không tự bịa địa danh, số liệu, ngày tháng, lịch sử, văn hoá, lễ hội hoặc ngày lễ. Trả lời tối đa 300 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở."
+            ? "Bạn là Hướng dẫn viên Travelwinne. Trò chuyện tự nhiên, thân thiện như một hướng dẫn viên du lịch Việt Nam. Chỉ trả lời bằng tiếng Việt đơn giản, không markdown, không gạch đầu dòng, không emoji. Câu hỏi hiện tại là trọng tâm cao nhất; không kéo câu trả lời sang chủ đề cũ trong lịch sử chat. Với câu hỏi cần thông tin chính xác, chỉ dùng THÔNG TIN NỀN TỪ NGUỒN TIN CẬY được hệ thống đưa vào: ưu tiên Wikipedia tiếng Việt, nếu Wikipedia không có thì dùng nguồn thay thế như Wikivoyage tiếng Việt hoặc dữ liệu TravelwAI. Hãy dùng nguồn để tự diễn giải đúng ý người dùng, không chép nguyên văn toàn đoạn, không mở đầu bằng Theo Wikipedia hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh hoặc lễ hội thì chỉ tập trung đúng mảng đó; nếu người dùng hỏi nhiều mảng cùng lúc thì trả lời đủ các mảng được hỏi, không tự chọn sai chủ đề. Nếu không có nguồn nền phù hợp, hãy nói chưa đủ nguồn và hỏi lại tên cụ thể. Tuyệt đối không tự bịa địa danh, số liệu, ngày tháng, lịch sử, văn hoá, lễ hội hoặc ngày lễ. Trả lời tối đa 300 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở."
             : "Bạn là Quản lí TravelwAI, trợ lí điều hướng và hướng dẫn sử dụng toàn bộ website TravelwAI. Chỉ trả lời bằng tiếng Việt đơn giản. Không dùng markdown, không gạch đầu dòng, không emoji, không ký hiệu lạ. Hướng dẫn ngắn gọn người dùng dùng các trang Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Tour du lịch, Sales, Admin, Hồ sơ, Thông báo và Phản hồi. Khi người dùng muốn mở trang, chỉ nhận cú pháp tới trang [tên trang] hoặc qua trang [tên trang]. Khi người dùng muốn xem hướng dẫn trang, nhận cú pháp chi tiết trang [tên trang] hoặc chỉ ghi đúng tên trang. Nếu người dùng ghi sai cú pháp mở trang, hãy hướng dẫn ghi đúng cú pháp thật ngắn. Với đổi mật khẩu hoặc đăng xuất, hãy xác nhận thao tác thật ngắn và giao diện sẽ tự chuyển trang nếu nhận diện được. Trả lời tối đa 300 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở. Khi nói khoảng ngày, viết dạng 1 đến 15/01 âm lịch hoặc 5 đến 8/06 dương lịch, không viết 1-15/01 và không viết 1 15/01.";
 
         var messages = new List<object>
@@ -239,17 +239,26 @@ public sealed class ChatController : ApiControllerBase
             messages.Add(new { role = "system", content = "Câu hỏi hiện tại không hỏi thời gian. Khi trả lời, không nêu ngày/tháng, không nêu âm lịch/dương lịch, không nêu khoảng ngày của lễ hội; chỉ nói nguồn gốc, ý nghĩa, hoạt động và nét văn hoá." });
         }
 
-        if (request.History is not null)
+        var historyLimit = assistantMode == "guide"
+            ? (guideNeedsTrustedSource ? 0 : 4)
+            : 12;
+
+        if (historyLimit > 0 && request.History is not null)
         {
             foreach (var item in request.History
                          .Where(item => !string.IsNullOrWhiteSpace(item.Content))
-                         .TakeLast(12))
+                         .TakeLast(historyLimit))
             {
                 var role = string.Equals(item.Role, "assistant", StringComparison.OrdinalIgnoreCase)
                     ? "assistant"
                     : "user";
                 messages.Add(new { role, content = item.Content!.Trim() });
             }
+        }
+
+        if (assistantMode == "guide")
+        {
+            messages.Add(new { role = "system", content = "Chỉ trả lời đúng câu hỏi hiện tại của người dùng. Nếu lịch sử hội thoại có chủ đề khác, bỏ qua lịch sử đó và không kéo sang chủ đề cũ." });
         }
 
         messages.Add(new { role = "user", content = request.Message.Trim() });
@@ -2102,22 +2111,6 @@ public sealed class ChatController : ApiControllerBase
             }
         }
 
-        // Luôn ưu tiên tỉnh/thành nếu người dùng nhắc tỉnh/thành. Ví dụ:
-        // "văn hoá Gia Lai", "lịch sử Gia Lai", "di tích Quảng Ngãi" chỉ tra lõi "Gia Lai" hoặc "Quảng Ngãi".
-        var provinceNames = FindProvinceNamesInText(source).ToList();
-        foreach (var provinceName in provinceNames)
-        {
-            foreach (var provinceQuery in BuildProvinceWikipediaQueries(provinceName))
-            {
-                AddQuery(provinceQuery);
-            }
-        }
-
-        if (provinceNames.Count > 0)
-        {
-            return queries.Take(10).ToList();
-        }
-
         // Ưu tiên tên được đặt trong ngoặc kép vì đó thường là từ khoá cốt lõi.
         var quoted = Regex.Matches(source, @"[""“”']([^""“”']{3,80})[""“”']")
             .Cast<Match>()
@@ -2130,6 +2123,10 @@ public sealed class ChatController : ApiControllerBase
             AddQuery(knownTopic);
         }
 
+        // Nếu câu hỏi có cả chủ đề cụ thể và tỉnh/thành, vẫn phải tra chủ đề trước.
+        // Ví dụ "Hội Lim ở Bắc Ninh" phải ưu tiên "Hội Lim", không được chỉ tra "Bắc Ninh".
+        var provinceNames = FindProvinceNamesInText(source).ToList();
+
         var coreTopic = ExtractGuideWikipediaCoreTopic(source);
         var normalizedCore = NormalizeVietnameseForSearch(coreTopic);
         if (!string.IsNullOrWhiteSpace(coreTopic))
@@ -2141,6 +2138,14 @@ public sealed class ChatController : ApiControllerBase
             }
 
             AddQuery(coreTopic);
+        }
+
+        foreach (var provinceName in provinceNames)
+        {
+            foreach (var provinceQuery in BuildProvinceWikipediaQueries(provinceName))
+            {
+                AddQuery(provinceQuery);
+            }
         }
 
         return queries.Take(10).ToList();
