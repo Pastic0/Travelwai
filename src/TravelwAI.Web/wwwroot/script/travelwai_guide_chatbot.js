@@ -96,7 +96,7 @@
   }
 
   function buildNoWikipediaReply() {
-    return "Mình chưa tìm thấy thông tin phù hợp trên Wikipedia tiếng Việt. Bạn hãy hỏi lại bằng tên địa danh, tỉnh thành, lễ hội hoặc sự kiện cụ thể hơn.";
+    return "Mình chưa tìm thấy nguồn khớp đủ tin cậy trên Google/Wikipedia tiếng Việt. Bạn hãy hỏi lại bằng tên địa danh, tỉnh thành, lễ hội hoặc sự kiện cụ thể hơn.";
   }
 
   function buildConversationFallbackReply(text) {
@@ -108,12 +108,12 @@
       return "Không có gì. Bạn cần mình gợi ý thêm điểm đến, lịch trình hay kinh nghiệm đi lại thì cứ nhắn tiếp nhé.";
     }
     if (normalized.includes("ban la ai") || normalized.includes("lam duoc gi") || normalized.includes("giup duoc gi")) {
-      return "Mình là Hướng dẫn viên Travelwinne. Mình có thể trò chuyện, gợi ý lịch trình và tra Wikipedia khi bạn hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ.";
+      return "Mình là Hướng dẫn viên Travelwinne. Mình có thể trò chuyện, gợi ý lịch trình và tra Google/Wikipedia khi bạn hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ.";
     }
     if (normalized.includes("toi muon di du lich") || normalized.includes("tu van") || normalized.includes("goi y")) {
       return "Bạn muốn đi kiểu nào: biển, núi, nghỉ dưỡng, khám phá văn hoá hay đi cùng nhóm bạn? Cho mình thêm thời gian đi, số người và ngân sách để gợi ý sát hơn.";
     }
-    return "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Wikipedia để trả lời chính xác.";
+    return "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Google/Wikipedia để trả lời chính xác.";
   }
 
   function stripDateText(text) {
@@ -192,7 +192,6 @@
 
   function buildContextForMessage(text) {
     const includeDates = questionRequestsDate(text);
-    const knownLandmarkReply = getKnownLandmarkReply(text);
     const provinceNames = findProvinceNamesFromText(text);
     const provinceContexts = provinceNames
       .map(function (provinceName) { return formatProvinceContext(getProvinceInfo(provinceName), includeDates); })
@@ -200,7 +199,6 @@
     const festivalContext = findFestivalContextFromText(text, provinceNames, includeDates);
 
     const parts = [];
-    if (knownLandmarkReply) parts.push("Thông tin địa danh khớp câu hỏi: " + knownLandmarkReply);
     if (provinceContexts.length) parts.push(provinceContexts.join("\n\n"));
     if (festivalContext) parts.push("Lễ hội khớp với câu hỏi: " + festivalContext);
     if (!parts.length) return "";
@@ -210,8 +208,7 @@
   }
 
   function buildLocalFallbackReply(text) {
-    const knownLandmarkReply = getKnownLandmarkReply(text);
-    if (knownLandmarkReply) return knownLandmarkReply;
+    if (questionNeedsWikipedia(text)) return buildNoWikipediaReply();
 
     const provinceNames = findProvinceNamesFromText(text);
     const includeDates = questionRequestsDate(text);
@@ -241,7 +238,7 @@
       return lines.join("\n\n") + "\n\nBạn có thể hỏi tiếp về lễ hội, lịch sử, địa danh hoặc kinh nghiệm đi lại của tỉnh này.";
     }
 
-    return "Mình chưa lấy được phản hồi AI lúc này. Bạn có thể hỏi ngắn hơn theo tên tỉnh, địa danh hoặc lễ hội, ví dụ: Đà Nẵng có gì nổi bật, Huế có lễ hội gì, Phú Quốc nên đi đâu.";
+    return "Mình chưa lấy được nguồn đủ tin cậy lúc này. Bạn hỏi lại bằng tên cụ thể hơn hoặc thử lại sau.";
   }
 
   function getWikipediaSearchQuery(text) {

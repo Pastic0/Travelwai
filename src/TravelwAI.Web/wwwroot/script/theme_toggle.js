@@ -654,11 +654,11 @@
   }
 
   function buildMiniGuideNoWikipediaReply() {
-    return getMiniGuideSharedLogic()?.buildNoWikipediaReply() || "Mình chưa tìm thấy thông tin phù hợp trên Wikipedia tiếng Việt. Bạn hãy hỏi lại bằng tên địa danh, tỉnh thành, lễ hội hoặc sự kiện cụ thể hơn.";
+    return getMiniGuideSharedLogic()?.buildNoWikipediaReply() || "Mình chưa tìm thấy nguồn khớp đủ tin cậy trên Google/Wikipedia tiếng Việt. Bạn hãy hỏi lại bằng tên địa danh, tỉnh thành, lễ hội hoặc sự kiện cụ thể hơn.";
   }
 
   function buildMiniGuideConversationFallbackReply(text) {
-    return getMiniGuideSharedLogic()?.buildConversationFallbackReply(text) || "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Wikipedia để trả lời chính xác.";
+    return getMiniGuideSharedLogic()?.buildConversationFallbackReply(text) || "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Google/Wikipedia để trả lời chính xác.";
   }
 
   function getMiniGuideWikipediaSearchQuery(text) {
@@ -694,7 +694,7 @@
   }
 
   function buildMiniGuideLocalFallbackReply(text) {
-    return getMiniGuideSharedLogic()?.buildLocalFallbackReply(text) || "Mình chưa lấy được phản hồi AI lúc này. Bạn có thể hỏi ngắn hơn theo tên tỉnh, địa danh hoặc lễ hội, ví dụ: Đà Nẵng có gì nổi bật, Huế có lễ hội gì, Phú Quốc nên đi đâu.";
+    return getMiniGuideSharedLogic()?.buildLocalFallbackReply(text) || "Mình chưa lấy được nguồn đủ tin cậy lúc này. Bạn hỏi lại bằng tên cụ thể hơn hoặc thử lại sau.";
   }
 
   function pushMiniChat(role, content) {

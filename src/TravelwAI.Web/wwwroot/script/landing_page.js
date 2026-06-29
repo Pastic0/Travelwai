@@ -304,7 +304,7 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     }
 
-    fetch("/vietnam.svg?v=2026-06-28-guide-shared-v39")
+    fetch("/vietnam.svg?v=2026-06-29-guide-google-wiki-v40")
       .then(function (response) {
         if (!response.ok) throw new Error("Không tải được bản đồ Việt Nam");
         return response.text();
