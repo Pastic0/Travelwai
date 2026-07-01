@@ -201,7 +201,7 @@ public sealed class ChatController : ApiControllerBase
         }
 
         var systemPrompt = assistantMode == "guide"
-            ? "Bạn là Hướng dẫn viên Travelwinne. Trò chuyện tự nhiên, thân thiện như một hướng dẫn viên du lịch Việt Nam. Chỉ trả lời bằng tiếng Việt đơn giản, không markdown, không gạch đầu dòng, không emoji. Câu hỏi hiện tại là trọng tâm cao nhất; không kéo câu trả lời sang chủ đề cũ trong lịch sử chat. Với câu hỏi cần thông tin chính xác, hệ thống sẽ đưa THÔNG TIN NỀN TỪ NGUỒN TIN CẬY vào cho OpenRouter xử lý; ưu tiên bài Wikipedia tiếng Việt có tiêu đề và nội dung khớp nhất với câu hỏi, nếu không có bài đủ khớp mới dùng nguồn thay thế như Wikivoyage tiếng Việt hoặc dữ liệu TravelwAI. Bạn phải dựa trên nguồn nền đó để diễn giải tự nhiên đúng ý người dùng, không trả lời thẳng bằng đoạn nguồn, không chép nguyên văn toàn đoạn, không mở đầu bằng Theo Wikipedia hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh hoặc lễ hội thì chỉ tập trung đúng mảng đó; nếu người dùng hỏi nhiều mảng cùng lúc thì trả lời đủ các mảng được hỏi, không tự chọn sai chủ đề. Nếu không có nguồn nền phù hợp hoặc nguồn không nói đúng điều được hỏi, hãy trả lời tự nhiên rằng mình chưa có nguồn đủ chắc và hỏi lại tên cụ thể. Tuyệt đối không tự bịa địa danh, số liệu, ngày tháng, lịch sử, văn hoá, lễ hội hoặc ngày lễ. Trả lời tối đa 100 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở."
+            ? "Bạn là Hướng dẫn viên Travelwinne. Trò chuyện tự nhiên, thân thiện như một hướng dẫn viên du lịch Việt Nam. Chỉ trả lời bằng tiếng Việt đơn giản, không markdown, không gạch đầu dòng, không emoji. Câu hỏi hiện tại là trọng tâm cao nhất; không kéo câu trả lời sang chủ đề cũ trong lịch sử chat. Với câu hỏi cần thông tin chính xác, hệ thống sẽ đưa THÔNG TIN NỀN TỪ NGUỒN TIN CẬY vào cho OpenRouter xử lý; ưu tiên bài Wikipedia tiếng Việt có tiêu đề và nội dung khớp nhất với câu hỏi, nếu không có bài đủ khớp mới dùng nguồn thay thế như Wikivoyage tiếng Việt hoặc dữ liệu TravelwAI. Bạn phải dựa trên nguồn nền đó để diễn giải tự nhiên đúng ý người dùng, không trả lời thẳng bằng đoạn nguồn, không chép nguyên văn toàn đoạn, không mở đầu bằng Theo Wikipedia hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh hoặc lễ hội thì chỉ tập trung đúng mảng đó; nếu người dùng hỏi nhiều mảng cùng lúc thì trả lời đủ các mảng được hỏi, không tự chọn sai chủ đề. Nếu không có nguồn nền phù hợp hoặc nguồn không nói đúng điều được hỏi, hãy trả lời tự nhiên rằng mình chưa có nguồn đủ chắc và hỏi lại tên cụ thể. Trả lời tối đa 100 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở."
             : "Bạn là Quản lí TravelwAI, trợ lí điều hướng và hướng dẫn sử dụng toàn bộ website TravelwAI. Chỉ trả lời bằng tiếng Việt đơn giản. Không dùng markdown, không gạch đầu dòng, không emoji, không ký hiệu lạ. Hướng dẫn ngắn gọn người dùng dùng các trang Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Tour du lịch, Sales, Admin, Hồ sơ, Thông báo và Phản hồi. Khi người dùng muốn mở trang, chỉ nhận cú pháp tới trang [tên trang] hoặc qua trang [tên trang]. Khi người dùng muốn xem hướng dẫn trang, nhận cú pháp chi tiết trang [tên trang] hoặc chỉ ghi đúng tên trang. Nếu người dùng ghi sai cú pháp mở trang, hãy hướng dẫn ghi đúng cú pháp thật ngắn. Với đổi mật khẩu hoặc đăng xuất, hãy xác nhận thao tác thật ngắn và giao diện sẽ tự chuyển trang nếu nhận diện được. Trả lời tối đa 100 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở. Khi nói khoảng ngày, viết dạng 1 đến 15/01 âm lịch hoặc 5 đến 8/06 dương lịch, không viết 1-15/01 và không viết 1 15/01.";
 
         var messages = new List<object>
@@ -233,7 +233,7 @@ public sealed class ChatController : ApiControllerBase
                 messages.Add(new { role = "system", content = guideAspectInstruction });
             }
 
-            messages.Add(new { role = "system", content = "QUY TẮC CHO HƯỚNG DẪN VIÊN TRAVELWINNE: Với câu hỏi về địa danh, lịch sử, văn hoá, lễ hội hoặc tỉnh thành, OpenRouter bắt buộc phải diễn giải câu trả lời dựa trên nguồn nền Wikipedia tiếng Việt, Wikivoyage tiếng Việt hoặc dữ liệu TravelwAI đã cung cấp, không được trả nguyên văn nguồn và không được tự bịa. Thứ tự nguồn: 1 Wikipedia tiếng Việt, 2 Wikivoyage tiếng Việt, 3 dữ liệu TravelwAI. Không đọc lại nguyên văn nguồn. Không lấy nhầm sang báo chí, phát thanh, truyền hình, cơ quan nhà nước, đường cao tốc hoặc chủ đề không được hỏi. Không bịa thông tin chính xác về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá, ngày lễ, số liệu hoặc lịch sự kiện. Nếu nguồn nền không đủ thông tin cho câu hỏi, hãy nói tự nhiên rằng mình chưa có nguồn đủ chắc và hỏi lại tên cụ thể." });
+            messages.Add(new { role = "system", content = "QUY TẮC CHO HƯỚNG DẪN VIÊN TRAVELWINNE: Với câu hỏi về địa danh, lịch sử, văn hoá, lễ hội hoặc tỉnh thành, OpenRouter bắt buộc phải diễn giải câu trả lời dựa trên nguồn nền Wikipedia tiếng Việt, Wikivoyage tiếng Việt hoặc dữ liệu TravelwAI đã cung cấp, không được trả nguyên văn nguồn. Thứ tự nguồn: 1 Wikipedia tiếng Việt, 2 Wikivoyage tiếng Việt, 3 dữ liệu TravelwAI. Không đọc lại nguyên văn nguồn. Không lấy nhầm sang báo chí, phát thanh, truyền hình, cơ quan nhà nước, đường cao tốc hoặc chủ đề không được hỏi. Nếu nguồn nền không đủ thông tin cho câu hỏi, hãy nói tự nhiên rằng mình chưa có nguồn đủ chắc và hỏi lại tên cụ thể." });
         }
         else if (!string.IsNullOrWhiteSpace(contextBlock))
         {
@@ -290,8 +290,6 @@ public sealed class ChatController : ApiControllerBase
             using var response = await http.SendAsync(httpRequest);
             var responseText = await response.Content.ReadAsStringAsync();
 
-            LogOpenRouterRawResponse("AI CHAT", response, responseText);
-
             if (!response.IsSuccessStatusCode)
             {
                 var friendlyDetail = BuildOpenRouterErrorMessage((int)response.StatusCode, responseText);
@@ -303,10 +301,8 @@ public sealed class ChatController : ApiControllerBase
             {
                 json = JsonNode.Parse(responseText);
             }
-            catch (JsonException ex)
+            catch (JsonException)
             {
-                Console.WriteLine("===== OPENROUTER AI CHAT JSON PARSE ERROR =====");
-                Console.WriteLine(ex.Message);
                 return StatusCode(502, new { success = false, detail = "AI trả về dữ liệu không hợp lệ.", raw = responseText });
             }
 
@@ -625,8 +621,6 @@ public sealed class ChatController : ApiControllerBase
         using var response = await http.SendAsync(httpRequest);
         var responseText = await response.Content.ReadAsStringAsync();
 
-        LogOpenRouterRawResponse("SCHEDULE PLAN", response, responseText);
-
         if (!response.IsSuccessStatusCode)
         {
             var friendlyDetail = BuildOpenRouterErrorMessage((int)response.StatusCode, responseText);
@@ -638,12 +632,10 @@ public sealed class ChatController : ApiControllerBase
         {
             json = JsonNode.Parse(responseText);
         }
-        catch (JsonException ex)
-        {
-            Console.WriteLine("===== OPENROUTER SCHEDULE PLAN JSON PARSE ERROR =====");
-            Console.WriteLine(ex.Message);
-            return StatusCode(502, new { success = false, detail = "AI trả về dữ liệu lập lịch trình không hợp lệ.", raw = responseText });
-        }
+            catch (JsonException)
+            {
+                return StatusCode(502, new { success = false, detail = "AI trả về dữ liệu lập lịch trình không hợp lệ.", raw = responseText });
+            }
 
         var answer = json?["choices"]?[0]?["message"]?["content"]?.ToString();
 
@@ -1286,7 +1278,7 @@ public sealed class ChatController : ApiControllerBase
             return "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ ưu tiên Wikipedia tiếng Việt, nếu không có thì dùng nguồn thay thế đáng tin để trả lời.";
         }
 
-        return "Mình nghe rồi. Để hướng dẫn đúng hơn, bạn gửi thêm điểm đến, thời gian đi, số người hoặc ngân sách nhé. Với thông tin lịch sử, văn hoá, lễ hội hay ngày lễ, mình sẽ ưu tiên tra Wikipedia tiếng Việt, nếu không có thì dùng nguồn thay thế đáng tin và không tự bịa.";
+        return "Mình nghe rồi. Để hướng dẫn đúng hơn, bạn gửi thêm điểm đến, thời gian đi, số người hoặc ngân sách nhé. Với thông tin lịch sử, văn hoá, lễ hội hay ngày lễ, mình sẽ ưu tiên tra Wikipedia tiếng Việt, nếu không có thì dùng nguồn thay thế đáng tin.";
     }
 
     private static bool IsGuideDateQuestion(string? message)
@@ -1528,8 +1520,6 @@ public sealed class ChatController : ApiControllerBase
 
             using var response = await http.SendAsync(httpRequest);
             var responseText = await response.Content.ReadAsStringAsync();
-            LogOpenRouterRawResponse("GUIDE SEARCH PLAN", response, responseText);
-
             if (!response.IsSuccessStatusCode)
             {
                 return null;
@@ -2892,21 +2882,6 @@ public sealed class ChatController : ApiControllerBase
             || clean.Equals("YOUR_OPENROUTER_API_KEY", StringComparison.OrdinalIgnoreCase)
             || clean.Equals("<OPENROUTER_API_KEY>", StringComparison.OrdinalIgnoreCase)
             || clean.Contains("YOUR_OPENROUTER_API_KEY", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static void LogOpenRouterRawResponse(string area, HttpResponseMessage response, string responseText)
-    {
-        Console.WriteLine("===== OPENROUTER " + area + " STATUS =====");
-        Console.WriteLine((int)response.StatusCode + " " + response.StatusCode);
-
-        Console.WriteLine("===== OPENROUTER " + area + " RAW RESPONSE =====");
-        Console.WriteLine(TrimLogText(responseText));
-    }
-
-    private static string TrimLogText(string? text, int maxChars = 6000)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return "(empty)";
-        return text.Length <= maxChars ? text : text[..maxChars] + "... [truncated]";
     }
 
     private static string BuildOpenRouterErrorMessage(int statusCode, string responseText)
