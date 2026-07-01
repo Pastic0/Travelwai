@@ -86,17 +86,34 @@
     const normalized = normalizeText(text);
     if (!normalized) return false;
     if (findProvinceNamesFromText(text).length) return true;
-    return [
+    const factualKeywords = [
       "dia danh", "di tich", "danh lam", "tinh thanh", "thanh pho", "le hoi", "ngay le",
       "lich su", "van hoa", "truyen thuyet", "nguon goc", "y nghia", "nhan vat", "dan toc", "di san",
       "bao tang", "den tho", "ngoi chua", "thap", "hoang thanh", "co do", "pho co", "lang nghe",
       "o dau", "la gi", "khi nao", "ngay nao", "dien ra", "to chuc", "ke chuyen", "gioi thieu", "thuyet minh",
+      "ai la", "la ai", "vi sao", "tai sao", "bao nhieu", "cao bao nhieu", "thuoc nuoc nao",
+      "what is", "who is", "where is", "when is", "how many", "how much", "how tall", "how high",
       "hoi lim", "gio to", "tet", "quoc khanh", "trung thu", "thang long", "ha long", "nha trang", "phu quoc", "da lat", "hoi an", "hue", "sa pa", "sapa", "tam coc", "trang an"
-    ].some(function (keyword) { return normalized.includes(keyword); });
+    ];
+    if (factualKeywords.some(function (keyword) { return normalized.includes(keyword); })) return true;
+
+    const stopWords = new Set([
+      "hay", "cho", "toi", "biet", "ve", "la", "gi", "ai", "dau", "khi", "nao", "nhu", "the",
+      "gioi", "thieu", "kham", "pha", "nghia", "nguon", "goc", "lich", "su", "van", "hoa",
+      "huong", "dan", "vien", "travelwinne", "travelwai", "wiki", "wikipedia", "noi", "thong", "tin",
+      "giai", "thich", "le", "hoi", "tom", "tat", "ke", "chuyen", "ro", "phan", "tich",
+      "thoi", "gian", "to", "chuc", "dien", "ra", "ngay", "thang", "nam", "am", "duong",
+      "bao", "gio", "luc", "mung", "may", "nguoi", "dan", "tai", "o", "di", "dia", "danh",
+      "what", "who", "where", "when", "why", "how", "is", "are", "the", "about", "tell", "me"
+    ]);
+    const casualOrPlanning = /\b(xin chao|chao|hi|hello|alo|hey|cam on|thanks|ok|oke|uh|um|vang|duoc|tu van|goi y|nen di|muon di|du lich|lich trinh|di choi|nghi duong|bien|nui|ngan sach)\b/i.test(normalized);
+    const meaningfulTokens = normalized.split(/\s+/)
+      .filter(function (token) { return token.length >= 3 && !stopWords.has(token); });
+    return meaningfulTokens.length >= 1 && meaningfulTokens.length <= 8 && !casualOrPlanning;
   }
 
   function buildNoWikipediaReply() {
-    return "Mình chưa tìm được nguồn đủ khớp để nói chắc về câu hỏi này. Bạn gửi lại đúng tên địa danh, lễ hội hoặc kèm thêm tỉnh/thành nhé, mình sẽ tra sát hơn.";
+    return "Mình chưa tìm được nguồn đủ khớp để nói chắc về câu hỏi này. Bạn gửi thêm tên riêng, địa điểm, thời gian hoặc ngữ cảnh cụ thể nhé, mình sẽ tra sát hơn.";
   }
 
   function buildConversationFallbackReply(text) {
@@ -108,12 +125,12 @@
       return "Không có gì. Bạn cần mình gợi ý thêm điểm đến, lịch trình hay kinh nghiệm đi lại thì cứ nhắn tiếp nhé.";
     }
     if (normalized.includes("ban la ai") || normalized.includes("lam duoc gi") || normalized.includes("giup duoc gi")) {
-      return "Mình là Hướng dẫn viên Travelwinne. Mình có thể trò chuyện, gợi ý lịch trình và tra Wikipedia khi bạn hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ.";
+      return "Mình là Hướng dẫn viên Travelwinne. Mình có thể tư vấn chuyến đi và tra nguồn trước khi trả lời câu hỏi thực tế. Nếu chưa có nguồn đủ chắc, mình sẽ nói rõ thay vì đoán.";
     }
     if (normalized.includes("toi muon di du lich") || normalized.includes("tu van") || normalized.includes("goi y")) {
-      return "Bạn muốn đi kiểu nào: biển, núi, nghỉ dưỡng, khám phá văn hoá hay đi cùng nhóm bạn? Cho mình thêm thời gian đi, số người và ngân sách để gợi ý sát hơn.";
+      return "Có thể bắt đầu bằng ba lựa chọn an toàn: đi gần nếu ít ngày, chọn nơi di chuyển thuận tiện nếu ngân sách chặt, và ưu tiên một chủ đề chính như biển, núi, nghỉ dưỡng hoặc văn hoá. Bạn gửi thêm điểm xuất phát, thời gian, số người và ngân sách để mình gợi ý sát hơn.";
     }
-    return "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Wikipedia để trả lời chính xác.";
+    return "Mình nghe rồi. Nếu đây là câu hỏi thực tế, mình sẽ cố tra nguồn phù hợp trước khi trả lời. Nếu là tư vấn chuyến đi, bạn gửi thêm điểm xuất phát, thời gian, số người và ngân sách để mình gợi ý cụ thể hơn.";
   }
 
   function stripDateText(text) {
@@ -310,11 +327,10 @@
     return picked.join(" ").trim() || text.slice(0, 850).trim();
   }
 
-  async function fetchWikipediaReply(text) {
-    const query = getWikipediaSearchQuery(text);
+  async function fetchMediaWikiReply(query, endpoint) {
     if (!query) return "";
 
-    const url = "https://vi.wikipedia.org/w/api.php?action=query&generator=search&gsrlimit=8&prop=extracts|info&exintro=1&explaintext=1&inprop=url&format=json&origin=*&gsrsearch=" + encodeURIComponent(query);
+    const url = endpoint + "?action=query&generator=search&gsrlimit=8&prop=extracts|info&exintro=1&explaintext=1&inprop=url&format=json&origin=*&gsrsearch=" + encodeURIComponent(query);
     try {
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) return "";
@@ -329,6 +345,23 @@
     } catch (_) {
       return "";
     }
+  }
+
+  async function fetchWikipediaReply(text) {
+    const query = getWikipediaSearchQuery(text);
+    if (!query) return "";
+
+    const endpoints = [
+      "https://vi.wikipedia.org/w/api.php",
+      "https://vi.wikivoyage.org/w/api.php"
+    ];
+
+    for (const endpoint of endpoints) {
+      const reply = await fetchMediaWikiReply(query, endpoint);
+      if (reply) return reply;
+    }
+
+    return "";
   }
 
   window.TravelwAIGuideChatbot = {

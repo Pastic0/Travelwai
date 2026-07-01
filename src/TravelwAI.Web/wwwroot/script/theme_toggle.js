@@ -763,15 +763,20 @@
         const target = getMiniChatManagerTarget(text) || getMiniChatNavigationTargetFromText(reply);
         if (target && target.type !== "info") runMiniChatManagerAction(target);
       }
-    }).catch(function (error) {
+    }).catch(async function (error) {
       if (/free|nâng cấp|nang cap|upgrade_required|free_ai_quota_exceeded/i.test(error.message || "") && window.TravelwAIPricingPopup?.showFreeAiPopup) {
         window.TravelwAIPricingPopup.showFreeAiPopup(error.message);
         return;
       }
       if (activeMiniChatKey === "guide") {
-        const guideFallback = miniGuideQuestionNeedsWikipedia(text)
-          ? buildMiniGuideNoWikipediaReply()
-          : (buildMiniGuideLocalFallbackReply(text) || buildMiniGuideConversationFallbackReply(text));
+        let guideFallback = "";
+        if (miniGuideQuestionNeedsWikipedia(text)) {
+          guideFallback = await fetchMiniGuideWikipediaReply(text);
+          if (!guideFallback) guideFallback = buildMiniGuideLocalFallbackReply(text);
+          if (!guideFallback) guideFallback = buildMiniGuideNoWikipediaReply();
+        } else {
+          guideFallback = buildMiniGuideLocalFallbackReply(text) || buildMiniGuideConversationFallbackReply(text);
+        }
         pushMiniChat("assistant", guideFallback);
         return;
       }

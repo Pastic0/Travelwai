@@ -2443,9 +2443,14 @@ async function sendAiMessage(options = {}) {
     if (aiKey === "travelwai") {
       appendLocalAiAssistantReply(getTravelwaiManagerFallbackReply(), "travelwai");
     } else if (aiKey === "guide") {
-      const guideFallback = guideQuestionNeedsWikipedia(typedContent)
-        ? buildGuideNoWikipediaReply()
-        : (buildGuideLocalFallbackReply(typedContent) || buildGuideConversationFallbackReply(typedContent));
+      let guideFallback = "";
+      if (guideQuestionNeedsWikipedia(typedContent)) {
+        guideFallback = await fetchGuideWikipediaReply(typedContent);
+        if (!guideFallback) guideFallback = buildGuideLocalFallbackReply(typedContent);
+        if (!guideFallback) guideFallback = buildGuideNoWikipediaReply();
+      } else {
+        guideFallback = buildGuideLocalFallbackReply(typedContent) || buildGuideConversationFallbackReply(typedContent);
+      }
       const aiMessage = {
         id: `ai-error-${Date.now()}`,
         sender_id: aiConfig.user.id,
