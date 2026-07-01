@@ -100,7 +100,7 @@ public sealed class ChatController : ApiControllerBase
         var guideQuestionAsksForDate = assistantMode == "guide" && IsGuideDateQuestion(request.Message);
         var guideNeedsTrustedSource = assistantMode == "guide" && GuideMessageNeedsWikipedia(request.Message);
         const int aiReplyLimit = 300;
-        const int aiMaxTokens = 750;
+        const int aiMaxTokens = 1200;
         using var http = _httpClientFactory.CreateClient();
 
         if (assistantMode == "guide")
@@ -283,7 +283,8 @@ public sealed class ChatController : ApiControllerBase
                 model,
                 messages,
                 temperature = assistantMode == "guide" ? 0.0 : 0.35,
-                max_tokens = aiMaxTokens
+                max_tokens = aiMaxTokens,
+                reasoning = BuildOpenRouterNoReasoningOptions()
             };
 
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, openRouterEndpoint);
@@ -616,7 +617,8 @@ public sealed class ChatController : ApiControllerBase
             model,
             messages,
             temperature = 0.35,
-            max_tokens = 2600
+            max_tokens = 2600,
+            reasoning = BuildOpenRouterNoReasoningOptions()
         };
 
         using var http = _httpClientFactory.CreateClient();
@@ -1520,7 +1522,8 @@ public sealed class ChatController : ApiControllerBase
                 model,
                 messages = extractionMessages,
                 temperature = 0.0,
-                max_tokens = 1200
+                max_tokens = 1200,
+                reasoning = BuildOpenRouterNoReasoningOptions()
             };
 
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, openRouterEndpoint);
@@ -2937,6 +2940,15 @@ public sealed class ChatController : ApiControllerBase
         }
 
         return new Uri(uri, "chat/completions");
+    }
+
+    private static object BuildOpenRouterNoReasoningOptions()
+    {
+        return new
+        {
+            effort = "none",
+            exclude = true
+        };
     }
 
     private static bool IsMissingOpenRouterSecret(string? value)
