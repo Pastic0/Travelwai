@@ -99,7 +99,7 @@ public sealed class ChatController : ApiControllerBase
 
         var guideQuestionAsksForDate = assistantMode == "guide" && IsGuideDateQuestion(request.Message);
         var guideNeedsTrustedSource = assistantMode == "guide" && GuideMessageNeedsWikipedia(request.Message);
-        const int aiReplyLimit = 300;
+        const int aiReplyLimit = 100;
         const int aiMaxTokens = 1200;
         using var http = _httpClientFactory.CreateClient();
 
@@ -201,8 +201,8 @@ public sealed class ChatController : ApiControllerBase
         }
 
         var systemPrompt = assistantMode == "guide"
-            ? "Bạn là Hướng dẫn viên Travelwinne. Trò chuyện tự nhiên, thân thiện như một hướng dẫn viên du lịch Việt Nam. Chỉ trả lời bằng tiếng Việt đơn giản, không markdown, không gạch đầu dòng, không emoji. Câu hỏi hiện tại là trọng tâm cao nhất; không kéo câu trả lời sang chủ đề cũ trong lịch sử chat. Với câu hỏi cần thông tin chính xác, hệ thống sẽ đưa THÔNG TIN NỀN TỪ NGUỒN TIN CẬY vào cho OpenRouter xử lý; ưu tiên bài Wikipedia tiếng Việt có tiêu đề và nội dung khớp nhất với câu hỏi, nếu không có bài đủ khớp mới dùng nguồn thay thế như Wikivoyage tiếng Việt hoặc dữ liệu TravelwAI. Bạn phải dựa trên nguồn nền đó để diễn giải tự nhiên đúng ý người dùng, không trả lời thẳng bằng đoạn nguồn, không chép nguyên văn toàn đoạn, không mở đầu bằng Theo Wikipedia hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh hoặc lễ hội thì chỉ tập trung đúng mảng đó; nếu người dùng hỏi nhiều mảng cùng lúc thì trả lời đủ các mảng được hỏi, không tự chọn sai chủ đề. Nếu không có nguồn nền phù hợp hoặc nguồn không nói đúng điều được hỏi, hãy trả lời tự nhiên rằng mình chưa có nguồn đủ chắc và hỏi lại tên cụ thể. Tuyệt đối không tự bịa địa danh, số liệu, ngày tháng, lịch sử, văn hoá, lễ hội hoặc ngày lễ. Trả lời tối đa 300 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở."
-            : "Bạn là Quản lí TravelwAI, trợ lí điều hướng và hướng dẫn sử dụng toàn bộ website TravelwAI. Chỉ trả lời bằng tiếng Việt đơn giản. Không dùng markdown, không gạch đầu dòng, không emoji, không ký hiệu lạ. Hướng dẫn ngắn gọn người dùng dùng các trang Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Tour du lịch, Sales, Admin, Hồ sơ, Thông báo và Phản hồi. Khi người dùng muốn mở trang, chỉ nhận cú pháp tới trang [tên trang] hoặc qua trang [tên trang]. Khi người dùng muốn xem hướng dẫn trang, nhận cú pháp chi tiết trang [tên trang] hoặc chỉ ghi đúng tên trang. Nếu người dùng ghi sai cú pháp mở trang, hãy hướng dẫn ghi đúng cú pháp thật ngắn. Với đổi mật khẩu hoặc đăng xuất, hãy xác nhận thao tác thật ngắn và giao diện sẽ tự chuyển trang nếu nhận diện được. Trả lời tối đa 300 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở. Khi nói khoảng ngày, viết dạng 1 đến 15/01 âm lịch hoặc 5 đến 8/06 dương lịch, không viết 1-15/01 và không viết 1 15/01.";
+            ? "Bạn là Hướng dẫn viên Travelwinne. Trò chuyện tự nhiên, thân thiện như một hướng dẫn viên du lịch Việt Nam. Chỉ trả lời bằng tiếng Việt đơn giản, không markdown, không gạch đầu dòng, không emoji. Câu hỏi hiện tại là trọng tâm cao nhất; không kéo câu trả lời sang chủ đề cũ trong lịch sử chat. Với câu hỏi cần thông tin chính xác, hệ thống sẽ đưa THÔNG TIN NỀN TỪ NGUỒN TIN CẬY vào cho OpenRouter xử lý; ưu tiên bài Wikipedia tiếng Việt có tiêu đề và nội dung khớp nhất với câu hỏi, nếu không có bài đủ khớp mới dùng nguồn thay thế như Wikivoyage tiếng Việt hoặc dữ liệu TravelwAI. Bạn phải dựa trên nguồn nền đó để diễn giải tự nhiên đúng ý người dùng, không trả lời thẳng bằng đoạn nguồn, không chép nguyên văn toàn đoạn, không mở đầu bằng Theo Wikipedia hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh hoặc lễ hội thì chỉ tập trung đúng mảng đó; nếu người dùng hỏi nhiều mảng cùng lúc thì trả lời đủ các mảng được hỏi, không tự chọn sai chủ đề. Nếu không có nguồn nền phù hợp hoặc nguồn không nói đúng điều được hỏi, hãy trả lời tự nhiên rằng mình chưa có nguồn đủ chắc và hỏi lại tên cụ thể. Tuyệt đối không tự bịa địa danh, số liệu, ngày tháng, lịch sử, văn hoá, lễ hội hoặc ngày lễ. Trả lời tối đa 100 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở."
+            : "Bạn là Quản lí TravelwAI, trợ lí điều hướng và hướng dẫn sử dụng toàn bộ website TravelwAI. Chỉ trả lời bằng tiếng Việt đơn giản. Không dùng markdown, không gạch đầu dòng, không emoji, không ký hiệu lạ. Hướng dẫn ngắn gọn người dùng dùng các trang Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Tour du lịch, Sales, Admin, Hồ sơ, Thông báo và Phản hồi. Khi người dùng muốn mở trang, chỉ nhận cú pháp tới trang [tên trang] hoặc qua trang [tên trang]. Khi người dùng muốn xem hướng dẫn trang, nhận cú pháp chi tiết trang [tên trang] hoặc chỉ ghi đúng tên trang. Nếu người dùng ghi sai cú pháp mở trang, hãy hướng dẫn ghi đúng cú pháp thật ngắn. Với đổi mật khẩu hoặc đăng xuất, hãy xác nhận thao tác thật ngắn và giao diện sẽ tự chuyển trang nếu nhận diện được. Trả lời tối đa 100 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở. Khi nói khoảng ngày, viết dạng 1 đến 15/01 âm lịch hoặc 5 đến 8/06 dương lịch, không viết 1-15/01 và không viết 1 15/01.";
 
         var messages = new List<object>
         {
@@ -231,12 +231,6 @@ public sealed class ChatController : ApiControllerBase
             if (!string.IsNullOrWhiteSpace(guideAspectInstruction))
             {
                 messages.Add(new { role = "system", content = guideAspectInstruction });
-            }
-
-            var guideSearchPlanInstruction = BuildGuideSearchPlanNote(guideSearchPlan);
-            if (!string.IsNullOrWhiteSpace(guideSearchPlanInstruction))
-            {
-                messages.Add(new { role = "system", content = guideSearchPlanInstruction });
             }
 
             messages.Add(new { role = "system", content = "QUY TẮC CHO HƯỚNG DẪN VIÊN TRAVELWINNE: Với câu hỏi về địa danh, lịch sử, văn hoá, lễ hội hoặc tỉnh thành, OpenRouter bắt buộc phải diễn giải câu trả lời dựa trên nguồn nền Wikipedia tiếng Việt, Wikivoyage tiếng Việt hoặc dữ liệu TravelwAI đã cung cấp, không được trả nguyên văn nguồn và không được tự bịa. Thứ tự nguồn: 1 Wikipedia tiếng Việt, 2 Wikivoyage tiếng Việt, 3 dữ liệu TravelwAI. Không đọc lại nguyên văn nguồn. Không lấy nhầm sang báo chí, phát thanh, truyền hình, cơ quan nhà nước, đường cao tốc hoặc chủ đề không được hỏi. Không bịa thông tin chính xác về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá, ngày lễ, số liệu hoặc lịch sự kiện. Nếu nguồn nền không đủ thông tin cho câu hỏi, hãy nói tự nhiên rằng mình chưa có nguồn đủ chắc và hỏi lại tên cụ thể." });
@@ -284,7 +278,7 @@ public sealed class ChatController : ApiControllerBase
                 messages,
                 temperature = assistantMode == "guide" ? 0.0 : 0.35,
                 max_tokens = aiMaxTokens,
-                reasoning = BuildOpenRouterNoReasoningOptions()
+                reasoning = BuildOpenRouterMinimalReasoningOptions()
             };
 
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, openRouterEndpoint);
@@ -618,7 +612,7 @@ public sealed class ChatController : ApiControllerBase
             messages,
             temperature = 0.35,
             max_tokens = 2600,
-            reasoning = BuildOpenRouterNoReasoningOptions()
+            reasoning = BuildOpenRouterMinimalReasoningOptions()
         };
 
         using var http = _httpClientFactory.CreateClient();
@@ -1523,7 +1517,7 @@ public sealed class ChatController : ApiControllerBase
                 messages = extractionMessages,
                 temperature = 0.0,
                 max_tokens = 1200,
-                reasoning = BuildOpenRouterNoReasoningOptions()
+                reasoning = BuildOpenRouterMinimalReasoningOptions()
             };
 
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, openRouterEndpoint);
@@ -1756,68 +1750,6 @@ public sealed class ChatController : ApiControllerBase
     {
         var text = NormalizeVietnameseForSearch(value ?? string.Empty);
         return string.IsNullOrWhiteSpace(text) ? "primary" : text;
-    }
-
-    private static string BuildGuideSearchPlanNote(GuideSearchPlan? searchPlan)
-    {
-        if (searchPlan is null || searchPlan.Topics.Count == 0) return string.Empty;
-
-        var builder = new StringBuilder();
-        builder.Append("KE HOACH TIM NGUON DA TRICH XUAT TU CAU HOI. ");
-        if (!string.IsNullOrWhiteSpace(searchPlan.QuestionFocus))
-        {
-            builder.Append("Trong tam cau hoi: ").Append(searchPlan.QuestionFocus).Append(". ");
-        }
-
-        builder.Append("Kieu y dinh: ").Append(searchPlan.IntentType).Append(". ");
-        builder.Append("Cac topic bat buoc: ");
-
-        foreach (var topic in searchPlan.Topics.Take(4))
-        {
-            builder.Append('[')
-                .Append(topic.Id)
-                .Append(": ")
-                .Append(topic.CoreTopic);
-
-            if (!string.IsNullOrWhiteSpace(topic.EntityType))
-            {
-                builder.Append(", loai=").Append(topic.EntityType);
-            }
-
-            if (topic.Aspects.Count > 0)
-            {
-                builder.Append(", aspects=").Append(string.Join("/", topic.Aspects));
-            }
-
-            if (topic.LocationHints.Count > 0)
-            {
-                builder.Append(", dia_danh_phu=").Append(string.Join(", ", topic.LocationHints));
-            }
-
-            if (topic.MustAnswerAspects.Count > 0)
-            {
-                builder.Append(", phai_tra_loi=");
-                builder.Append(string.Join("; ", topic.MustAnswerAspects.Select(item =>
-                    string.IsNullOrWhiteSpace(item.Question) ? item.Aspect : item.Aspect + ": " + item.Question)));
-            }
-
-            builder.Append("] ");
-        }
-
-        var avoidTerms = searchPlan.NegativeHints
-            .Concat(searchPlan.Topics.SelectMany(topic => topic.SearchPlan.AvoidQueries))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(10)
-            .ToList();
-
-        if (avoidTerms.Count > 0)
-        {
-            builder.Append("Chu de can tranh khi suy luan/tim nham: ")
-                .Append(string.Join(", ", avoidTerms))
-                .Append(". ");
-        }
-
-        return builder.ToString();
     }
 
 
@@ -2942,11 +2874,11 @@ public sealed class ChatController : ApiControllerBase
         return new Uri(uri, "chat/completions");
     }
 
-    private static object BuildOpenRouterNoReasoningOptions()
+    private static object BuildOpenRouterMinimalReasoningOptions()
     {
         return new
         {
-            effort = "none",
+            effort = "minimal",
             exclude = true
         };
     }
