@@ -118,7 +118,6 @@ public sealed class ChatController : ApiControllerBase
         }
 
         var guideTrustedSourceBlock = string.Empty;
-        var guideTrustedFallbackReply = string.Empty;
         var guideTrustedSourceName = string.Empty;
 
         if (assistantMode == "guide" && guideNeedsTrustedSource)
@@ -127,7 +126,6 @@ public sealed class ChatController : ApiControllerBase
             if (!string.IsNullOrWhiteSpace(guideTrustedSourceBlock))
             {
                 guideTrustedSourceName = "Wikipedia tiếng Việt";
-                guideTrustedFallbackReply = CleanSimpleChatbotReply(await BuildWikipediaSmartFallbackReplyAsync(http, request.Message, request.Context, guideQuestionAsksForDate), aiReplyLimit);
             }
 
             if (string.IsNullOrWhiteSpace(guideTrustedSourceBlock))
@@ -136,7 +134,6 @@ public sealed class ChatController : ApiControllerBase
                 if (!string.IsNullOrWhiteSpace(guideTrustedSourceBlock))
                 {
                     guideTrustedSourceName = "Wikivoyage tiếng Việt";
-                    guideTrustedFallbackReply = CleanSimpleChatbotReply(await BuildWikivoyageSmartFallbackReplyAsync(http, request.Message, request.Context, guideQuestionAsksForDate), aiReplyLimit);
                 }
             }
 
@@ -147,7 +144,6 @@ public sealed class ChatController : ApiControllerBase
                 {
                     guideTrustedSourceBlock = localContextBlock;
                     guideTrustedSourceName = "dữ liệu TravelwAI";
-                    guideTrustedFallbackReply = CleanSimpleChatbotReply(TryBuildGuideTrustedLocalReply(request.Message, request.Context, guideQuestionAsksForDate), aiReplyLimit);
                 }
             }
 
@@ -161,15 +157,6 @@ public sealed class ChatController : ApiControllerBase
                 });
             }
 
-            if (!string.IsNullOrWhiteSpace(guideTrustedFallbackReply))
-            {
-                return Ok(new
-                {
-                    success = true,
-                    data = new { reply = guideTrustedFallbackReply },
-                    message = string.IsNullOrWhiteSpace(guideTrustedSourceName) ? "Đã trả lời bằng nguồn đã kiểm tra" : $"Đã trả lời bằng {guideTrustedSourceName}"
-                });
-            }
         }
 
         if (assistantMode == "guide" && !guideNeedsTrustedSource)
@@ -189,17 +176,13 @@ public sealed class ChatController : ApiControllerBase
         var apiKey = GetOpenRouterApiKey();
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            if (!string.IsNullOrWhiteSpace(guideTrustedFallbackReply))
+            return StatusCode(500, new
             {
-                return Ok(new
-                {
-                    success = true,
-                    data = new { reply = guideTrustedFallbackReply },
-                    message = string.IsNullOrWhiteSpace(guideTrustedSourceName) ? "Đã trả lời bằng nguồn tin cậy" : $"Đã trả lời bằng {guideTrustedSourceName}"
-                });
-            }
-
-            return StatusCode(500, new { success = false, detail = "Chưa cấu hình API key AI. Vui lòng kiểm tra cấu hình trên Render." });
+                success = false,
+                detail = assistantMode == "guide" && guideNeedsTrustedSource
+                    ? "Đã tìm được nguồn nền nhưng chưa cấu hình API key OpenRouter để AI diễn giải câu trả lời."
+                    : "Chưa cấu hình API key AI. Vui lòng kiểm tra cấu hình trên Render."
+            });
         }
 
         var model = GetOpenRouterConfigValue("Model", "OPENROUTER_MODEL", "openrouter/free");
@@ -207,7 +190,7 @@ public sealed class ChatController : ApiControllerBase
         var appName = GetOpenRouterConfigValue("AppName", "OPENROUTER_APP_NAME", "TravelwAI");
         var openRouterEndpoint = BuildOpenRouterChatCompletionsUri();
         var systemPrompt = assistantMode == "guide"
-            ? "Bạn là Hướng dẫn viên Travelwinne. Trò chuyện tự nhiên, thân thiện như một hướng dẫn viên du lịch Việt Nam. Chỉ trả lời bằng tiếng Việt đơn giản, không markdown, không gạch đầu dòng, không emoji. Câu hỏi hiện tại là trọng tâm cao nhất; không kéo câu trả lời sang chủ đề cũ trong lịch sử chat. Với câu hỏi cần thông tin chính xác, chỉ dùng THÔNG TIN NỀN TỪ NGUỒN TIN CẬY được hệ thống đưa vào; ưu tiên bài Wikipedia tiếng Việt có tiêu đề và nội dung khớp nhất với câu hỏi, nếu không có bài đủ khớp mới dùng nguồn thay thế như Wikivoyage tiếng Việt hoặc dữ liệu TravelwAI. Hãy dùng nguồn để tự diễn giải đúng ý người dùng, không chép nguyên văn toàn đoạn, không mở đầu bằng Theo Wikipedia hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh hoặc lễ hội thì chỉ tập trung đúng mảng đó; nếu người dùng hỏi nhiều mảng cùng lúc thì trả lời đủ các mảng được hỏi, không tự chọn sai chủ đề. Nếu không có nguồn nền phù hợp hoặc nguồn không nói đúng điều được hỏi, hãy trả lời tự nhiên rằng mình chưa có nguồn đủ chắc và hỏi lại tên cụ thể. Tuyệt đối không tự bịa địa danh, số liệu, ngày tháng, lịch sử, văn hoá, lễ hội hoặc ngày lễ. Trả lời tối đa 300 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở."
+            ? "Bạn là Hướng dẫn viên Travelwinne. Trò chuyện tự nhiên, thân thiện như một hướng dẫn viên du lịch Việt Nam. Chỉ trả lời bằng tiếng Việt đơn giản, không markdown, không gạch đầu dòng, không emoji. Câu hỏi hiện tại là trọng tâm cao nhất; không kéo câu trả lời sang chủ đề cũ trong lịch sử chat. Với câu hỏi cần thông tin chính xác, hệ thống sẽ đưa THÔNG TIN NỀN TỪ NGUỒN TIN CẬY vào cho OpenRouter xử lý; ưu tiên bài Wikipedia tiếng Việt có tiêu đề và nội dung khớp nhất với câu hỏi, nếu không có bài đủ khớp mới dùng nguồn thay thế như Wikivoyage tiếng Việt hoặc dữ liệu TravelwAI. Bạn phải dựa trên nguồn nền đó để diễn giải tự nhiên đúng ý người dùng, không trả lời thẳng bằng đoạn nguồn, không chép nguyên văn toàn đoạn, không mở đầu bằng Theo Wikipedia hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh hoặc lễ hội thì chỉ tập trung đúng mảng đó; nếu người dùng hỏi nhiều mảng cùng lúc thì trả lời đủ các mảng được hỏi, không tự chọn sai chủ đề. Nếu không có nguồn nền phù hợp hoặc nguồn không nói đúng điều được hỏi, hãy trả lời tự nhiên rằng mình chưa có nguồn đủ chắc và hỏi lại tên cụ thể. Tuyệt đối không tự bịa địa danh, số liệu, ngày tháng, lịch sử, văn hoá, lễ hội hoặc ngày lễ. Trả lời tối đa 300 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở."
             : "Bạn là Quản lí TravelwAI, trợ lí điều hướng và hướng dẫn sử dụng toàn bộ website TravelwAI. Chỉ trả lời bằng tiếng Việt đơn giản. Không dùng markdown, không gạch đầu dòng, không emoji, không ký hiệu lạ. Hướng dẫn ngắn gọn người dùng dùng các trang Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Tour du lịch, Sales, Admin, Hồ sơ, Thông báo và Phản hồi. Khi người dùng muốn mở trang, chỉ nhận cú pháp tới trang [tên trang] hoặc qua trang [tên trang]. Khi người dùng muốn xem hướng dẫn trang, nhận cú pháp chi tiết trang [tên trang] hoặc chỉ ghi đúng tên trang. Nếu người dùng ghi sai cú pháp mở trang, hãy hướng dẫn ghi đúng cú pháp thật ngắn. Với đổi mật khẩu hoặc đăng xuất, hãy xác nhận thao tác thật ngắn và giao diện sẽ tự chuyển trang nếu nhận diện được. Trả lời tối đa 300 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở. Khi nói khoảng ngày, viết dạng 1 đến 15/01 âm lịch hoặc 5 đến 8/06 dương lịch, không viết 1-15/01 và không viết 1 15/01.";
 
         var messages = new List<object>
@@ -239,7 +222,7 @@ public sealed class ChatController : ApiControllerBase
                 messages.Add(new { role = "system", content = guideAspectInstruction });
             }
 
-            messages.Add(new { role = "system", content = "QUY TẮC CHO HƯỚNG DẪN VIÊN TRAVELWINNE: OpenRouter chỉ được dùng để diễn giải lại thông tin từ nguồn nền đã cung cấp, không được tự bịa. Thứ tự nguồn: 1 Wikipedia tiếng Việt, 2 Wikivoyage tiếng Việt, 3 dữ liệu TravelwAI. Không đọc lại nguyên văn nguồn. Không lấy nhầm sang báo chí, phát thanh, truyền hình, cơ quan nhà nước, đường cao tốc hoặc chủ đề không được hỏi. Không bịa thông tin chính xác về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá, ngày lễ, số liệu hoặc lịch sự kiện. Nếu nguồn nền không đủ thông tin cho câu hỏi, hãy nói tự nhiên rằng mình chưa có nguồn đủ chắc và hỏi lại tên cụ thể." });
+            messages.Add(new { role = "system", content = "QUY TẮC CHO HƯỚNG DẪN VIÊN TRAVELWINNE: Với câu hỏi về địa danh, lịch sử, văn hoá, lễ hội hoặc tỉnh thành, OpenRouter bắt buộc phải diễn giải câu trả lời dựa trên nguồn nền Wikipedia tiếng Việt, Wikivoyage tiếng Việt hoặc dữ liệu TravelwAI đã cung cấp, không được trả nguyên văn nguồn và không được tự bịa. Thứ tự nguồn: 1 Wikipedia tiếng Việt, 2 Wikivoyage tiếng Việt, 3 dữ liệu TravelwAI. Không đọc lại nguyên văn nguồn. Không lấy nhầm sang báo chí, phát thanh, truyền hình, cơ quan nhà nước, đường cao tốc hoặc chủ đề không được hỏi. Không bịa thông tin chính xác về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá, ngày lễ, số liệu hoặc lịch sự kiện. Nếu nguồn nền không đủ thông tin cho câu hỏi, hãy nói tự nhiên rằng mình chưa có nguồn đủ chắc và hỏi lại tên cụ thể." });
         }
         else if (!string.IsNullOrWhiteSpace(contextBlock))
         {
@@ -299,16 +282,6 @@ public sealed class ChatController : ApiControllerBase
 
             if (!response.IsSuccessStatusCode)
             {
-                if (!string.IsNullOrWhiteSpace(guideTrustedFallbackReply))
-                {
-                    return Ok(new
-                    {
-                        success = true,
-                        data = new { reply = guideTrustedFallbackReply },
-                        message = string.IsNullOrWhiteSpace(guideTrustedSourceName) ? "Đã trả lời bằng nguồn tin cậy" : $"Đã trả lời bằng {guideTrustedSourceName}"
-                    });
-                }
-
                 var friendlyDetail = BuildOpenRouterErrorMessage((int)response.StatusCode, responseText);
                 return StatusCode((int)response.StatusCode, new { success = false, detail = friendlyDetail, raw = responseText });
             }
@@ -322,15 +295,6 @@ public sealed class ChatController : ApiControllerBase
             {
                 Console.WriteLine("===== OPENROUTER AI CHAT JSON PARSE ERROR =====");
                 Console.WriteLine(ex.Message);
-                if (!string.IsNullOrWhiteSpace(guideTrustedFallbackReply))
-                {
-                    return Ok(new
-                    {
-                        success = true,
-                        data = new { reply = guideTrustedFallbackReply },
-                        message = string.IsNullOrWhiteSpace(guideTrustedSourceName) ? "Đã trả lời bằng nguồn tin cậy" : $"Đã trả lời bằng {guideTrustedSourceName}"
-                    });
-                }
                 return StatusCode(502, new { success = false, detail = "AI trả về dữ liệu không hợp lệ.", raw = responseText });
             }
 
@@ -339,15 +303,6 @@ public sealed class ChatController : ApiControllerBase
 
             if (string.IsNullOrWhiteSpace(answerPart))
             {
-                if (!string.IsNullOrWhiteSpace(guideTrustedFallbackReply))
-                {
-                    return Ok(new
-                    {
-                        success = true,
-                        data = new { reply = guideTrustedFallbackReply },
-                        message = string.IsNullOrWhiteSpace(guideTrustedSourceName) ? "Đã trả lời bằng nguồn tin cậy" : $"Đã trả lời bằng {guideTrustedSourceName}"
-                    });
-                }
                 return StatusCode(502, new { success = false, detail = "AI chưa trả về nội dung hợp lệ.", raw = responseText });
             }
 
@@ -378,12 +333,14 @@ public sealed class ChatController : ApiControllerBase
         }
         if (string.IsNullOrWhiteSpace(answer))
         {
-            answer = !string.IsNullOrWhiteSpace(guideTrustedFallbackReply)
-                ? guideTrustedFallbackReply
-                : "Mình chưa nhận được câu trả lời hoàn chỉnh. Bạn hỏi lại giúp mình nhé.";
+            answer = "Mình chưa nhận được câu trả lời hoàn chỉnh từ AI. Bạn hỏi lại giúp mình nhé.";
         }
 
-        return Ok(new { success = true, data = new { reply = answer }, message = "AI đã trả lời" });
+        var successMessage = assistantMode == "guide" && !string.IsNullOrWhiteSpace(guideTrustedSourceName)
+            ? $"OpenRouter đã trả lời dựa trên {guideTrustedSourceName}"
+            : "AI đã trả lời";
+
+        return Ok(new { success = true, data = new { reply = answer }, message = successMessage });
     }
 
     private async Task TrackProvinceMentionsFromAiAsync(string? message, string? userId)
@@ -1452,21 +1409,6 @@ public sealed class ChatController : ApiControllerBase
         public int Score { get; }
     }
 
-    private static async Task<string> BuildWikipediaDirectReplyAsync(HttpClient http, string? message, string? appContext, bool includeDateInformation)
-    {
-        return await BuildWikipediaSmartFallbackReplyAsync(http, message, appContext, includeDateInformation);
-    }
-
-    private static async Task<string> BuildWikipediaSmartFallbackReplyAsync(HttpClient http, string? message, string? appContext, bool includeDateInformation)
-    {
-        var page = await FindBestWikipediaPageAsync(http, message, appContext);
-        if (page is null) return string.Empty;
-
-        var extract = PrepareWikipediaExtractForQuestion(page.Extract, message, includeDateInformation, 1200);
-        if (string.IsNullOrWhiteSpace(extract)) return string.Empty;
-
-        return BuildGuideLocalAnswerFromWikipedia(page.Title, extract, message);
-    }
 
     private static async Task<string> BuildWikipediaContextBlockAsync(HttpClient http, string? message, string? appContext, bool includeDateInformation)
     {
@@ -1477,19 +1419,9 @@ public sealed class ChatController : ApiControllerBase
         if (string.IsNullOrWhiteSpace(extract)) return string.Empty;
 
         var source = string.IsNullOrWhiteSpace(page.Url) ? page.Title : $"{page.Title} ({page.Url})";
-        return "THÔNG TIN NỀN TỪ WIKIPEDIA TIẾNG VIỆT. Đây là nguồn ưu tiên số 1 và đã được chọn vì khớp nhất với câu hỏi. Người dùng hỏi: " + (message ?? string.Empty).Trim() + ". Hãy dùng nội dung này để tự diễn giải đúng trọng tâm câu hỏi, không chép nguyên văn toàn đoạn và không mở đầu bằng Theo Wikipedia. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh/du lịch hoặc lễ hội thì chỉ tập trung đúng mảng đó. Nếu người dùng hỏi nhiều mảng cùng lúc như văn hoá, lịch sử, di tích và lễ hội, hãy trả lời đủ các mảng được hỏi theo nguồn. Tuyệt đối không lấy nhầm sang báo chí, phát thanh, truyền hình, cơ quan truyền thông, đường cao tốc hoặc chủ đề không được hỏi. Không suy luận thêm ngoài nội dung nguồn. Nếu nội dung không đủ cho đúng khía cạnh người dùng hỏi, hãy nói chưa đủ thông tin từ Wikipedia tiếng Việt. Nếu thông tin Wikipedia và thông tin ứng dụng khác nhau, ưu tiên Wikipedia. Nguồn tham khảo nội bộ: " + source + ". Nội dung: " + extract;
+        return "THÔNG TIN NỀN TỪ WIKIPEDIA TIẾNG VIỆT CHO OPENROUTER DIỄN GIẢI. Đây là nguồn ưu tiên số 1 và đã được chọn vì khớp nhất với câu hỏi. Người dùng hỏi: " + (message ?? string.Empty).Trim() + ". Hãy dùng nội dung này để tự diễn giải đúng trọng tâm câu hỏi, không chép nguyên văn toàn đoạn và không mở đầu bằng Theo Wikipedia. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh/du lịch hoặc lễ hội thì chỉ tập trung đúng mảng đó. Nếu người dùng hỏi nhiều mảng cùng lúc như văn hoá, lịch sử, di tích và lễ hội, hãy trả lời đủ các mảng được hỏi theo nguồn. Tuyệt đối không lấy nhầm sang báo chí, phát thanh, truyền hình, cơ quan truyền thông, đường cao tốc hoặc chủ đề không được hỏi. Không suy luận thêm ngoài nội dung nguồn. Nếu nội dung không đủ cho đúng khía cạnh người dùng hỏi, hãy nói chưa đủ thông tin từ Wikipedia tiếng Việt. Nếu thông tin Wikipedia và thông tin ứng dụng khác nhau, ưu tiên Wikipedia. Nguồn tham khảo nội bộ: " + source + ". Nội dung: " + extract;
     }
 
-    private static async Task<string> BuildWikivoyageSmartFallbackReplyAsync(HttpClient http, string? message, string? appContext, bool includeDateInformation)
-    {
-        var page = await FindBestWikivoyagePageAsync(http, message, appContext);
-        if (page is null) return string.Empty;
-
-        var extract = PrepareWikipediaExtractForQuestion(page.Extract, message, includeDateInformation, 1200);
-        if (string.IsNullOrWhiteSpace(extract)) return string.Empty;
-
-        return BuildGuideLocalAnswerFromWikipedia(page.Title, extract, message);
-    }
 
     private static async Task<string> BuildWikivoyageContextBlockAsync(HttpClient http, string? message, string? appContext, bool includeDateInformation)
     {
@@ -1500,7 +1432,7 @@ public sealed class ChatController : ApiControllerBase
         if (string.IsNullOrWhiteSpace(extract)) return string.Empty;
 
         var source = string.IsNullOrWhiteSpace(page.Url) ? page.Title : $"{page.Title} ({page.Url})";
-        return "THÔNG TIN NỀN TỪ WIKIVOYAGE TIẾNG VIỆT. Đây là nguồn thay thế khi Wikipedia tiếng Việt không có thông tin phù hợp. Người dùng hỏi: " + (message ?? string.Empty).Trim() + ". Hãy dùng nội dung này để tự diễn giải đúng trọng tâm câu hỏi, không chép nguyên văn toàn đoạn và không mở đầu bằng Theo Wikivoyage hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh/du lịch hoặc lễ hội thì chỉ tập trung đúng mảng đó. Nếu người dùng hỏi nhiều mảng cùng lúc, hãy trả lời đủ các mảng được hỏi theo nguồn. Nếu nội dung không đủ cho đúng khía cạnh người dùng hỏi, hãy nói chưa đủ thông tin từ nguồn thay thế. Nguồn tham khảo nội bộ: " + source + ". Nội dung: " + extract;
+        return "THÔNG TIN NỀN TỪ WIKIVOYAGE TIẾNG VIỆT CHO OPENROUTER DIỄN GIẢI. Đây là nguồn thay thế khi Wikipedia tiếng Việt không có thông tin phù hợp. Người dùng hỏi: " + (message ?? string.Empty).Trim() + ". Hãy dùng nội dung này để tự diễn giải đúng trọng tâm câu hỏi, không chép nguyên văn toàn đoạn và không mở đầu bằng Theo Wikivoyage hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh/du lịch hoặc lễ hội thì chỉ tập trung đúng mảng đó. Nếu người dùng hỏi nhiều mảng cùng lúc, hãy trả lời đủ các mảng được hỏi theo nguồn. Nếu nội dung không đủ cho đúng khía cạnh người dùng hỏi, hãy nói chưa đủ thông tin từ nguồn thay thế. Nguồn tham khảo nội bộ: " + source + ". Nội dung: " + extract;
     }
 
     private static string BuildGuideTrustedLocalContextBlock(string? message, string? appContext, bool includeDateInformation)
@@ -1508,13 +1440,13 @@ public sealed class ChatController : ApiControllerBase
         var contextBlock = BuildAiContextBlock(appContext, "guide", includeDateInformation);
         if (!string.IsNullOrWhiteSpace(contextBlock))
         {
-            return "THÔNG TIN NỀN TỪ DỮ LIỆU TRAVELWAI. Đây là nguồn thay thế khi Wikipedia tiếng Việt và Wikivoyage tiếng Việt không có thông tin phù hợp. Chỉ dùng đúng dữ liệu này để trả lời, không tự thêm chi tiết ngoài nguồn. " + contextBlock;
+            return "THÔNG TIN NỀN TỪ DỮ LIỆU TRAVELWAI CHO OPENROUTER DIỄN GIẢI. Đây là nguồn thay thế khi Wikipedia tiếng Việt và Wikivoyage tiếng Việt không có thông tin phù hợp. OpenRouter chỉ dùng đúng dữ liệu này để trả lời, không tự thêm chi tiết ngoài nguồn. " + contextBlock;
         }
 
         var trustedLocalReply = TryBuildGuideTrustedLocalReply(message, appContext, includeDateInformation);
         if (string.IsNullOrWhiteSpace(trustedLocalReply)) return string.Empty;
 
-        return "THÔNG TIN NỀN TỪ DỮ LIỆU TRAVELWAI. Đây là nguồn thay thế khi Wikipedia tiếng Việt và Wikivoyage tiếng Việt không có thông tin phù hợp. Hãy diễn giải tự nhiên theo nội dung sau, không tự thêm chi tiết ngoài nguồn. Nội dung: " + trustedLocalReply;
+        return "THÔNG TIN NỀN TỪ DỮ LIỆU TRAVELWAI CHO OPENROUTER DIỄN GIẢI. Đây là nguồn thay thế khi Wikipedia tiếng Việt và Wikivoyage tiếng Việt không có thông tin phù hợp. Hãy diễn giải tự nhiên theo nội dung sau, không tự thêm chi tiết ngoài nguồn. Nội dung: " + trustedLocalReply;
     }
 
     private static async Task<WikipediaPageCandidate?> FindBestWikivoyagePageAsync(HttpClient http, string? message, string? appContext)
@@ -1894,35 +1826,6 @@ public sealed class ChatController : ApiControllerBase
         };
     }
 
-    private static string BuildGuideLocalAnswerFromWikipedia(string title, string extract, string? message)
-    {
-        var summary = TakeWikipediaSentences(extract, 4);
-        if (string.IsNullOrWhiteSpace(summary)) return string.Empty;
-
-        var lead = DetectGuideQuestionAspect(message) switch
-        {
-            "overview" => $"Về văn hoá, lịch sử, địa danh và lễ hội ở {title}, có thể tóm tắt các nét nổi bật sau.",
-            "culture" => $"Văn hoá {title} có thể hiểu nổi bật qua các nét sau.",
-            "history" => $"Lịch sử {title} có thể tóm tắt như sau.",
-            "landmark" => $"Về địa danh và điểm đến ở {title}, có thể chú ý các nét sau.",
-            "festival" => $"Về lễ hội/ngày lễ liên quan đến {title}, có thể hiểu như sau.",
-            _ => $"{title} có thể tóm tắt như sau."
-        };
-
-        return (lead + " " + summary).Trim();
-    }
-
-    private static string TakeWikipediaSentences(string text, int maxSentences)
-    {
-        if (string.IsNullOrWhiteSpace(text) || maxSentences <= 0) return string.Empty;
-        var sentences = Regex.Split(Regex.Replace(text, @"\s+", " ").Trim(), @"(?<=[.!?])\s+")
-            .Select(sentence => sentence.Trim())
-            .Where(sentence => Regex.Matches(sentence, @"[\p{L}\p{N}]+").Count >= 4)
-            .Take(maxSentences)
-            .ToList();
-
-        return string.Join(" ", sentences).Trim();
-    }
 
     private static string LimitWikipediaText(string text, int maxChars)
     {
