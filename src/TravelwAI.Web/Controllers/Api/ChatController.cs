@@ -2414,6 +2414,55 @@ public sealed class ChatController : ApiControllerBase
         yield return "Tỉnh " + name;
     }
 
+    private static bool IsProvinceOverviewGuideQuestion(string normalizedSource, IReadOnlyList<string> provinceNames, GuideSearchPlan? searchPlan)
+    {
+        if (provinceNames.Count == 0 || string.IsNullOrWhiteSpace(normalizedSource)) return false;
+
+        var normalizedProvinceNames = provinceNames
+            .Select(NormalizeVietnameseForSearch)
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .ToList();
+
+        if (searchPlan is not null && searchPlan.Topics.Count > 0)
+        {
+            var hasProvinceTopic = searchPlan.Topics.Any(topic =>
+            {
+                var core = NormalizeVietnameseForSearch((topic.CoreTopic + " " + topic.NormalizedTopic).Trim());
+                return string.Equals(topic.EntityType, "province", StringComparison.OrdinalIgnoreCase)
+                    || normalizedProvinceNames.Any(province => core.Equals(province, StringComparison.OrdinalIgnoreCase)
+                        || core.Equals("tinh " + province, StringComparison.OrdinalIgnoreCase)
+                        || core.Equals("thanh pho " + province, StringComparison.OrdinalIgnoreCase));
+            });
+
+            if (hasProvinceTopic) return true;
+
+            var hasSpecificNonProvinceTopic = searchPlan.Topics.Any(topic =>
+            {
+                var core = NormalizeVietnameseForSearch((topic.CoreTopic + " " + topic.NormalizedTopic).Trim());
+                if (string.IsNullOrWhiteSpace(core)) return false;
+                if (normalizedProvinceNames.Any(province => core.Equals(province, StringComparison.OrdinalIgnoreCase))) return false;
+                return topic.EntityType is "festival" or "landmark" or "person" or "event" or "culture";
+            });
+
+            if (hasSpecificNonProvinceTopic) return false;
+        }
+
+        if (HasKnownSpecificGuideTopic(normalizedSource)) return false;
+
+        if (Regex.IsMatch(normalizedSource, @"\b(le hoi|di tich|dia danh|danh lam)\s+(?!noi\s+bat|tieu\s+bieu|dac\s+sac|o\b|tai\b|cua\b|va\b)[a-z0-9]{3,}", RegexOptions.IgnoreCase))
+        {
+            return false;
+        }
+
+        var broadProvinceKeywords = new[]
+        {
+            "kham pha", "tim hieu", "gioi thieu", "thuyet minh", "van hoa", "lich su", "di tich",
+            "le hoi", "dia danh", "danh lam", "noi bat", "tieu bieu", "du lich", "tinh thanh"
+        };
+
+        return broadProvinceKeywords.Any(keyword => normalizedSource.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static IReadOnlyList<string> BuildWikipediaSearchQueries(string? message, string? appContext, GuideSearchPlan? searchPlan = null)
     {
         var source = !string.IsNullOrWhiteSpace(message) ? message! : appContext ?? string.Empty;
@@ -2427,6 +2476,7 @@ public sealed class ChatController : ApiControllerBase
 
         var normalizedSource = NormalizeVietnameseForSearch(source);
         if (IsGenericGuideExplorationMessage(source) && (searchPlan is null || searchPlan.Topics.Count == 0)) return queries;
+        var provinceNames = FindProvinceNamesInText(source).ToList();
 
         void AddQuery(string? value)
         {
@@ -2439,6 +2489,17 @@ public sealed class ChatController : ApiControllerBase
             if (!queries.Any(item => string.Equals(NormalizeVietnameseForSearch(item), NormalizeVietnameseForSearch(cleanedValue), StringComparison.OrdinalIgnoreCase)))
             {
                 queries.Add(cleanedValue);
+            }
+        }
+
+        if (IsProvinceOverviewGuideQuestion(normalizedSource, provinceNames, searchPlan))
+        {
+            foreach (var provinceName in provinceNames)
+            {
+                foreach (var provinceQuery in BuildProvinceWikipediaQueries(provinceName))
+                {
+                    AddQuery(provinceQuery);
+                }
             }
         }
 
@@ -2507,8 +2568,6 @@ public sealed class ChatController : ApiControllerBase
 
         // Nếu câu hỏi có cả chủ đề cụ thể và tỉnh/thành, vẫn phải tra chủ đề trước.
         // Ví dụ "Hội Lim ở Bắc Ninh" phải ưu tiên "Hội Lim", không được chỉ tra "Bắc Ninh".
-        var provinceNames = FindProvinceNamesInText(source).ToList();
-
         var coreTopic = ExtractGuideWikipediaCoreTopic(source);
         var normalizedCore = NormalizeVietnameseForSearch(coreTopic);
         if (!string.IsNullOrWhiteSpace(coreTopic))
@@ -2654,6 +2713,9 @@ public sealed class ChatController : ApiControllerBase
         var normalized = NormalizeVietnameseForSearch((message ?? string.Empty) + " " + (appContext ?? string.Empty));
         if (string.IsNullOrWhiteSpace(normalized)) return string.Empty;
 
+        var provinceOverviewReply = TryBuildProvinceOverviewLocalReply(message, appContext);
+        if (!string.IsNullOrWhiteSpace(provinceOverviewReply)) return provinceOverviewReply;
+
         if (normalized.Contains("gau tao", StringComparison.OrdinalIgnoreCase))
         {
             var reply = "Lễ hội Gầu Tào là lễ hội của đồng bào H'Mông, gắn với việc cầu phúc hoặc cầu mệnh. Gia đình xin mở hội thường dựng cây nêu ở nơi cao, làm lễ cúng tổ tiên và thần linh để cầu con cái, sức khỏe, bình an, mùa màng và vật nuôi tốt lành. Phần hội là dịp cộng đồng gặp gỡ, vui chơi, hát giao duyên, múa khèn và giữ gìn bản sắc Mông.";
@@ -2665,6 +2727,51 @@ public sealed class ChatController : ApiControllerBase
         }
 
         return string.Empty;
+    }
+
+    private static string TryBuildProvinceOverviewLocalReply(string? message, string? appContext)
+    {
+        var source = ((message ?? string.Empty) + " " + (appContext ?? string.Empty)).Trim();
+        var provinceNames = FindProvinceNamesInText(source).ToList();
+        if (!IsProvinceOverviewGuideQuestion(NormalizeVietnameseForSearch(source), provinceNames, null)) return string.Empty;
+
+        var provinceName = provinceNames.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(provinceName)) return string.Empty;
+
+        var province = PlanCatalog.DefaultProvinceTags().FirstOrDefault(item =>
+        {
+            var name = item.GetValueOrDefault("name")?.ToString()
+                       ?? item.GetValueOrDefault("province_name")?.ToString()
+                       ?? string.Empty;
+            return string.Equals(NormalizeVietnameseForSearch(name), NormalizeVietnameseForSearch(provinceName), StringComparison.OrdinalIgnoreCase);
+        });
+
+        if (province is null) return string.Empty;
+
+        var nameText = province.GetValueOrDefault("name")?.ToString()
+                       ?? province.GetValueOrDefault("province_name")?.ToString()
+                       ?? provinceName;
+        var area = province.GetValueOrDefault("area")?.ToString() ?? string.Empty;
+        var region = province.GetValueOrDefault("region")?.ToString() ?? string.Empty;
+        var description = province.GetValueOrDefault("description")?.ToString() ?? string.Empty;
+        var tags = PlanCatalog.ToStringList(province.GetValueOrDefault("tags"));
+
+        var parts = new List<string> { nameText };
+        if (!string.IsNullOrWhiteSpace(area) || !string.IsNullOrWhiteSpace(region))
+        {
+            parts.Add("khu vực: " + string.Join(" - ", new[] { area, region }.Where(item => !string.IsNullOrWhiteSpace(item))));
+        }
+        if (tags.Count > 0)
+        {
+            parts.Add("chủ đề nổi bật: " + string.Join(", ", tags));
+        }
+        if (!string.IsNullOrWhiteSpace(description))
+        {
+            parts.Add("mô tả TravelwAI: " + description);
+        }
+
+        parts.Add("Nếu người dùng hỏi văn hoá, lịch sử, di tích và lễ hội, hãy chỉ diễn giải từ các dữ liệu trên; phần nào dữ liệu chưa nêu rõ thì nói là TravelwAI chưa có nguồn đủ chi tiết cho phần đó.");
+        return string.Join(". ", parts) + ".";
     }
 
     private static string KeepOnlyCompletedSentences(string text)
