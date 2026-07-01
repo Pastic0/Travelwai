@@ -304,7 +304,7 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     }
 
-    fetch("/vietnam.svg?v=2026-06-29-wiki-strict-v40")
+    fetch("/vietnam.svg?v=2026-07-01-clean-v1")
       .then(function (response) {
         if (!response.ok) throw new Error("Không tải được bản đồ Việt Nam");
         return response.text();

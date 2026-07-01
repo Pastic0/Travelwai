@@ -16,19 +16,10 @@
       subtitle: "Hỏi nhanh cách dùng website",
       avatar: "/logo/travelwai-manager-avatar.webp",
       welcome: "Xin chào, mình là Quản lý TravelwAI. Bạn cần hỗ trợ gì trên website?"
-    },
-    guide: {
-      key: "guide",
-      mode: "guide",
-      buttonIcon: "🧭",
-      title: "Hướng dẫn viên Travelwinne",
-      subtitle: "Hỏi về văn hoá, lịch sử, lễ hội",
-      avatar: "/logo/travelwinne-guide-avatar.webp",
-      welcome: "Xin chào, mình là Hướng dẫn viên Travelwinne. Bạn muốn khám phá địa danh, lễ hội hay câu chuyện lịch sử nào?"
     }
   };
 
-  const miniChatHistories = { travelwai: [], guide: [] };
+  const miniChatHistories = { travelwai: [] };
   let activeMiniChatKey = "travelwai";
 
 
@@ -472,7 +463,7 @@
   }
 
   function buildMiniChatHistoryForApi(key) {
-    const limit = key === "guide" ? 4 : 10;
+    const limit = 10;
     return (miniChatHistories[key] || []).slice(-limit).map(function (item) {
       return { role: item.role === "assistant" ? "assistant" : "user", content: item.content || "" };
     });
@@ -636,67 +627,6 @@
   function getMiniChatManagerFallbackReply() {
     return "Chưa nhận diện được lệnh. Bạn có thể nhắn: đăng nhập, đăng ký, bản đồ, lịch trình, kế hoạch, bảng giá, giỏ hàng, thanh toán, tour du lịch, bài viết, nhắn tin, đổi mật khẩu hoặc đăng xuất.";
   }
-
-  function getMiniGuideSharedLogic() {
-    return window.TravelwAIGuideChatbot || null;
-  }
-
-  function findMiniGuideProvinceMatches(text) {
-    return getMiniGuideSharedLogic()?.findProvinceNamesFromText(text) || [];
-  }
-
-  function getMiniGuideKnownLandmarkReply(text) {
-    return getMiniGuideSharedLogic()?.getKnownLandmarkReply(text) || "";
-  }
-
-  function miniGuideQuestionNeedsWikipedia(text) {
-    return !!getMiniGuideSharedLogic()?.questionNeedsWikipedia(text);
-  }
-
-  function buildMiniGuideNoWikipediaReply() {
-    return getMiniGuideSharedLogic()?.buildNoWikipediaReply() || "Mình chưa tìm được nguồn đủ khớp để nói chắc về câu hỏi này. Bạn gửi lại đúng tên địa danh, lễ hội hoặc kèm thêm tỉnh/thành nhé, mình sẽ tra sát hơn.";
-  }
-
-  function buildMiniGuideConversationFallbackReply(text) {
-    return getMiniGuideSharedLogic()?.buildConversationFallbackReply(text) || "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Wikipedia để trả lời chính xác.";
-  }
-
-  function getMiniGuideWikipediaSearchQuery(text) {
-    return getMiniGuideSharedLogic()?.getWikipediaSearchQuery(text) || "";
-  }
-
-  function isMiniGuideWikipediaResultRelevant(query, title, extract) {
-    return !!getMiniGuideSharedLogic()?.isWikipediaResultRelevant(query, title, extract);
-  }
-
-  function cleanMiniGuideWikipediaExtract(value) {
-    return getMiniGuideSharedLogic()?.cleanWikipediaExtract(value) || "";
-  }
-
-  function trimMiniGuideWikipediaReply(value) {
-    return getMiniGuideSharedLogic()?.trimWikipediaReply(value) || "";
-  }
-
-  async function fetchMiniGuideWikipediaReply(text) {
-    return await (getMiniGuideSharedLogic()?.fetchWikipediaReply(text) || "");
-  }
-
-  function miniGuideQuestionRequestsDate(text) {
-    return !!getMiniGuideSharedLogic()?.questionRequestsDate(text);
-  }
-
-  function stripMiniGuideDateText(text) {
-    return getMiniGuideSharedLogic()?.stripDateText(text) || "";
-  }
-
-  function buildMiniGuideContextForMessage(text) {
-    return getMiniGuideSharedLogic()?.buildContextForMessage(text) || "";
-  }
-
-  function buildMiniGuideLocalFallbackReply(text) {
-    return getMiniGuideSharedLogic()?.buildLocalFallbackReply(text) || "Mình chưa lấy được phản hồi AI lúc này. Bạn có thể hỏi ngắn hơn theo tên tỉnh, địa danh hoặc lễ hội, ví dụ: Đà Nẵng có gì nổi bật, Huế có lễ hội gì, Phú Quốc nên đi đâu.";
-  }
-
   function pushMiniChat(role, content) {
     if (!miniChatHistories[activeMiniChatKey]) miniChatHistories[activeMiniChatKey] = [];
     miniChatHistories[activeMiniChatKey].push({ role: role === "user" ? "user" : "assistant", content: content || "" });
@@ -746,7 +676,7 @@
         message: text,
         assistant: config.mode,
         history: buildMiniChatHistoryForApi(activeMiniChatKey),
-        context: activeMiniChatKey === "guide" ? buildMiniGuideContextForMessage(text) : ""
+        context: ""
       })
     }).then(function (response) {
       return response.json().catch(function () { return {}; }).then(function (result) {
@@ -768,18 +698,6 @@
         window.TravelwAIPricingPopup.showFreeAiPopup(error.message);
         return;
       }
-      if (activeMiniChatKey === "guide") {
-        let guideFallback = "";
-        if (miniGuideQuestionNeedsWikipedia(text)) {
-          guideFallback = await fetchMiniGuideWikipediaReply(text);
-          if (!guideFallback) guideFallback = buildMiniGuideLocalFallbackReply(text);
-          if (!guideFallback) guideFallback = buildMiniGuideNoWikipediaReply();
-        } else {
-          guideFallback = buildMiniGuideLocalFallbackReply(text) || buildMiniGuideConversationFallbackReply(text);
-        }
-        pushMiniChat("assistant", guideFallback);
-        return;
-      }
       if (activeMiniChatKey === "travelwai") {
         pushMiniChat("assistant", getMiniChatManagerFallbackReply());
         return;
@@ -796,7 +714,6 @@
   document.addEventListener("DOMContentLoaded", function () {
     const host = ensureFloatingToolsHost();
     ensureMiniChatButton(host, "travelwai");
-    ensureMiniChatButton(host, "guide");
     ensureReloadButton(host);
     ensureCacheButton(host);
     ensureThemeButton(host);

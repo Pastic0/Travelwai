@@ -11,7 +11,7 @@ let provinceTagSearchQuery = "";
 let travelwaiPosts = [];
 let postSearchQuery = "";
 let selectedAdminPostImageFiles = [];
-let selectedAiAvatarAssistant = "travelwinne";
+let selectedAiAvatarAssistant = "travelwai";
 let selectedSiteBackgroundTheme = "light";
 let salesLevelSettings = [
   { level: 1, commissionPercent: 8, offerDiscountPercent: 0, servicePercent: 0 },
@@ -1691,7 +1691,7 @@ function closeAiAvatarModal() {
 }
 
 function chooseAiAvatar(assistant) {
-  selectedAiAvatarAssistant = assistant === "travelwai" ? "travelwai" : "travelwinne";
+  selectedAiAvatarAssistant = "travelwai";
   document.getElementById("aiAvatarFile")?.click();
 }
 

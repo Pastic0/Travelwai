@@ -410,7 +410,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 document.addEventListener("DOMContentLoaded", async function () {
   try {
-    const response = await fetch("vietnam.svg?v=2026-06-29-wiki-strict-v40");
+    const response = await fetch("vietnam.svg?v=2026-07-01-clean-v1");
     const svgContent = await response.text();
 
     const mapContainer = document.querySelector(".map-container");
@@ -1193,42 +1193,19 @@ function buildProvinceAiPrompt(provinceInfo) {
   return `Khám phá văn hoá, lịch sử, di tích và lễ hội nổi bật ở ${provinceName}.`;
 }
 
-function buildProvinceGuideAiContext34(provinceInfo) {
-  const provinceName = provinceInfo.province_name || provinceInfo.name || "tỉnh/thành này";
-  const info = { ...provinceInfo };
-  const culture = info.culture || {};
-  const currentFestivalItems = getProvinceCurrentFestivalItems(info);
-  const currentFestivalText = currentFestivalItems.length
-    ? currentFestivalItems.map((item) => item?.line || item?.name || item || "").filter(Boolean).join("; ")
-    : (info.current_festival_summary || "");
-
-  const landmarkAndRelicText = getMergedProvinceCultureText(culture, ["dia_danh_noi_tieng", "cau_chuyen_di_tich"]);
-  const festivalText = getMergedProvinceCultureText(culture, ["le_hoi_dan_toc", "le_hoi_cac_dan_toc", "le_hoi_dia_phuong", "le_hoi_theo_thang"]);
-  const craftText = getMergedProvinceCultureText(culture, ["nganh_nghe_truyen_thong", "nghe_truyen_thong_mai_mot"]);
-
-  return [
-    `Tỉnh/thành: ${info.province_name || info.name || provinceName}`,
-    info.description ? `Mô tả: ${info.description}` : "",
-    landmarkAndRelicText ? `Địa danh nổi tiếng và câu chuyện di tích: ${landmarkAndRelicText}` : "",
-    festivalText ? `Lễ hội dân tộc và địa phương: ${festivalText}` : "",
-    craftText ? `Ngành nghề truyền thống: ${craftText}` : "",
-    culture.nhan_vat_lich_su ? `Nhân vật lịch sử: ${culture.nhan_vat_lich_su}` : "",
-    culture.truyen_thuyet_dia_phuong ? `Truyền thuyết địa phương: ${culture.truyen_thuyet_dia_phuong}` : "",
-    currentFestivalText ? `Lễ hội đang diễn ra: ${currentFestivalText}` : ""
-  ].filter(Boolean).join("\n").slice(0, 3400);
-}
+function buildProvinceAiContext34(provinceInfo) { return ""; }
 
 function askAiAboutProvince(provinceInfo) {
   const provinceName = provinceInfo.province_name || provinceInfo.name || "tỉnh/thành này";
   const prompt = buildProvinceAiPrompt(provinceInfo);
-  const context = buildProvinceGuideAiContext34(provinceInfo);
+  const context = buildProvinceAiAiContext34(provinceInfo);
 
   try {
     localStorage.setItem(AI_PENDING_PROMPT_KEY, JSON.stringify({
       prompt,
       context,
       province: provinceName,
-      assistant: "guide",
+      assistant: "travelwai",
       source: "province-map",
       createdAt: new Date().toISOString(),
     }));
@@ -1236,7 +1213,7 @@ function askAiAboutProvince(provinceInfo) {
     console.warn("Không thể lưu câu hỏi AI trước khi chuyển trang:", error);
   }
 
-  window.location.href = "/messaging?ai=guide";
+  window.location.href = "/messaging?ai=travelwai";
 }
 
 function create_province_detail_Panel(provinceInfo) {
@@ -2246,23 +2223,14 @@ function getProvinceCurrentMonthFestivalLines(date = new Date()) {
   return groupProvinceCalendarFestivalEvents34(events).slice(0, 80);
 }
 
-function buildFestivalGuideAiContext34(item) {
-  if (!item || typeof item === "string") return "";
-  const provinces = Array.isArray(item.provinces) ? item.provinces.filter(Boolean) : [];
-  return [
-    `Tên lễ hội: ${item.name || "Lễ hội"}`,
-    provinces.length ? `Tỉnh/thành: ${provinces.join(", ")}` : "",
-    item.ethnic || item.dan_toc ? `Dân tộc/cộng đồng: ${item.ethnic || item.dan_toc}` : "",
-    `Nguồn: dữ liệu lễ hội trong lịch TravelwAI`
-  ].filter(Boolean).join("\n").slice(0, 1800);
-}
+function buildFestivalAiContext34(item) { return ""; }
 
 function renderProvinceCalendarItem34(item) {
   if (typeof item === "string") return `<li>${escapeHtml(item)}</li>`;
 
   const line = escapeHtml(item?.line || "");
   const provinces = Array.isArray(item?.provinces) ? item.provinces.filter(Boolean) : [];
-  const festivalContext = buildFestivalGuideAiContext34(item);
+  const festivalContext = buildFestivalAiAiContext34(item);
   const festivalContextAttr = escapeHtml(festivalContext).replace(/\n/g, "&#10;");
   const askAiButton = item?.type === "festival"
     ? `<button type="button" class="ask-ai-province-btn festival-calendar-ask-ai-btn" data-festival-name="${escapeHtml(item?.name || "lễ hội này")}" data-festival-line="${escapeHtml(item?.line || "")}" data-festival-provinces="${escapeHtml(provinces.join(", "))}" data-festival-context="${festivalContextAttr}">Hỏi AI</button>`
@@ -2281,7 +2249,7 @@ function renderProvinceCalendarItem34(item) {
   `;
 }
 
-function askGuideAboutFestivalFromCalendar34(button) {
+function askAiAboutFestivalFromCalendar34(button) {
   const festivalName = button?.dataset?.festivalName || "lễ hội này";
   const provinces = button?.dataset?.festivalProvinces || "";
   const context = button?.dataset?.festivalContext || "";
@@ -2292,7 +2260,7 @@ function askGuideAboutFestivalFromCalendar34(button) {
     localStorage.setItem(AI_PENDING_PROMPT_KEY, JSON.stringify({
       prompt,
       context,
-      assistant: "guide",
+      assistant: "travelwai",
       festival: festivalName,
       source: "festival-calendar",
       createdAt: new Date().toISOString(),
@@ -2301,7 +2269,7 @@ function askGuideAboutFestivalFromCalendar34(button) {
     console.warn("Không thể lưu câu hỏi AI lễ hội:", error);
   }
 
-  window.location.href = "/messaging?ai=guide";
+  window.location.href = "/messaging?ai=travelwai";
 }
 
 function renderProvinceCalendarList34(items, emptyText) {
@@ -2476,7 +2444,7 @@ function bindFestivalCalendarModalEvents34(modal) {
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      askGuideAboutFestivalFromCalendar34(button);
+      askAboutFestivalFromCalendar34(button);
     });
   });
 }

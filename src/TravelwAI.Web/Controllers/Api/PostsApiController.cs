@@ -856,7 +856,7 @@ public sealed class PostsApiController : ApiControllerBase
 
     private static List<Dictionary<string, object?>> SeedPosts()
     {
-        var authors = new[] { "Pastic", "Admin TravelwAI", "Travelwinne", "Việt Hành", "Sắc Việt" };
+        var authors = new[] { "Pastic", "Admin TravelwAI", "Việt Hành", "Sắc Việt" };
         var seedImages = new[]
         {
             new[] { "/main_site_image/back1.webp" },

@@ -881,10 +881,6 @@ html[data-travelwai-theme="dark"] .twai-mini-chat-form input {
   background-image: url('/logo/travelwai-manager-avatar.webp') !important;
 }
 
-.twai-mini-chat-toggle-guide {
-  background-image: url('/logo/travelwinne-guide-avatar.webp') !important;
-}
-
 .twai-mini-chat-toggle::after {
   content: "";
   position: absolute;

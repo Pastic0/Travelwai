@@ -169,7 +169,7 @@ public sealed class AdminApiController : ApiControllerBase
 
         await SaveFixedImageVariantAsync(logoDir, avatarBaseName, avatar);
         var publicFile = avatarBaseName + ".webp";
-        var label = avatarBaseName.Contains("manager", StringComparison.OrdinalIgnoreCase) ? "Quản lý TravelwAI" : "Travelwinne";
+        var label = "Quản lý TravelwAI";
         return Ok(new { success = true, url = $"/logo/{publicFile}", message = $"Đã cập nhật avatar {label}" });
     }
 
@@ -209,13 +209,6 @@ public sealed class AdminApiController : ApiControllerBase
 
         return Ok(new { success = true, message = $"Đã cập nhật ảnh {background.Value.Label}." });
     }
-
-    [HttpPost("travelwinne-avatar")]
-    public Task<IActionResult> UpdateTravelwinneAvatar([FromForm] IFormFile? avatar)
-    {
-        return UpdateAiAvatar("travelwinne", avatar);
-    }
-
     [HttpGet("sales-level-settings")]
     public async Task<IActionResult> GetSalesLevelSettings()
     {
@@ -1425,7 +1418,6 @@ public sealed class AdminApiController : ApiControllerBase
         return normalized switch
         {
             "travelwai" or "manager" or "quan-ly" or "quanly" => "travelwai-manager-avatar",
-            "travelwinne" or "guide" or "huong-dan-vien" or "huongdanvien" => "travelwinne-guide-avatar",
             _ => null
         };
     }

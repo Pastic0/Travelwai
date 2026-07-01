@@ -1,7 +1,5 @@
 using System.Collections.Concurrent;
 using System.Globalization;
-using System.Net;
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -9,9 +7,7 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using TravelwAI.Business.Interfaces;
-using TravelwAI.Data.Interfaces;
 using TravelwAI.Models.Requests;
-using TravelwAI.Web.Services;
 
 namespace TravelwAI.Web.Controllers.Api;
 
@@ -24,16 +20,12 @@ public sealed class ChatController : ApiControllerBase
         public int Count { get; set; }
     }
 
-    private const string ProvinceSearchEventsCollection = "province_search_events";
-    private const int TrustedWikipediaMinimumScore = 70;
-    private const int TrustedWikipediaStrongMatchScore = 95;
     private static readonly ConcurrentDictionary<string, AiChatQuotaWindow> AiChatQuota = new(StringComparer.Ordinal);
     private readonly IChatService _chatService;
     private readonly IFriendService _friendService;
     private readonly IFileStorageService _fileStorage;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
-    private readonly IDataRepository _repo;
 
     public ChatController(
         IAuthService authService,
@@ -41,54 +33,36 @@ public sealed class ChatController : ApiControllerBase
         IFriendService friendService,
         IFileStorageService fileStorage,
         IHttpClientFactory httpClientFactory,
-        IConfiguration configuration,
-        IDataRepository repo) : base(authService)
+        IConfiguration configuration) : base(authService)
     {
         _chatService = chatService;
         _friendService = friendService;
         _fileStorage = fileStorage;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
-        _repo = repo;
     }
 
     [HttpPost("ai/chat")]
     public async Task<IActionResult> AskAi([FromBody] AiChatRequest request)
     {
-        var assistantMode = NormalizeAiAssistantMode(request.Assistant);
-
-        if (string.IsNullOrWhiteSpace(request.Message))
+        if (request is null || string.IsNullOrWhiteSpace(request.Message))
         {
             return BadRequest(new { success = false, detail = "Bạn chưa nhập nội dung để hỏi AI." });
         }
 
+        var quickReply = TryBuildManagerQuickReply(request.Message);
+        if (!string.IsNullOrWhiteSpace(quickReply))
+        {
+            return Ok(new { success = true, data = new { reply = quickReply }, message = "Quản lý TravelwAI đã xử lý nội bộ" });
+        }
+
         var current = await CurrentUserAsync();
-        var isGuest = !current.ok;
         if (current.ok)
         {
             var quotaError = TryConsumeAiChatQuota(current.userId!, current.authUser);
             if (quotaError is not null) return quotaError;
-            if (assistantMode == "guide")
-            {
-                await TrackProvinceMentionsFromAiAsync(request.Message, current.userId);
-            }
         }
-
-        if (assistantMode != "guide")
-        {
-            var managerQuickReply = TryBuildManagerQuickReply(request.Message);
-            if (!string.IsNullOrWhiteSpace(managerQuickReply))
-            {
-                return Ok(new
-                {
-                    success = true,
-                    data = new { reply = managerQuickReply },
-                    message = "Quản lý TravelwAI đã xử lý nội bộ"
-                });
-            }
-        }
-
-        if (isGuest && assistantMode != "guide")
+        else
         {
             return Ok(new
             {
@@ -98,432 +72,85 @@ public sealed class ChatController : ApiControllerBase
             });
         }
 
-        var guideQuestionAsksForDate = assistantMode == "guide" && IsGuideDateQuestion(request.Message);
-        var guideNeedsTrustedSource = assistantMode == "guide" && GuideMessageNeedsWikipedia(request.Message);
-        var aiReplyLimit = assistantMode == "guide" ? 220 : 100;
-        const int aiMaxTokens = 1200;
-        using var http = _httpClientFactory.CreateClient();
-
-        if (assistantMode == "guide")
-        {
-            var everydayFactReply = CleanSimpleChatbotReply(TryBuildGuideEverydayFactReply(request.Message), aiReplyLimit);
-            if (!string.IsNullOrWhiteSpace(everydayFactReply))
-            {
-                return Ok(new
-                {
-                    success = true,
-                    data = new { reply = everydayFactReply },
-                    message = "Hướng dẫn viên đã trả lời thông tin hiện tại"
-                });
-            }
-        }
-
-        if (assistantMode == "guide")
-        {
-            var clarificationReply = TryBuildGuideClarifyingReply(request.Message, request.Context);
-            if (!string.IsNullOrWhiteSpace(clarificationReply))
-            {
-                return Ok(new
-                {
-                    success = true,
-                    data = new { reply = clarificationReply },
-                    message = "Hướng dẫn viên cần làm rõ thông tin"
-                });
-            }
-        }
-
-        var guideTrustedSourceBlock = string.Empty;
-        var guideTrustedSourceName = string.Empty;
         var apiKey = GetOpenRouterApiKey();
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return StatusCode(500, new { success = false, detail = "Chưa cấu hình API key AI. Vui lòng kiểm tra cấu hình trên Render." });
+        }
+
         var model = GetOpenRouterConfigValue("Model", "OPENROUTER_MODEL", "openrouter/free");
         var siteUrl = GetOpenRouterConfigValue("SiteUrl", "OPENROUTER_SITE_URL", "https://travelwai.onrender.com");
         var appName = GetOpenRouterConfigValue("AppName", "OPENROUTER_APP_NAME", "TravelwAI");
-        var openRouterEndpoint = BuildOpenRouterChatCompletionsUri();
-        GuideSearchPlan? guideSearchPlan = null;
-
-        if (assistantMode == "guide" && guideNeedsTrustedSource)
-        {
-            guideSearchPlan = await ExtractGuideSearchPlanAsync(
-                http,
-                request.Message,
-                request.Context,
-                apiKey,
-                model,
-                siteUrl,
-                appName,
-                openRouterEndpoint);
-
-            if (ShouldPreferLocalGuideContext(request.Message, request.Context, guideSearchPlan))
-            {
-                guideTrustedSourceBlock = BuildGuideTrustedLocalContextBlock(request.Message, request.Context, GuideIntentNeedsTimeInAnswer(request.Message, guideSearchPlan) || guideQuestionAsksForDate, guideSearchPlan);
-                if (!string.IsNullOrWhiteSpace(guideTrustedSourceBlock))
-                {
-                    guideTrustedSourceName = "dữ liệu TravelwAI";
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(guideTrustedSourceBlock))
-            {
-                guideTrustedSourceBlock = await BuildWikipediaContextBlockAsync(http, request.Message, request.Context, guideQuestionAsksForDate || GuideIntentNeedsTimeInAnswer(request.Message, guideSearchPlan), guideSearchPlan);
-            }
-            if (!string.IsNullOrWhiteSpace(guideTrustedSourceBlock) && string.IsNullOrWhiteSpace(guideTrustedSourceName))
-            {
-                guideTrustedSourceName = "Wikipedia tiếng Việt";
-            }
-
-            if (string.IsNullOrWhiteSpace(guideTrustedSourceBlock))
-            {
-                guideTrustedSourceBlock = await BuildWikivoyageContextBlockAsync(http, request.Message, request.Context, guideQuestionAsksForDate || GuideIntentNeedsTimeInAnswer(request.Message, guideSearchPlan), guideSearchPlan);
-                if (!string.IsNullOrWhiteSpace(guideTrustedSourceBlock))
-                {
-                    guideTrustedSourceName = "Wikivoyage tiếng Việt";
-                }
-            }
-
-
-            if (string.IsNullOrWhiteSpace(guideTrustedSourceBlock))
-            {
-                var localContextBlock = BuildGuideTrustedLocalContextBlock(request.Message, request.Context, guideQuestionAsksForDate || GuideIntentNeedsTimeInAnswer(request.Message, guideSearchPlan), guideSearchPlan);
-                if (!string.IsNullOrWhiteSpace(localContextBlock))
-                {
-                    guideTrustedSourceBlock = localContextBlock;
-                    guideTrustedSourceName = "dữ liệu TravelwAI";
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(guideTrustedSourceBlock))
-            {
-                return Ok(new
-                {
-                    success = true,
-                    data = new { reply = "Mình chưa có đủ thông tin từ nguồn Wiki/Wikipedia để trả lời chính xác nội dung này." },
-                    message = "Không tìm thấy nguồn đủ khớp"
-                });
-            }
-
-        }
-
-        if (assistantMode == "guide" && !guideNeedsTrustedSource)
-        {
-            var conversationalReply = TryBuildGuideConversationalReply(request.Message);
-            if (!string.IsNullOrWhiteSpace(conversationalReply))
-            {
-                return Ok(new
-                {
-                    success = true,
-                    data = new { reply = conversationalReply },
-                    message = "Hướng dẫn viên đã trả lời"
-                });
-            }
-        }
-
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            return StatusCode(500, new
-            {
-                success = false,
-                detail = assistantMode == "guide" && guideNeedsTrustedSource
-                    ? "Đã tìm được nguồn nền nhưng chưa cấu hình API key OpenRouter để AI diễn giải câu trả lời."
-                    : "Chưa cấu hình API key AI. Vui lòng kiểm tra cấu hình trên Render."
-            });
-        }
-
-        var systemPrompt = assistantMode == "guide"
-            ? "Bạn là AI hướng dẫn viên du lịch, chuyên giới thiệu thông tin về điểm đến, địa danh, tỉnh thành, di tích, danh lam thắng cảnh, lễ hội, văn hoá, lịch sử, nhân vật lịch sử, kiến trúc, tôn giáo, phong tục và bối cảnh địa phương. Nguồn thông tin chính là dữ liệu Wiki/Wikipedia được hệ thống cung cấp trong CONTEXT. Chỉ sử dụng thông tin có trong CONTEXT hoặc nguồn nền Wiki/Wikipedia đã được backend đưa vào; không tự bịa, không suy đoán thêm dữ kiện chưa có trong nguồn. Trình bày như hướng dẫn viên đang thuyết minh tại điểm tham quan: tiếng Việt tự nhiên, thân thiện, dễ hiểu, không quá học thuật. Khi người dùng hỏi địa danh, hãy xác định tên địa danh chính, tên gọi khác hoặc tên cũ nếu có, loại địa danh, tỉnh/thành hoặc vùng miền trực thuộc nếu nguồn có, quốc gia nếu cần, bối cảnh lịch sử, văn hoá hoặc du lịch liên quan. Nếu nguồn có tỉnh/thành, nói rõ địa danh đó thuộc tỉnh/thành nào; nếu nguồn không nêu, phải nói nguồn Wiki/Wikipedia trong CONTEXT chưa nêu rõ thuộc tỉnh/thành nào. Nếu địa danh có nhiều nơi trùng tên trong nguồn, trình bày các khả năng chính thay vì tự chọn bừa. Khi hỏi tỉnh/thành, chỉ giới thiệu vị trí, tên gọi, đặc điểm, di tích/danh thắng, lễ hội, văn hoá, lịch sử được nguồn cung cấp. Khi nói lịch sử, phân biệt rõ thông tin lịch sử, truyền thuyết, giai thoại và yếu tố văn hoá dân gian nếu nguồn có nhắc đến. Khi nói lễ hội/văn hoá, chỉ nêu thời gian, nguồn gốc, ý nghĩa, hoạt động hoặc nghi thức nếu CONTEXT có. Không tạo lịch trình du lịch, không sắp xếp kế hoạch theo ngày, không gợi ý tour, không đặt vé/đặt phòng/đặt xe/đặt nhà hàng, không tư vấn giá vé, giờ mở cửa, thời tiết, phương tiện, chi phí, booking hoặc độ đông nếu CONTEXT không có. Nếu người dùng hỏi những nội dung ngoài phạm vi đó, hãy nói ngắn gọn rằng mình chỉ có thể giới thiệu thông tin địa danh/văn hoá/lịch sử dựa trên nguồn Wiki/Wikipedia trong CONTEXT. Nếu thiếu dữ liệu, trả lời: Mình chưa có đủ thông tin từ nguồn Wiki/Wikipedia để trả lời chính xác nội dung này. Có thể dùng nhãn ngắn như Tên địa danh, Thuộc tỉnh/thành, Loại địa danh, Điểm nổi bật, Bối cảnh lịch sử/văn hoá, Ý nghĩa với du khách, Nguồn khi phù hợp. Không quảng cáo, không bán tour."
-            : "Bạn là Quản lí TravelwAI, trợ lí điều hướng và hướng dẫn sử dụng toàn bộ website TravelwAI. Chỉ trả lời bằng tiếng Việt đơn giản. Không dùng markdown, không gạch đầu dòng, không emoji, không ký hiệu lạ. Hướng dẫn ngắn gọn người dùng dùng các trang Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Tour du lịch, Sales, Admin, Hồ sơ, Thông báo và Phản hồi. Khi người dùng muốn mở trang, chỉ nhận cú pháp tới trang [tên trang] hoặc qua trang [tên trang]. Khi người dùng muốn xem hướng dẫn trang, nhận cú pháp chi tiết trang [tên trang] hoặc chỉ ghi đúng tên trang. Nếu người dùng ghi sai cú pháp mở trang, hãy hướng dẫn ghi đúng cú pháp thật ngắn. Với đổi mật khẩu hoặc đăng xuất, hãy xác nhận thao tác thật ngắn và giao diện sẽ tự chuyển trang nếu nhận diện được. Trả lời tối đa 100 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở. Khi nói khoảng ngày, viết dạng 1 đến 15/01 âm lịch hoặc 5 đến 8/06 dương lịch, không viết 1-15/01 và không viết 1 15/01.";
-
         var messages = new List<object>
         {
-            new { role = "system", content = systemPrompt }
+            new
+            {
+                role = "system",
+                content = "Bạn là Quản lý TravelwAI, trợ lý hỗ trợ người dùng sử dụng website TravelwAI. Không dùng markdown, không gạch đầu dòng, không emoji. Trả lời ngắn gọn bằng tiếng Việt. Hỗ trợ điều hướng trang, lịch trình, kế hoạch, nhắn tin, tour du lịch, hồ sơ, thông báo, phản hồi và tài khoản. Khi người dùng muốn mở trang, hướng dẫn dùng cú pháp: tới trang [tên trang]. Khi không chắc, hỏi lại một câu ngắn."
+            }
         };
 
-        var contextBlock = BuildAiContextBlock(request.Context, assistantMode, assistantMode != "guide" || guideQuestionAsksForDate);
-
-        if (assistantMode == "guide")
-        {
-            if (!string.IsNullOrWhiteSpace(guideTrustedSourceBlock))
-            {
-                messages.Add(new { role = "system", content = guideTrustedSourceBlock });
-            }
-            else
-            {
-                messages.Add(new { role = "system", content = string.IsNullOrWhiteSpace(contextBlock) ? "Không có dữ liệu nền cho câu hỏi hiện tại. Chỉ trả lời giao tiếp chung, không nêu thông tin chính xác nếu không có nguồn." : "Chỉ dùng CONTEXT do hệ thống cung cấp nếu phù hợp và không tự thêm chi tiết ngoài nguồn." });
-            }
-
-            if (!string.IsNullOrWhiteSpace(contextBlock) && !string.Equals(guideTrustedSourceName, "dữ liệu TravelwAI", StringComparison.OrdinalIgnoreCase))
-            {
-                messages.Add(new { role = "system", content = contextBlock });
-            }
-
-            var guideAspectInstruction = BuildGuideAspectInstruction(request.Message);
-            if (!string.IsNullOrWhiteSpace(guideAspectInstruction))
-            {
-                messages.Add(new { role = "system", content = guideAspectInstruction });
-            }
-
-            messages.Add(new { role = "system", content = "QUY TẮC CHO HƯỚNG DẪN VIÊN TRAVELWAI: Chỉ trả lời dựa trên CONTEXT hoặc nguồn nền Wiki/Wikipedia đã cung cấp. Không tự thêm thông tin ngoài nguồn, không trả lời chỉ vì tên gần giống, không tự gán địa danh vào tỉnh/thành nếu nguồn không nêu. Nếu nguồn có nhiều kết quả trùng tên, hãy trình bày các khả năng chính trong nguồn hiện có; nếu nguồn không nêu rõ tỉnh/thành, nói rõ là CONTEXT chưa nêu rõ. Không lập lịch trình, không gợi ý tour, không tư vấn booking, giá vé, giờ mở cửa, thời tiết, phương tiện, chi phí hoặc độ đông nếu nguồn không có. Với lịch sử, phân biệt lịch sử, truyền thuyết, giai thoại và yếu tố văn hoá/dân gian. Nếu thiếu dữ liệu, hãy nói: Mình chưa có đủ thông tin từ nguồn Wiki/Wikipedia để trả lời chính xác nội dung này. Không đọc lại nguyên văn nguồn và không mở đầu bằng Theo nguồn." });
-        }
-        else if (!string.IsNullOrWhiteSpace(contextBlock))
+        var contextBlock = BuildAiContextBlock(request.Context);
+        if (!string.IsNullOrWhiteSpace(contextBlock))
         {
             messages.Add(new { role = "system", content = contextBlock });
         }
 
-        if (assistantMode == "guide" && !guideQuestionAsksForDate && !GuideIntentNeedsTimeInAnswer(request.Message, guideSearchPlan))
+        if (request.History is not null)
         {
-            messages.Add(new { role = "system", content = "Câu hỏi hiện tại không hỏi thời gian và không thuộc nhóm lễ hội/sự kiện. Khi trả lời, không tự nêu ngày/tháng nếu nguồn không cần thiết; chỉ tập trung đúng chủ đề người dùng hỏi." });
-        }
-
-        var historyLimit = assistantMode == "guide"
-            ? (guideNeedsTrustedSource ? 0 : 4)
-            : 12;
-
-        if (historyLimit > 0 && request.History is not null)
-        {
-            foreach (var item in request.History
-                         .Where(item => !string.IsNullOrWhiteSpace(item.Content))
-                         .TakeLast(historyLimit))
+            foreach (var item in request.History.Where(item => !string.IsNullOrWhiteSpace(item.Content)).TakeLast(12))
             {
-                var role = string.Equals(item.Role, "assistant", StringComparison.OrdinalIgnoreCase)
-                    ? "assistant"
-                    : "user";
+                var role = string.Equals(item.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? "assistant" : "user";
                 messages.Add(new { role, content = item.Content!.Trim() });
             }
         }
 
-        if (assistantMode == "guide")
-        {
-            messages.Add(new { role = "system", content = "Chỉ trả lời đúng câu hỏi hiện tại của người dùng. Nếu lịch sử hội thoại có chủ đề khác, bỏ qua lịch sử đó và không kéo sang chủ đề cũ." });
-        }
-
         messages.Add(new { role = "user", content = request.Message.Trim() });
 
-        var fullAnswer = new StringBuilder();
-        var answerWasCutOff = false;
+        var payload = new
         {
-            var payload = new
-            {
-                model,
-                messages,
-                temperature = assistantMode == "guide" ? 0.0 : 0.35,
-                max_tokens = aiMaxTokens,
-                reasoning = BuildOpenRouterMinimalReasoningOptions()
-            };
-
-            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, openRouterEndpoint);
-            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            httpRequest.Headers.TryAddWithoutValidation("HTTP-Referer", siteUrl);
-            httpRequest.Headers.TryAddWithoutValidation("X-Title", appName);
-            httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
-            using var response = await http.SendAsync(httpRequest);
-            var responseText = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var friendlyDetail = BuildOpenRouterErrorMessage((int)response.StatusCode, responseText);
-                return StatusCode((int)response.StatusCode, new { success = false, detail = friendlyDetail, raw = responseText });
-            }
-
-            JsonNode? json;
-            try
-            {
-                json = JsonNode.Parse(responseText);
-            }
-            catch (JsonException)
-            {
-                return StatusCode(502, new { success = false, detail = "AI trả về dữ liệu không hợp lệ.", raw = responseText });
-            }
-
-            var answerPart = json?["choices"]?[0]?["message"]?["content"]?.ToString();
-            var finishReason = json?["choices"]?[0]?["finish_reason"]?.ToString();
-
-            if (string.IsNullOrWhiteSpace(answerPart))
-            {
-                return StatusCode(502, new { success = false, detail = "AI chưa trả về nội dung hợp lệ.", raw = responseText });
-            }
-
-            if (fullAnswer.Length > 0)
-            {
-                fullAnswer.Append(' ');
-            }
-
-            fullAnswer.Append(answerPart.Trim());
-
-            if (IsOpenRouterAnswerCutOff(finishReason))
-            {
-                answerWasCutOff = true;
-            }
-
-        }
-
-        var answer = CleanSimpleChatbotReply(fullAnswer.ToString(), aiReplyLimit, answerWasCutOff);
-        if (assistantMode == "guide")
-        {
-            answer = StripGuideSourceLeadIn(answer);
-        }
-        if (assistantMode == "guide" && !guideQuestionAsksForDate && !GuideIntentNeedsTimeInAnswer(request.Message, guideSearchPlan))
-        {
-            answer = RemoveGuideDateMentions(answer);
-            answer = CleanSimpleChatbotReply(answer, aiReplyLimit, answerWasCutOff);
-            answer = StripGuideSourceLeadIn(answer);
-        }
-        if (string.IsNullOrWhiteSpace(answer))
-        {
-            answer = "Mình chưa nhận được câu trả lời hoàn chỉnh từ AI. Bạn hỏi lại giúp mình nhé.";
-        }
-
-        var successMessage = assistantMode == "guide" && !string.IsNullOrWhiteSpace(guideTrustedSourceName)
-            ? $"OpenRouter đã trả lời dựa trên {guideTrustedSourceName}"
-            : "AI đã trả lời";
-
-        return Ok(new { success = true, data = new { reply = answer }, message = successMessage });
-    }
-
-    private async Task TrackProvinceMentionsFromAiAsync(string? message, string? userId)
-    {
-        var provinceNames = FindProvinceNamesInText(message).Take(5).ToList();
-        if (provinceNames.Count == 0) return;
-
-        foreach (var provinceName in provinceNames)
-        {
-            await TrackProvinceSearchEventAsync(provinceName, userId, "ai-chat");
-        }
-    }
-
-    private async Task TrackProvinceSearchEventAsync(string provinceName, string? userId, string source)
-    {
-        var name = (provinceName ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(name)) return;
-
-        try
-        {
-            await _repo.AddAsync(ProvinceSearchEventsCollection, new Dictionary<string, object?>
-            {
-                ["province_name"] = name,
-                ["provinceName"] = name,
-                ["user_id"] = userId ?? string.Empty,
-                ["userId"] = userId ?? string.Empty,
-                ["source"] = source,
-                ["created_at"] = DateTime.UtcNow,
-                ["updated_at"] = DateTime.UtcNow
-            });
-        }
-        catch
-        {
-        }
-    }
-
-    private static IEnumerable<string> FindProvinceNamesInText(string? text)
-    {
-        var normalized = NormalizeVietnameseForSearch(text ?? string.Empty);
-        if (string.IsNullOrWhiteSpace(normalized)) return Enumerable.Empty<string>();
-
-        normalized = Regex.Replace(normalized, @"[^a-z0-9\s]", " ");
-        normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
-
-        var provinceMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var province in PlanCatalog.DefaultProvinceTags())
-        {
-            var name = province.GetValueOrDefault("name")?.ToString()
-                       ?? province.GetValueOrDefault("province_name")?.ToString()
-                       ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(name)) continue;
-
-            foreach (var alias in BuildProvinceAliasesForTracking(name))
-            {
-                var key = NormalizeVietnameseForSearch(alias);
-                key = Regex.Replace(key, @"[^a-z0-9\s]", " ");
-                key = Regex.Replace(key, @"\s+", " ").Trim();
-                if (!string.IsNullOrWhiteSpace(key) && !provinceMap.ContainsKey(key))
-                {
-                    provinceMap[key] = name;
-                }
-            }
-        }
-
-        var manualAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["ha long"] = "Quảng Ninh",
-            ["co to"] = "Quảng Ninh",
-            ["yen tu"] = "Quảng Ninh",
-            ["cat ba"] = "Thành phố Hải Phòng",
-            ["do son"] = "Thành phố Hải Phòng",
-            ["ho guom"] = "Thành phố Hà Nội",
-            ["ho hoan kiem"] = "Thành phố Hà Nội",
-            ["hoan kiem"] = "Thành phố Hà Nội",
-            ["hoang thanh thang long"] = "Thành phố Hà Nội",
-            ["thang long"] = "Thành phố Hà Nội",
-            ["van mieu"] = "Thành phố Hà Nội",
-            ["quoc tu giam"] = "Thành phố Hà Nội",
-            ["co loa"] = "Thành phố Hà Nội",
-            ["pho co ha noi"] = "Thành phố Hà Nội",
-            ["hoi an"] = "Thành phố Đà Nẵng",
-            ["my khe"] = "Thành phố Đà Nẵng",
-            ["ba na"] = "Thành phố Đà Nẵng",
-            ["nha trang"] = "Khánh Hòa",
-            ["cam ranh"] = "Khánh Hòa",
-            ["da lat"] = "Lâm Đồng",
-            ["binh thuan"] = "Lâm Đồng",
-            ["quy nhon"] = "Gia Lai",
-            ["pleiku"] = "Gia Lai",
-            ["mang den"] = "Quảng Ngãi",
-            ["ly son"] = "Quảng Ngãi",
-            ["sam son"] = "Thanh Hóa",
-            ["puluong"] = "Thanh Hóa",
-            ["pu luong"] = "Thanh Hóa",
-            ["cua lo"] = "Nghệ An",
-            ["phong nha"] = "Quảng Trị",
-            ["lang co"] = "Thành phố Huế",
-            ["phu quoc"] = "An Giang",
-            ["ha tien"] = "An Giang",
-            ["nam du"] = "An Giang",
-            ["nui sam"] = "An Giang",
-            ["can gio"] = "Thành phố Hồ Chí Minh",
-            ["vung tau"] = "Thành phố Hồ Chí Minh",
-            ["cat tien"] = "Đồng Nai",
-            ["ba den"] = "Tây Ninh",
-            ["cho noi"] = "Thành phố Cần Thơ",
-            ["ben ninh kieu"] = "Thành phố Cần Thơ",
-            ["dat mui"] = "Cà Mau",
-            ["tram chim"] = "Đồng Tháp",
-            ["sa dec"] = "Đồng Tháp",
-            ["thac ban gioc"] = "Cao Bằng",
-            ["pac bo"] = "Cao Bằng",
-            ["sa pa"] = "Lào Cai",
-            ["sapa"] = "Lào Cai",
-            ["moc chau"] = "Sơn La",
-            ["ta xua"] = "Sơn La",
-            ["tam coc"] = "Ninh Bình",
-            ["trang an"] = "Ninh Bình",
-            ["hoa lu"] = "Ninh Bình"
+            model,
+            messages,
+            temperature = 0.35,
+            max_tokens = 1200,
+            reasoning = BuildOpenRouterMinimalReasoningOptions()
         };
 
-        foreach (var item in manualAliases)
+        using var http = _httpClientFactory.CreateClient();
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BuildOpenRouterChatCompletionsUri());
+        httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        httpRequest.Headers.TryAddWithoutValidation("HTTP-Referer", siteUrl);
+        httpRequest.Headers.TryAddWithoutValidation("X-Title", appName);
+        httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        using var response = await http.SendAsync(httpRequest);
+        var responseText = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
         {
-            if (!provinceMap.ContainsKey(item.Key)) provinceMap[item.Key] = item.Value;
+            var friendlyDetail = BuildOpenRouterErrorMessage((int)response.StatusCode, responseText);
+            return StatusCode((int)response.StatusCode, new { success = false, detail = friendlyDetail, raw = responseText });
         }
 
-        return provinceMap
-            .Where(item => Regex.IsMatch(normalized, $@"(^|\s){Regex.Escape(item.Key)}(\s|$)", RegexOptions.IgnoreCase))
-            .OrderByDescending(item => item.Key.Length)
-            .Select(item => item.Value)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
-    }
+        JsonNode? json;
+        try
+        {
+            json = JsonNode.Parse(responseText);
+        }
+        catch (JsonException)
+        {
+            return StatusCode(502, new { success = false, detail = "AI trả về dữ liệu không hợp lệ.", raw = responseText });
+        }
 
-    private static IEnumerable<string> BuildProvinceAliasesForTracking(string name)
-    {
-        yield return name;
-        var normalized = NormalizeVietnameseForSearch(name);
-        if (normalized.StartsWith("thanh pho ", StringComparison.OrdinalIgnoreCase))
+        var answer = json?["choices"]?[0]?["message"]?["content"]?.ToString();
+        var finishReason = json?["choices"]?[0]?["finish_reason"]?.ToString();
+        if (string.IsNullOrWhiteSpace(answer))
         {
-            yield return name.Replace("Thành phố ", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
-            yield return name.Replace("Thành phố", "TP", StringComparison.OrdinalIgnoreCase).Trim();
-            yield return name.Replace("Thành phố", "TP.", StringComparison.OrdinalIgnoreCase).Trim();
+            return StatusCode(502, new { success = false, detail = "AI chưa trả về nội dung hợp lệ.", raw = responseText });
         }
-        if (normalized.StartsWith("tinh ", StringComparison.OrdinalIgnoreCase))
-        {
-            yield return name.Replace("Tỉnh ", string.Empty, StringComparison.OrdinalIgnoreCase).Trim();
-        }
+
+        var cleaned = CleanSimpleChatbotReply(answer, 100, IsOpenRouterAnswerCutOff(finishReason));
+        if (string.IsNullOrWhiteSpace(cleaned)) cleaned = "Mình chưa nhận được câu trả lời hoàn chỉnh từ AI. Bạn hỏi lại giúp mình nhé.";
+        return Ok(new { success = true, data = new { reply = cleaned }, message = "AI đã trả lời" });
     }
 
     private IActionResult? TryConsumeAiChatQuota(string userId, Dictionary<string, object?>? authUser)
@@ -570,7 +197,7 @@ public sealed class ChatController : ApiControllerBase
         var current = await CurrentUserAsync();
         if (!current.ok) return current.error!;
 
-        if (string.IsNullOrWhiteSpace(request.Message))
+        if (request is null || string.IsNullOrWhiteSpace(request.Message))
         {
             return BadRequest(new { success = false, detail = "Bạn chưa nhập yêu cầu lập lịch trình cho AI." });
         }
@@ -578,12 +205,6 @@ public sealed class ChatController : ApiControllerBase
         if (!CanCreateSchedule(current.authUser))
         {
             return StatusCode(403, new { success = false, detail = "Tài khoản Free chưa dùng được lịch trình. Vui lòng nâng cấp VIP hoặc Premium.", message = "Tài khoản Free chưa dùng được lịch trình." });
-        }
-
-        var quickEditResult = TryBuildQuickScheduleEditPatch(request);
-        if (quickEditResult is not null)
-        {
-            return Ok(new { success = true, data = quickEditResult, message = "AI đã chỉnh lịch trình" });
         }
 
         var apiKey = GetOpenRouterApiKey();
@@ -595,41 +216,25 @@ public sealed class ChatController : ApiControllerBase
         var model = GetOpenRouterConfigValue("Model", "OPENROUTER_MODEL", "openrouter/free");
         var siteUrl = GetOpenRouterConfigValue("SiteUrl", "OPENROUTER_SITE_URL", "https://travelwai.onrender.com");
         var appName = GetOpenRouterConfigValue("AppName", "OPENROUTER_APP_NAME", "TravelwAI");
-        var openRouterEndpoint = BuildOpenRouterChatCompletionsUri();
-
         var messages = new List<object>
         {
             new
             {
                 role = "system",
-                content = "Bạn là AI lập lịch trình du lịch cho TravelwAI. Trả lời DUY NHẤT bằng JSON hợp lệ, không markdown. " +
-                          "Nhiệm vụ: tạo hoặc chỉnh lịch trình theo form Schedule của ứng dụng, hoặc hỏi lại nếu thiếu thông tin quan trọng. " +
-                          "Hiểu ngày tương đối theo ngày hiện tại do prompt cung cấp: 'hôm nay' là ngày hiện tại, 'ngày mai' là ngày hiện tại + 1. " +
-                          "Ví dụ người dùng nói 'đi Đà Lạt, 2 ngày, đi hôm nay' thì đủ thông tin: start_date là hôm nay, end_date là hôm nay + 1 ngày. " +
-                          "Nếu người dùng chỉ yêu cầu chỉnh một phần như ngân sách, đơn vị tiền, ngày đi hoặc số ngày, hãy giữ nguyên các phần khác đang có trong form và chỉ sửa đúng phần được yêu cầu. " +
-                          "Hiểu tiền Việt: 2 củ = 2 triệu = 2000000 VND, 500k = 500000 VND. Hiểu 'tiền đô', 'tiền đo', 'USD', 'đô la' là currency='USD'. " +
-                          "Nếu thiếu điểm đến/tỉnh thành, ngày bắt đầu, ngày kết thúc hoặc số ngày để đủ tính ngày kết thúc, hãy trả status='needs_more_info' và question là câu hỏi ngắn gọn bằng tiếng Việt. " +
-                          "Nếu đã đủ thông tin, trả status='ready', reply ngắn gọn, và schedule theo schema: " +
-                          "{title:string, description:string, start_date:'yyyy-MM-dd', end_date:'yyyy-MM-dd', budget:number|null, currency:'VND'|'USD'|'EUR', tags:string[], days:[{day_number:number, date:'yyyy-MM-dd', destinations:[{name:string, description:string, estimated_duration:string|null, time_phase:string, time_range:string}]}]}. " +
-                          "Mỗi ngày nên có 3-5 hoạt động, chia sáng/trưa/chiều/tối, ưu tiên địa điểm văn hoá, du lịch, ăn uống hợp lý. Không đưa giá chính xác nếu không có nguồn; nếu cần hãy ghi ước lượng trong description."
+                content = "Bạn là AI lập lịch trình du lịch cho TravelwAI. Trả lời DUY NHẤT bằng JSON hợp lệ, không markdown. Nếu thiếu thông tin quan trọng, trả status='needs_more_info' và question bằng tiếng Việt. Nếu đủ thông tin, trả status='ready', reply ngắn gọn và schedule theo schema: {title:string, description:string, start_date:'yyyy-MM-dd', end_date:'yyyy-MM-dd', budget:number|null, currency:'VND'|'USD'|'EUR', tags:string[], days:[{day_number:number, date:'yyyy-MM-dd', destinations:[{name:string, description:string, estimated_duration:string|null, time_phase:string, time_range:string}]}]}."
             }
         };
 
         if (request.History is not null)
         {
-            foreach (var item in request.History
-                         .Where(item => !string.IsNullOrWhiteSpace(item.Content))
-                         .TakeLast(8))
+            foreach (var item in request.History.Where(item => !string.IsNullOrWhiteSpace(item.Content)).TakeLast(8))
             {
-                var role = string.Equals(item.Role, "assistant", StringComparison.OrdinalIgnoreCase)
-                    ? "assistant"
-                    : "user";
+                var role = string.Equals(item.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? "assistant" : "user";
                 messages.Add(new { role, content = item.Content!.Trim() });
             }
         }
 
         messages.Add(new { role = "user", content = BuildSchedulePlannerPrompt(request) });
-
         var payload = new
         {
             model,
@@ -640,7 +245,7 @@ public sealed class ChatController : ApiControllerBase
         };
 
         using var http = _httpClientFactory.CreateClient();
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, openRouterEndpoint);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BuildOpenRouterChatCompletionsUri());
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         httpRequest.Headers.TryAddWithoutValidation("HTTP-Referer", siteUrl);
         httpRequest.Headers.TryAddWithoutValidation("X-Title", appName);
@@ -648,7 +253,6 @@ public sealed class ChatController : ApiControllerBase
 
         using var response = await http.SendAsync(httpRequest);
         var responseText = await response.Content.ReadAsStringAsync();
-
         if (!response.IsSuccessStatusCode)
         {
             var friendlyDetail = BuildOpenRouterErrorMessage((int)response.StatusCode, responseText);
@@ -660,13 +264,12 @@ public sealed class ChatController : ApiControllerBase
         {
             json = JsonNode.Parse(responseText);
         }
-            catch (JsonException)
-            {
-                return StatusCode(502, new { success = false, detail = "AI trả về dữ liệu lập lịch trình không hợp lệ.", raw = responseText });
-            }
+        catch (JsonException)
+        {
+            return StatusCode(502, new { success = false, detail = "AI trả về dữ liệu lập lịch trình không hợp lệ.", raw = responseText });
+        }
 
         var answer = json?["choices"]?[0]?["message"]?["content"]?.ToString();
-
         if (string.IsNullOrWhiteSpace(answer))
         {
             return StatusCode(502, new { success = false, detail = "AI chưa trả về nội dung lập lịch trình hợp lệ.", raw = responseText });
@@ -675,45 +278,19 @@ public sealed class ChatController : ApiControllerBase
         var aiResult = TryParseAiJsonObject(answer);
         if (aiResult is null)
         {
-            return StatusCode(502, new
-            {
-                success = false,
-                detail = "AI chưa trả về JSON hợp lệ để lập lịch trình. Vui lòng hỏi lại ngắn gọn hơn.",
-                raw = answer
-            });
+            return StatusCode(502, new { success = false, detail = "AI chưa trả về JSON hợp lệ để lập lịch trình. Vui lòng hỏi lại ngắn gọn hơn.", raw = answer });
         }
 
         if (aiResult["status"] is null)
         {
             aiResult["status"] = JsonValue.Create(aiResult["schedule"] is null ? "needs_more_info" : "ready");
         }
-
-        if (string.Equals(aiResult["status"]?.ToString(), "ready", StringComparison.OrdinalIgnoreCase))
-        {
-            ApplyScheduleHintsToReadyResult(aiResult, request);
-        }
-
-        if (string.Equals(aiResult["status"]?.ToString(), "ready", StringComparison.OrdinalIgnoreCase) && !HasUsableAiSchedule(aiResult))
-        {
-            aiResult["status"] = JsonValue.Create("needs_more_info");
-            aiResult["question"] = JsonValue.Create("Bạn cho mình biết rõ điểm đến, ngày bắt đầu, ngày kết thúc hoặc số ngày đi để mình lập lịch trình chính xác nhé.");
-        }
-
         if (aiResult["reply"] is null && aiResult["question"] is not null)
         {
             aiResult["reply"] = JsonValue.Create(aiResult["question"]!.ToString());
         }
 
         return Ok(new { success = true, data = aiResult, message = "AI đã xử lý yêu cầu lập lịch trình" });
-    }
-
-    private static bool HasUsableAiSchedule(JsonObject result)
-    {
-        if (result["schedule"] is not JsonObject schedule) return false;
-        var startDate = schedule["start_date"]?.ToString();
-        var endDate = schedule["end_date"]?.ToString();
-        if (string.IsNullOrWhiteSpace(startDate) || string.IsNullOrWhiteSpace(endDate)) return false;
-        return schedule["days"] is JsonArray days && days.Count > 0;
     }
 
     private static string BuildSchedulePlannerPrompt(AiSchedulePlanRequest request)
@@ -726,360 +303,18 @@ public sealed class ChatController : ApiControllerBase
 
         var today = GetVietnamToday();
         var tomorrow = today.AddDays(1);
-
         return "Ngày hiện tại tại Việt Nam: " + today.ToString("yyyy-MM-dd") + "\n" +
                "Ngày mai tại Việt Nam: " + tomorrow.ToString("yyyy-MM-dd") + "\n\n" +
-               "Yêu cầu mới của người dùng:\n" +
-               request.Message!.Trim() +
-               "\n\nThông tin hiện đang có trong form lịch trình của TravelwAI:\n" +
-               currentScheduleJson +
-               "\n\nQuy tắc xử lý:\n" +
-               "- Nếu người dùng nói 'hôm nay', dùng start_date=" + today.ToString("yyyy-MM-dd") + ".\n" +
-               "- Nếu người dùng nói 'ngày mai' hoặc 'từ ngày mai', dùng start_date=" + tomorrow.ToString("yyyy-MM-dd") + ".\n" +
-               "- Nếu người dùng nói số ngày, ví dụ 2 ngày, hãy tính end_date = start_date + số ngày - 1.\n" +
-               "- Nếu người dùng chỉ sửa một phần, ví dụ 'ngân sách 2 củ', 'đổi sang tiền đô', 'đi từ ngày mai', hãy giữ nguyên các phần khác trong form.\n" +
-               "- 1 củ = 1 triệu VND; 2 củ = 2000000; 500k = 500000. 'tiền đô/tiền đo/USD/đô la' nghĩa là currency USD.\n" +
-               "Hãy kiểm tra đủ thông tin chưa. Nếu thiếu thông tin quan trọng thì chỉ hỏi lại 1-3 ý còn thiếu. " +
-               "Nếu đủ thì tạo JSON lịch trình có thể đưa thẳng vào form.";
-    }
-
-    private static JsonObject? TryBuildQuickScheduleEditPatch(AiSchedulePlanRequest request)
-    {
-        var message = request.Message?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(message)) return null;
-
-        var currentSchedule = GetCurrentScheduleObject(request);
-        if (currentSchedule is null || !CurrentScheduleHasUsefulData(currentSchedule)) return null;
-        if (LooksLikeNewDestinationRequest(message)) return null;
-
-        var patch = new JsonObject();
-        var replyParts = new List<string>();
-        var currentStart = GetJsonString(currentSchedule, "start_date");
-        var currentEnd = GetJsonString(currentSchedule, "end_date");
-
-        var budget = TryParseBudgetAmount(message);
-        if (budget.HasValue)
-        {
-            patch["budget"] = JsonValue.Create((double)budget.Value);
-            if (ParseCurrencyHint(message) is null) patch["currency"] = JsonValue.Create("VND");
-            replyParts.Add("ngân sách");
-        }
-
-        var currency = ParseCurrencyHint(message);
-        if (!string.IsNullOrWhiteSpace(currency))
-        {
-            patch["currency"] = JsonValue.Create(currency);
-            replyParts.Add("đơn vị tiền tệ");
-        }
-
-        var startHint = TryParseStartDateHint(message);
-        var durationDays = TryParseDurationDays(message);
-        var addDays = TryParseAddOrReduceDays(message);
-
-        if (startHint.HasValue)
-        {
-            patch["start_date"] = JsonValue.Create(startHint.Value.ToString("yyyy-MM-dd"));
-            var oldDuration = TryCalculateInclusiveDuration(currentStart, currentEnd);
-            var finalDuration = durationDays ?? oldDuration ?? 1;
-            patch["end_date"] = JsonValue.Create(startHint.Value.AddDays(finalDuration - 1).ToString("yyyy-MM-dd"));
-            replyParts.Add("ngày đi");
-        }
-        else if (addDays.HasValue && !string.IsNullOrWhiteSpace(currentEnd))
-        {
-            var end = TryParseIsoDate(currentEnd);
-            if (end.HasValue)
-            {
-                patch["end_date"] = JsonValue.Create(end.Value.AddDays(addDays.Value).ToString("yyyy-MM-dd"));
-                replyParts.Add(addDays.Value > 0 ? "thêm ngày" : "giảm ngày");
-            }
-        }
-        else if (durationDays.HasValue && !string.IsNullOrWhiteSpace(currentStart))
-        {
-            var start = TryParseIsoDate(currentStart) ?? GetVietnamToday();
-            patch["end_date"] = JsonValue.Create(start.AddDays(durationDays.Value - 1).ToString("yyyy-MM-dd"));
-            replyParts.Add("số ngày đi");
-        }
-
-        if (patch.Count == 0) return null;
-
-        return new JsonObject
-        {
-            ["status"] = JsonValue.Create("ready"),
-            ["mode"] = JsonValue.Create("patch"),
-            ["patch"] = patch,
-            ["reply"] = JsonValue.Create("Đã chỉnh " + string.Join(", ", replyParts.Distinct()) + " theo yêu cầu. Bạn kiểm tra lại rồi bấm Tạo lịch trình để lưu.")
-        };
-    }
-
-    private static void ApplyScheduleHintsToReadyResult(JsonObject aiResult, AiSchedulePlanRequest request)
-    {
-        if (aiResult["schedule"] is not JsonObject schedule) return;
-
-        var message = request.Message?.Trim() ?? string.Empty;
-        var currentSchedule = GetCurrentScheduleObject(request);
-        var currentStart = currentSchedule is null ? string.Empty : GetJsonString(currentSchedule, "start_date");
-        var currentEnd = currentSchedule is null ? string.Empty : GetJsonString(currentSchedule, "end_date");
-
-        var startHint = TryParseStartDateHint(message);
-        var durationDays = TryParseDurationDays(message);
-        var budget = TryParseBudgetAmount(message);
-        var currency = ParseCurrencyHint(message);
-
-        if (budget.HasValue)
-        {
-            schedule["budget"] = JsonValue.Create((double)budget.Value);
-            if (string.IsNullOrWhiteSpace(currency)) currency = "VND";
-        }
-
-        if (!string.IsNullOrWhiteSpace(currency))
-        {
-            schedule["currency"] = JsonValue.Create(currency);
-        }
-
-        if (startHint.HasValue)
-        {
-            schedule["start_date"] = JsonValue.Create(startHint.Value.ToString("yyyy-MM-dd"));
-        }
-
-        var startText = schedule["start_date"]?.ToString();
-        var start = TryParseIsoDate(startText) ?? TryParseIsoDate(currentStart) ?? GetVietnamToday();
-
-        if (durationDays.HasValue)
-        {
-            schedule["start_date"] = JsonValue.Create(start.ToString("yyyy-MM-dd"));
-            schedule["end_date"] = JsonValue.Create(start.AddDays(durationDays.Value - 1).ToString("yyyy-MM-dd"));
-            NormalizeAiScheduleDayDates(schedule, start, durationDays.Value);
-        }
-        else if (startHint.HasValue)
-        {
-            var oldDuration = TryCalculateInclusiveDuration(currentStart, currentEnd);
-            var aiDuration = TryCalculateInclusiveDuration(schedule["start_date"]?.ToString(), schedule["end_date"]?.ToString());
-            var finalDuration = aiDuration ?? oldDuration;
-            if (finalDuration.HasValue)
-            {
-                schedule["end_date"] = JsonValue.Create(startHint.Value.AddDays(finalDuration.Value - 1).ToString("yyyy-MM-dd"));
-                NormalizeAiScheduleDayDates(schedule, startHint.Value, finalDuration.Value);
-            }
-        }
-    }
-
-    private static void NormalizeAiScheduleDayDates(JsonObject schedule, DateOnly start, int durationDays)
-    {
-        if (durationDays <= 0 || schedule["days"] is not JsonArray days) return;
-
-        while (days.Count > durationDays)
-        {
-            days.RemoveAt(days.Count - 1);
-        }
-
-        for (var i = 0; i < days.Count; i++)
-        {
-            if (days[i] is not JsonObject day) continue;
-            day["day_number"] = JsonValue.Create(i + 1);
-            day["date"] = JsonValue.Create(start.AddDays(i).ToString("yyyy-MM-dd"));
-        }
-    }
-
-    private static JsonObject? GetCurrentScheduleObject(AiSchedulePlanRequest request)
-    {
-        if (request.CurrentSchedule.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null) return null;
-        try
-        {
-            return JsonNode.Parse(request.CurrentSchedule.GetRawText()) as JsonObject;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static bool CurrentScheduleHasUsefulData(JsonObject currentSchedule)
-    {
-        return !string.IsNullOrWhiteSpace(GetJsonString(currentSchedule, "title"))
-               || !string.IsNullOrWhiteSpace(GetJsonString(currentSchedule, "description"))
-               || !string.IsNullOrWhiteSpace(GetJsonString(currentSchedule, "start_date"))
-               || !string.IsNullOrWhiteSpace(GetJsonString(currentSchedule, "end_date"))
-               || !string.IsNullOrWhiteSpace(GetJsonString(currentSchedule, "budget"))
-               || (currentSchedule["tags"] is JsonArray tags && tags.Count > 0)
-               || (currentSchedule["days"] is JsonObject daysObject && daysObject.Count > 0)
-               || (currentSchedule["days"] is JsonArray daysArray && daysArray.Count > 0);
-    }
-
-    private static string GetJsonString(JsonObject obj, string propertyName)
-    {
-        return obj[propertyName]?.ToString()?.Trim() ?? string.Empty;
+               "Yêu cầu mới của người dùng:\n" + request.Message!.Trim() + "\n\n" +
+               "Thông tin hiện đang có trong form lịch trình của TravelwAI:\n" + currentScheduleJson + "\n\n" +
+               "Quy tắc: hiểu hôm nay/ngày mai theo ngày đã cung cấp; nếu người dùng nói số ngày, tính end_date = start_date + số ngày - 1; nếu chỉ sửa một phần, giữ nguyên phần khác trong form; 1 củ = 1000000 VND, 500k = 500000 VND. Trả JSON đúng schema.";
     }
 
     private static DateOnly GetVietnamToday()
     {
-        try
-        {
-            var vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
-            return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vietnamTimeZone));
-        }
-        catch
-        {
-            try
-            {
-                var vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
-                return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vietnamTimeZone));
-            }
-            catch
-            {
-                return DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
-            }
-        }
-    }
-
-    private static DateTime GetVietnamNow()
-    {
-        try
-        {
-            var vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
-            return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vietnamTimeZone);
-        }
-        catch
-        {
-            try
-            {
-                var vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
-                return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vietnamTimeZone);
-            }
-            catch
-            {
-                return DateTime.UtcNow.AddHours(7);
-            }
-        }
-    }
-
-    private static DateOnly? TryParseStartDateHint(string message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message);
-        var today = GetVietnamToday();
-
-        if (Regex.IsMatch(normalized, @"\b(ngay mai|mai)\b", RegexOptions.IgnoreCase)) return today.AddDays(1);
-        if (Regex.IsMatch(normalized, @"\b(hom nay|bay gio|toi nay|chieu nay|sang nay)\b", RegexOptions.IgnoreCase)) return today;
-
-        var match = Regex.Match(message, @"(?<!\d)(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?(?!\d)");
-        if (match.Success)
-        {
-            var day = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-            var month = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
-            var year = match.Groups[3].Success ? int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) : today.Year;
-            if (year < 100) year += 2000;
-            try
-            {
-                var date = new DateOnly(year, month, day);
-                if (!match.Groups[3].Success && date < today) date = date.AddYears(1);
-                return date;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        match = Regex.Match(message, @"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)");
-        if (match.Success && DateOnly.TryParseExact(match.Value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var isoDate))
-        {
-            return isoDate;
-        }
-
-        return null;
-    }
-
-    private static DateOnly? TryParseIsoDate(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var text = value.Trim();
-        var match = Regex.Match(text, @"\d{4}-\d{2}-\d{2}");
-        if (match.Success && DateOnly.TryParseExact(match.Value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)) return date;
-        return null;
-    }
-
-    private static int? TryParseDurationDays(string message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message);
-        var match = Regex.Match(normalized, @"(?<!\d)(\d{1,2})\s*(ngay|day|days)(?!\w)", RegexOptions.IgnoreCase);
-        if (!match.Success) return null;
-        if (!int.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var days)) return null;
-        return days is >= 1 and <= 30 ? days : null;
-    }
-
-    private static int? TryParseAddOrReduceDays(string message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message);
-        var add = Regex.Match(normalized, @"\b(them|cong)\s*(\d{1,2})\s*(ngay|day|days)\b", RegexOptions.IgnoreCase);
-        if (add.Success && int.TryParse(add.Groups[2].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var addDays))
-        {
-            return addDays is >= 1 and <= 30 ? addDays : null;
-        }
-
-        var reduce = Regex.Match(normalized, @"\b(bot|giam|rut ngan)\s*(\d{1,2})\s*(ngay|day|days)\b", RegexOptions.IgnoreCase);
-        if (reduce.Success && int.TryParse(reduce.Groups[2].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var reduceDays))
-        {
-            return reduceDays is >= 1 and <= 30 ? -reduceDays : null;
-        }
-
-        return null;
-    }
-
-    private static int? TryCalculateInclusiveDuration(string? startText, string? endText)
-    {
-        var start = TryParseIsoDate(startText);
-        var end = TryParseIsoDate(endText);
-        if (!start.HasValue || !end.HasValue || end.Value < start.Value) return null;
-        return end.Value.DayNumber - start.Value.DayNumber + 1;
-    }
-
-    private static decimal? TryParseBudgetAmount(string message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message).Replace(',', '.');
-        decimal? MatchAmount(string pattern, decimal multiplier)
-        {
-            var match = Regex.Match(normalized, pattern, RegexOptions.IgnoreCase);
-            if (!match.Success) return null;
-            if (!decimal.TryParse(match.Groups[1].Value.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var value)) return null;
-            return Math.Round(value * multiplier);
-        }
-
-        return MatchAmount(@"(?<!\d)(\d+(?:[\.,]\d+)?)\s*(cu|trieu|tr|m|million)\b", 1_000_000m)
-               ?? MatchAmount(@"(?<!\d)(\d+(?:[\.,]\d+)?)\s*(k|nghin|ngan|ngan dong|nghin dong)\b", 1_000m)
-               ?? MatchAmount(@"\b(?:ngan sach|budget|tien)\s*(?:la|khoang|tam|toi da|duoi)?\s*(\d{5,12})\b", 1m);
-    }
-
-    private static string? ParseCurrencyHint(string message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message);
-        if (Regex.IsMatch(normalized, @"\b(usd|dollar|do la|tien do|dong do|do)\b", RegexOptions.IgnoreCase)) return "USD";
-        if (Regex.IsMatch(normalized, @"\b(eur|euro)\b", RegexOptions.IgnoreCase)) return "EUR";
-        if (Regex.IsMatch(normalized, @"\b(vnd|vnđ|viet nam dong|tien viet|dong viet|dong)\b", RegexOptions.IgnoreCase)) return "VND";
-        return null;
-    }
-
-    private static bool LooksLikeNewDestinationRequest(string message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message);
-        return Regex.IsMatch(normalized, @"\b(di|den)\s+(?!tu\b|hom\b|ngay\b|vao\b|trong\b|luc\b|voi\b|may\b|bao\b|muon\b)([a-z])", RegexOptions.IgnoreCase);
-    }
-
-    private static string NormalizeVietnameseForSearch(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-        var formD = text.Normalize(NormalizationForm.FormD);
-        var builder = new StringBuilder(formD.Length);
-        foreach (var ch in formD)
-        {
-            var category = CharUnicodeInfo.GetUnicodeCategory(ch);
-            if (category == UnicodeCategory.NonSpacingMark) continue;
-            builder.Append(ch switch
-            {
-                '\u0111' => 'd',
-                '\u0110' => 'D',
-                _ => ch
-            });
-        }
-        return builder.ToString().Normalize(NormalizationForm.FormC).ToLowerInvariant();
+        var utcNow = DateTimeOffset.UtcNow;
+        var vietnamNow = utcNow.ToOffset(TimeSpan.FromHours(7));
+        return DateOnly.FromDateTime(vietnamNow.DateTime);
     }
 
     private static string? TryBuildManagerQuickReply(string message)
@@ -1095,7 +330,6 @@ public sealed class ChatController : ApiControllerBase
             ("Đăng nhập", "/login", new[] { "dang nhap", "login" }, "Đăng nhập vào tài khoản TravelwAI."),
             ("Đăng ký", "/signup", new[] { "dang ky", "tao tai khoan", "register", "signup", "sign up" }, "Tạo tài khoản mới và nhập mã mời nếu có."),
             ("Quên mật khẩu", "/forgot-password", new[] { "quen mat khau", "lay lai mat khau", "khoi phuc mat khau", "forgot password" }, "Khôi phục mật khẩu bằng email."),
-            ("Đặt lại mật khẩu", "/reset-password", new[] { "dat lai mat khau", "reset password", "reset mat khau" }, "Nhập mã khôi phục và tạo mật khẩu mới."),
             ("Trang chủ", "/home", new[] { "trang chu", "home" }, "Trang chính sau khi đăng nhập."),
             ("Giới thiệu", "/landing", new[] { "gioi thieu", "landing", "trang gioi thieu" }, "Xem tổng quan TravelwAI."),
             ("Bản đồ Việt Nam", "/provinces", new[] { "ban do viet nam", "ban do", "tinh thanh", "34 tinh", "viet nam", "provinces" }, "Xem bản đồ 34 tỉnh thành và thông tin nổi bật."),
@@ -1108,50 +342,35 @@ public sealed class ChatController : ApiControllerBase
             ("Bài viết", "/posts", new[] { "bai viet", "tin du lich", "kham pha bai", "posts" }, "Xem và quản lý bài viết du lịch."),
             ("Tour du lịch", "/tours", new[] { "tour du lich", "tour", "dat tour", "xem tour", "tours" }, "Xem tour, đặt tour và theo dõi ưu đãi."),
             ("Sales", "/tour-sales", new[] { "sales", "trang sales", "ban tour", "don ban tour", "tour sales", "tour-sales" }, "Quản lý tour, đơn bán tour, hoa hồng và doanh thu."),
-            ("Business", "/business", new[] { "business", "business", "trang business" }, "Quản lý tour, đơn bán tour, doanh thu và phí dịch vụ."),
+            ("Business", "/business", new[] { "business", "trang business" }, "Quản lý tour, đơn bán tour, doanh thu và phí dịch vụ."),
             ("Admin", "/admin", new[] { "admin", "quan tri", "quan ly he thong", "trang admin" }, "Quản lý tài khoản, quyền, tour, bài viết và dữ liệu hệ thống."),
             ("Hồ sơ", "/profile", new[] { "ho so", "tai khoan", "thong tin ca nhan", "doi ten", "profile" }, "Xem hồ sơ, đổi ảnh, đổi tên và đổi mật khẩu.")
         };
 
         string NormalizeLocal(string value) => NormalizeVietnameseForSearch(value);
-
         (string Name, string Url, string[] Aliases, string Detail)? FindPage(string value)
         {
             var key = NormalizeLocal(value);
             if (string.IsNullOrWhiteSpace(key)) return null;
-
             foreach (var page in pages)
             {
                 if (NormalizeLocal(page.Name) == key || page.Aliases.Any(alias => NormalizeLocal(alias) == key)) return page;
             }
-
             foreach (var page in pages)
             {
                 var pageName = NormalizeLocal(page.Name);
                 if (key.Contains(pageName) || pageName.Contains(key)) return page;
                 if (page.Aliases.Any(alias => key.Contains(NormalizeLocal(alias)) || NormalizeLocal(alias).Contains(key))) return page;
             }
-
             return null;
         }
 
         string PageListText() => string.Join(", ", pages.Select(page => page.Name));
         string DetailReply((string Name, string Url, string[] Aliases, string Detail) page) => page.Detail + " Muốn mở trang này, nhắn: tới trang " + page.Name + ".";
 
-        if (Match(normalized, @"\b(dang\s*xuat|thoat\s*tai\s*khoan|log\s*out)\b"))
-        {
-            return "Đang đăng xuất tài khoản.";
-        }
-
-        if (Match(normalized, @"\b(doi\s*mat\s*khau|doi\s*password|change\s*password)\b"))
-        {
-            return "Đang mở Hồ sơ để đổi mật khẩu.";
-        }
-
-        if (Match(normalized, @"(co\s*)?trang\s*nao|danh\s*sach\s*trang|menu|cac\s*trang|nhung\s*trang|xem\s*trang"))
-        {
-            return "Các trang TravelwAI: " + PageListText() + ". " + SyntaxReply();
-        }
+        if (Match(normalized, @"(dang\s*xuat|thoat\s*tai\s*khoan|log\s*out)")) return "Đang đăng xuất tài khoản.";
+        if (Match(normalized, @"(doi\s*mat\s*khau|doi\s*password|change\s*password)")) return "Đang mở Hồ sơ để đổi mật khẩu.";
+        if (Match(normalized, @"(co\s*)?trang\s*nao|danh\s*sach\s*trang|menu|cac\s*trang|nhung\s*trang|xem\s*trang")) return "Các trang TravelwAI: " + PageListText() + ". " + SyntaxReply();
 
         var navigateMatch = Regex.Match(normalized, @"^(?:toi|toi\s*toi|qua|di\s*toi|chuyen\s*toi)\s+trang\s+(.+)$", RegexOptions.IgnoreCase);
         if (navigateMatch.Success)
@@ -1168,17 +387,50 @@ public sealed class ChatController : ApiControllerBase
         }
 
         var directPage = FindPage(normalized);
-        if (directPage.HasValue && (NormalizeLocal(directPage.Value.Name) == normalized || directPage.Value.Aliases.Any(alias => NormalizeLocal(alias) == normalized)))
-        {
-            return DetailReply(directPage.Value);
-        }
-
-        if (normalized.Contains("trang") || pages.Any(page => normalized.Contains(NormalizeLocal(page.Name)) || page.Aliases.Any(alias => normalized.Contains(NormalizeLocal(alias)))))
-        {
-            return SyntaxReply();
-        }
-
+        if (directPage.HasValue && (NormalizeLocal(directPage.Value.Name) == normalized || directPage.Value.Aliases.Any(alias => NormalizeLocal(alias) == normalized))) return DetailReply(directPage.Value);
+        if (normalized.Contains("trang") || pages.Any(page => normalized.Contains(NormalizeLocal(page.Name)) || page.Aliases.Any(alias => normalized.Contains(NormalizeLocal(alias))))) return SyntaxReply();
         return null;
+    }
+
+    private static string NormalizeVietnameseForSearch(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var formD = text.Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(formD.Length);
+        foreach (var ch in formD)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(ch);
+            if (category == UnicodeCategory.NonSpacingMark) continue;
+            builder.Append(ch switch { 'đ' => 'd', 'Đ' => 'D', _ => ch });
+        }
+        return builder.ToString().Normalize(NormalizationForm.FormC).ToLowerInvariant();
+    }
+
+    private static string BuildAiContextBlock(string? context)
+    {
+        if (string.IsNullOrWhiteSpace(context)) return string.Empty;
+        var clean = Regex.Replace(context.Trim(), @"\s+", " ");
+        if (clean.Length > 8000) clean = clean[..8000];
+        return "CONTEXT từ giao diện TravelwAI: " + clean;
+    }
+
+    private static string CleanSimpleChatbotReply(string text, int maxWords, bool dropUnfinishedTail = false)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var clean = Regex.Replace(text.Trim(), @"\s+", " ");
+        clean = clean.Replace("```", string.Empty).Trim();
+        var words = clean.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length > maxWords)
+        {
+            clean = string.Join(' ', words.Take(maxWords));
+            dropUnfinishedTail = true;
+        }
+        if (dropUnfinishedTail)
+        {
+            var end = Math.Max(clean.LastIndexOf('.'), Math.Max(clean.LastIndexOf('!'), clean.LastIndexOf('?')));
+            if (end > 40) clean = clean[..(end + 1)].Trim();
+        }
+        return clean;
     }
 
     private static JsonObject? TryParseAiJsonObject(string text)
@@ -1186,2369 +438,39 @@ public sealed class ChatController : ApiControllerBase
         var cleaned = text.Trim();
         cleaned = Regex.Replace(cleaned, @"^```(?:json)?\s*", "", RegexOptions.IgnoreCase).Trim();
         cleaned = Regex.Replace(cleaned, @"\s*```$", "", RegexOptions.IgnoreCase).Trim();
-
         var start = cleaned.IndexOf('{');
         var end = cleaned.LastIndexOf('}');
-        if (start >= 0 && end > start)
-        {
-            cleaned = cleaned[start..(end + 1)];
-        }
-
-        try
-        {
-            return JsonNode.Parse(cleaned) as JsonObject;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static bool IsOpenRouterAnswerCutOff(string? finishReason)
-    {
-        return string.Equals(finishReason, "length", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string TryBuildGuideEverydayFactReply(string? message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message ?? string.Empty);
-        if (string.IsNullOrWhiteSpace(normalized)) return string.Empty;
-
-        var asksTime = Regex.IsMatch(normalized, @"\b(bay gio|gio hien tai|may gio|mấy giờ|luc nay|gio may)\b", RegexOptions.IgnoreCase);
-        var asksDate = Regex.IsMatch(normalized, @"\b(hom nay|ngay may|ngay bao nhieu|thu may|thu gi|nam nay|thang may|ngay hien tai)\b", RegexOptions.IgnoreCase);
-        if (!asksTime && !asksDate) return string.Empty;
-
-        var now = GetVietnamNow();
-        var dayNames = new[] { "Chủ nhật", "thứ Hai", "thứ Ba", "thứ Tư", "thứ Năm", "thứ Sáu", "thứ Bảy" };
-        var dayName = dayNames[(int)now.DayOfWeek];
-
-        if (asksTime)
-        {
-            return $"Bây giờ ở Việt Nam khoảng {now:HH:mm}, {dayName}, ngày {now:dd/MM/yyyy}.";
-        }
-
-        return $"Hôm nay là {dayName}, ngày {now:dd/MM/yyyy} theo giờ Việt Nam.";
-    }
-
-    private static bool GuideMessageNeedsWikipedia(string? message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message ?? string.Empty);
-        if (string.IsNullOrWhiteSpace(normalized)) return false;
-
-        if (FindProvinceNamesInText(message).Any()) return true;
-        if (IsGenericGuideExplorationMessage(message)) return false;
-
-        var factualKeywords = new[]
-        {
-            "dia danh", "di tich", "danh lam", "tinh thanh", "tinh nao", "thanh pho", "le hoi", "ngay le",
-            "lich su", "van hoa", "truyen thuyet", "nguon goc", "y nghia", "nhan vat", "dan toc", "di san",
-            "bao tang", "den tho", "den", "dinh", "chua", "ngoi chua", "thap", "hoang thanh", "co do", "pho co", "lang nghe",
-            "o dau", "la gi", "khi nao", "ngay nao", "dien ra", "to chuc", "ke chuyen", "gioi thieu", "thuyet minh",
-            "ai la", "la ai", "vi sao", "tai sao", "co phai", "dung khong", "bao nhieu", "bao lau", "may",
-            "dien tich", "dan so", "nam nao", "trieu dai", "xay dung", "duoc cong nhan", "unesco", "nguoi sang lap",
-            "cao bao nhieu", "rong bao nhieu", "sau bao nhieu", "nam o dau", "thuoc nuoc nao", "thuoc tinh nao",
-            "what is", "who is", "where is", "when is", "how many", "how much", "how tall", "how high",
-            "hoi lim", "gio to", "tet", "quoc khanh", "trung thu", "thang long", "ha long", "nha trang", "phu quoc", "da lat", "hoi an", "hue", "sa pa", "sapa", "tam coc", "trang an",
-            "gau tao", "long tong", "nong tong", "roong pooc", "xoan", "nao cong", "katê", "kate", "ok om bok"
-        };
-
-        if (factualKeywords.Any(keyword => normalized.Contains(keyword, StringComparison.OrdinalIgnoreCase))) return true;
-
-        var meaningfulTokens = normalized
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(token => token.Length >= 3)
-            .Where(token => !GuideWikipediaStopWords.Contains(token))
-            .ToList();
-
-        if (meaningfulTokens.Count is >= 1 and <= 8 && !LooksLikeGuideCasualOrPlanningMessage(normalized)) return true;
-
-        return false;
-    }
-
-    private static bool LooksLikeGuideCasualOrPlanningMessage(string normalized)
-    {
-        if (string.IsNullOrWhiteSpace(normalized)) return true;
-        if (Regex.IsMatch(normalized, @"\b(xin chao|chao|hi|hello|alo|hey|cam on|thanks|ok|oke|uh|um|vâng|vang|duoc|được)\b", RegexOptions.IgnoreCase)) return true;
-        if (Regex.IsMatch(normalized, @"\b(tu van|goi y|nen di|muon di|du lich|lich trinh|di choi|nghi duong|bien|nui|team building|gia dinh|ban be|cap doi|ngan sach|bao nhieu tien)\b", RegexOptions.IgnoreCase)) return true;
-        return false;
-    }
-
-    private static string TryBuildGuideConversationalReply(string? message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message ?? string.Empty);
-        if (string.IsNullOrWhiteSpace(normalized)) return string.Empty;
-
-        if (Regex.IsMatch(normalized, @"\b(xin chao|chao|hi|hello|alo|hey)\b", RegexOptions.IgnoreCase))
-        {
-            return "Chào bạn, mình là hướng dẫn viên du lịch. Mình có thể giới thiệu địa danh, tỉnh thành, di tích, danh thắng, lễ hội, văn hoá và lịch sử dựa trên nguồn Wiki/Wikipedia trong CONTEXT.";
-        }
-
-        if (normalized.Contains("cam on", StringComparison.OrdinalIgnoreCase) || normalized.Contains("thanks", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Không có gì. Bạn gửi tên địa danh, tỉnh/thành, di tích, lễ hội hoặc nhân vật lịch sử, mình sẽ giới thiệu dựa trên nguồn Wiki/Wikipedia trong CONTEXT.";
-        }
-
-        if (normalized.Contains("ban la ai", StringComparison.OrdinalIgnoreCase) || normalized.Contains("lam duoc gi", StringComparison.OrdinalIgnoreCase) || normalized.Contains("giup duoc gi", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Mình là hướng dẫn viên du lịch. Mình giới thiệu nơi chốn, văn hoá, lịch sử, kiến trúc, tôn giáo, phong tục và lễ hội dựa trên nguồn Wiki/Wikipedia trong CONTEXT; không tự thêm thông tin ngoài nguồn.";
-        }
-
-        if (Regex.IsMatch(normalized, @"\b(lich trinh|ke hoach di|tour|dat ve|dat phong|dat xe|dat nha hang|booking|gia ve|chi phi|thoi tiet|phuong tien|dong duc|ngan sach)\b", RegexOptions.IgnoreCase))
-        {
-            return "Mình không tạo lịch trình, gợi ý tour, booking, giá vé, thời tiết, phương tiện hoặc chi phí nếu CONTEXT không có. Mình có thể giới thiệu địa danh, văn hoá, lịch sử và lễ hội dựa trên nguồn Wiki/Wikipedia.";
-        }
-
-        if (IsGenericGuideExplorationMessage(message))
-        {
-            return "Mình đang hiểu bạn muốn tìm hiểu về địa danh, tỉnh thành, di tích, lễ hội, văn hoá hoặc lịch sử. Hãy gửi tên cụ thể, mình sẽ giới thiệu dựa trên nguồn Wiki/Wikipedia trong CONTEXT.";
-        }
-
-        if (normalized.Length <= 30)
-        {
-            return "Bạn gửi rõ tên địa danh, tỉnh/thành, di tích, lễ hội hoặc nhân vật lịch sử nhé. Mình chỉ trả lời dựa trên nguồn Wiki/Wikipedia trong CONTEXT.";
-        }
-
-        return "Mình chưa có đủ thông tin từ nguồn Wiki/Wikipedia để trả lời chính xác nội dung này.";
-    }
-
-    private static bool IsGuideDateQuestion(string? message)
-    {
-        if (string.IsNullOrWhiteSpace(message)) return false;
-
-        var text = NormalizeVietnameseForSearch(message);
-        var dateKeywords = new[]
-        {
-            "ngay nao", "ngay may", "ngay bao nhieu", "khi nao", "bao gio", "luc nao",
-            "thoi gian", "dien ra", "to chuc", "may thang", "thang nao", "nam nao",
-            "am lich", "duong lich", "mung", "dien bien ngay", "dang dien ra"
-        };
-
-        return dateKeywords.Any(keyword => text.Contains(keyword, StringComparison.OrdinalIgnoreCase));
-    }
-    private static bool IsGenericGuideExplorationMessage(string? message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message ?? string.Empty);
-        if (string.IsNullOrWhiteSpace(normalized)) return false;
-        if (FindProvinceNamesInText(message).Any()) return false;
-        if (HasKnownSpecificGuideTopic(normalized)) return false;
-
-        var broadTopicCount = 0;
-        var broadTopics = new[]
-        {
-            "van hoa", "lich su", "di tich", "le hoi", "dia danh", "danh lam", "lang nghe", "di san", "nhan vat"
-        };
-        foreach (var topic in broadTopics)
-        {
-            if (normalized.Contains(topic, StringComparison.OrdinalIgnoreCase)) broadTopicCount++;
-        }
-
-        if (broadTopicCount < 2) return false;
-
-        var asksBroadExplore = Regex.IsMatch(normalized, @"\b(kham pha|tim hieu|gioi thieu|thuyet minh|ke chuyen|noi ve|giai thich)\b", RegexOptions.IgnoreCase);
-        if (!asksBroadExplore) return false;
-
-        var meaningfulTokens = normalized
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(token => token.Trim(',', '.', '-', ':', ';', '(', ')'))
-            .Where(token => token.Length >= 3)
-            .Where(token => !GuideWikipediaStopWords.Contains(token))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        if (meaningfulTokens.Count == 0) return true;
-
-        var genericOnlyTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "kham", "pha", "tim", "hieu", "gioi", "thieu", "thuyet", "minh", "chuyen", "giai", "thich",
-            "van", "hoa", "lich", "su", "tich", "hoi", "dia", "danh", "noi", "bat", "tieu", "bieu", "mien",
-            "tinh", "thanh", "pho", "diem", "den", "trai", "nghiem", "viet", "nam", "bac", "trung", "dong", "tay", "phia"
-        };
-
-        return meaningfulTokens.All(token => genericOnlyTokens.Contains(token));
-    }
-
-    private static bool HasKnownSpecificGuideTopic(string normalized)
-    {
-        if (string.IsNullOrWhiteSpace(normalized)) return false;
-
-        var knownSpecificTopics = new[]
-        {
-            "hoang thanh thang long", "thang long", "van mieu", "quoc tu giam", "co loa", "ho guom", "ho hoan kiem",
-            "festival hue", "hue", "hoi an", "ha long", "nha trang", "phu quoc", "da lat", "sa pa", "sapa",
-            "tam coc", "trang an", "gau tao", "hoi lim", "gio to hung vuong", "tet nguyen dan",
-            "trung thu", "quoc khanh", "ok om bok", "kate", "katê", "long tong", "nong tong", "roong pooc", "xoan",
-            "nha tho duc ba", "dinh doc lap", "dia dao cu chi", "my son", "thanh nha ho", "co do hue", "viet nam"
-        };
-
-        return knownSpecificTopics.Any(topic => normalized.Contains(topic, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static string RemoveGuideDateMentions(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-
-        var cleaned = text;
-        var options = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
-
-        cleaned = Regex.Replace(cleaned, "\\b(?:ngày\\s*)?(?:mùng\\s*)?[0-3]?\\d\\s*(?:đến|den|[-\u2013\u2014])\\s*[0-3]?\\d/\\d{1,2}\\s*(?:âm\\s*lịch|am\\s*lich|dương\\s*lịch|duong\\s*lich|AL|DL)?", "", options);
-        cleaned = Regex.Replace(cleaned, "\\b(?:ngày\\s*)?(?:mùng\\s*)?[0-3]?\\d/\\d{1,2}\\s*(?:âm\\s*lịch|am\\s*lich|dương\\s*lịch|duong\\s*lich|AL|DL)?", "", options);
-        cleaned = Regex.Replace(cleaned, "\\b(?:ngày\\s*)?(?:mùng\\s*)?[0-3]?\\d\\s+đến\\s+[0-3]?\\d\\s+tháng\\s+\\d{1,2}\\s*(?:âm\\s*lịch|am\\s*lich|dương\\s*lịch|duong\\s*lich)?", "", options);
-        cleaned = Regex.Replace(cleaned, "\\b[0-3]?\\d\\s+[0-3]?\\d\\s+\\d{1,2}\\s*(?:âm\\s*lịch|am\\s*lich|dương\\s*lịch|duong\\s*lich)\\b", "", options);
-        cleaned = Regex.Replace(cleaned, "\\b(?:tháng\\s*)\\d{1,2}\\s*(?:âm\\s*lịch|am\\s*lich|dương\\s*lịch|duong\\s*lich|AL|DL)?", "", options);
-        cleaned = Regex.Replace(cleaned, @"\s*(?:Thời gian|Thông tin thời gian)\s*:\s*[,.;]?", " ", options);
-        cleaned = Regex.Replace(cleaned, @"\s+([,.;])", "$1");
-        cleaned = Regex.Replace(cleaned, @"\s{2,}", " ").Trim();
-        cleaned = Regex.Replace(cleaned, @"\(\s*\)", "").Trim();
-        cleaned = Regex.Replace(cleaned, @"\s*,\s*,+", ", ").Trim();
-        cleaned = Regex.Replace(cleaned, @"^[,.;\s]+", "").Trim();
-
-        return cleaned;
-    }
-
-    private static string BuildAiContextBlock(string? context, string assistantMode, bool includeDateInformation)
-    {
-        if (string.IsNullOrWhiteSpace(context)) return string.Empty;
-
-        var cleaned = Regex.Replace(context.Trim(), @"\s+", " ");
-        cleaned = Regex.Replace(cleaned, @"[\u0000-\u001F\u007F]", " ").Trim();
-        if (assistantMode == "guide" && !includeDateInformation)
-        {
-            cleaned = RemoveGuideDateMentions(cleaned);
-        }
-        const int maxContextChars = 3600;
-        if (cleaned.Length > maxContextChars)
-        {
-            cleaned = cleaned[..maxContextChars].Trim();
-        }
-
-        return assistantMode == "guide"
-            ? (includeDateInformation
-                ? "CONTEXT DO HỆ THỐNG CUNG CẤP. Chỉ dùng phần CONTEXT này nếu nó khớp trực tiếp với câu hỏi. Không tự thêm chi tiết ngoài nguồn. Khi trả lời, đi thẳng vào nội dung và không dùng lời dẫn nguồn ở đầu câu. Thông tin: " + cleaned
-                : "CONTEXT DO HỆ THỐNG CUNG CẤP. Câu hỏi không hỏi ngày tháng, nên không tự nêu thời gian. Chỉ dùng phần CONTEXT này nếu nó khớp trực tiếp với câu hỏi. Không tự thêm chi tiết ngoài nguồn. Khi trả lời, đi thẳng vào nội dung và không dùng lời dẫn nguồn ở đầu câu. Thông tin: " + cleaned)
-            : "NGỮ CẢNH TỪ ỨNG DỤNG TRAVELWAI. Dùng để trả lời hướng dẫn ngắn gọn nếu phù hợp. Dữ liệu: " + cleaned;
-    }
-
-    private sealed class WikipediaPageCandidate
-    {
-        public WikipediaPageCandidate(string title, string extract, string url, int score, string sourceName = "")
-        {
-            Title = title;
-            Extract = extract;
-            Url = url;
-            Score = score;
-            SourceName = sourceName;
-        }
-
-        public string Title { get; }
-        public string Extract { get; }
-        public string Url { get; }
-        public int Score { get; }
-        public string SourceName { get; }
-    }
-
-    private sealed class GuideSearchPlan
-    {
-        public string OriginalQuestion { get; set; } = string.Empty;
-        public string IntentType { get; set; } = "explain";
-        public bool NeedsTrustedSource { get; set; } = true;
-        public string QuestionFocus { get; set; } = string.Empty;
-        public string AnswerStyle { get; set; } = "tour_guide_explanation";
-        public IReadOnlyList<GuideSearchTopic> Topics { get; set; } = Array.Empty<GuideSearchTopic>();
-        public IReadOnlyList<string> NegativeHints { get; set; } = Array.Empty<string>();
-    }
-
-    private sealed class GuideSearchTopic
-    {
-        public string Id { get; set; } = string.Empty;
-        public string CoreTopic { get; set; } = string.Empty;
-        public string NormalizedTopic { get; set; } = string.Empty;
-        public string EntityType { get; set; } = "topic";
-        public string Role { get; set; } = "primary";
-        public IReadOnlyList<string> Aspects { get; set; } = Array.Empty<string>();
-        public IReadOnlyList<string> LocationHints { get; set; } = Array.Empty<string>();
-        public IReadOnlyList<string> CultureHints { get; set; } = Array.Empty<string>();
-        public IReadOnlyList<string> TimeHints { get; set; } = Array.Empty<string>();
-        public IReadOnlyList<GuideAspectQuestion> MustAnswerAspects { get; set; } = Array.Empty<GuideAspectQuestion>();
-        public GuideTopicSearchPlan SearchPlan { get; set; } = new();
-    }
-
-    private sealed class GuideAspectQuestion
-    {
-        public string Aspect { get; set; } = string.Empty;
-        public string Question { get; set; } = string.Empty;
-    }
-
-    private sealed class GuideTopicSearchPlan
-    {
-        public IReadOnlyList<string> ExactTitleQueries { get; set; } = Array.Empty<string>();
-        public IReadOnlyList<string> FallbackQueries { get; set; } = Array.Empty<string>();
-        public IReadOnlyList<string> LocationQueries { get; set; } = Array.Empty<string>();
-        public IReadOnlyList<string> AspectQueries { get; set; } = Array.Empty<string>();
-        public IReadOnlyList<string> AvoidQueries { get; set; } = Array.Empty<string>();
-    }
-
-    private static async Task<GuideSearchPlan?> ExtractGuideSearchPlanAsync(
-        HttpClient http,
-        string? message,
-        string? appContext,
-        string? apiKey,
-        string model,
-        string siteUrl,
-        string appName,
-        Uri openRouterEndpoint)
-    {
-        if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(message))
-        {
-            return null;
-        }
-
-        try
-        {
-            var extractionMessages = new List<object>
-            {
-                new
-                {
-                    role = "system",
-                    content =
-                        "Ban la bo lap ke hoach tim nguon cho Huong dan vien Travelwinne. " +
-                        "Khong tra loi cau hoi cua nguoi dung. Chi phan tich cau hoi thanh ke hoach tim nhieu nguon: Wikipedia/Wikivoyage tieng Viet truoc, neu chu de quoc te thi them Wikipedia/Wikivoyage tieng Anh, DuckDuckGo va Wikidata. " +
-                        "Tra ve DUY NHAT JSON hop le, khong markdown, khong giai thich ngoai JSON. " +
-                        "Schema: {original_question:string,intent_type:string,needs_trusted_source:boolean,question_focus:string,answer_style:string,negative_hints:string[],topics:[{id:string,core_topic:string,normalized_topic:string,entity_type:string,role:string,aspects:string[],location_hints:string[],culture_hints:string[],time_hints:string[],must_answer_aspects:[{aspect:string,question:string}],search_plan:{exact_title_queries:string[],fallback_queries:string[],location_queries:string[],aspect_queries:string[],avoid_queries:string[]}}]}. " +
-                        "Quy tac topic: Neu nguoi dung hoi mot le hoi/dia danh/nhan vat thi tao 1 topic chinh va dua cac y nhu nguon goc, y nghia van hoa, lich su, dieu thu vi vao aspects va must_answer_aspects; khong tach cac y do thanh topic rieng. " +
-                        "Neu nguoi dung so sanh hoac hoi nhieu dia danh/le hoi khac nhau thi tao nhieu topic, moi topic co search_plan rieng. " +
-                        "core_topic phai la ten rieng hoac chu de chinh ngan gon nhat, vi du 'Le hoi Gau Tao', 'Hoi Lim', 'Hoang thanh Thang Long'. " +
-                        "entity_type dung mot trong: festival, place, landmark, province, person, culture, event, topic. " +
-                        "aspects dung cac nhan nhu origin, culture, history, festival, landmark, date, activity, interesting_facts, overview. " +
-                        "search_plan.exact_title_queries uu tien tieu de co kha nang trung bai Wikipedia nhat; fallback_queries la bien the ten, co the them ten tieng Anh pho bien neu chu de quoc te; location_queries chi them dia danh phu; aspect_queries dung de tim doan lien quan. " +
-                        "Khong dua cac tu chung nhu 'kham pha', 'gioi thieu', 'la gi', 'nguon goc', 'van hoa', 'lich su' thanh query rieng neu khong kem core_topic. " +
-                        "Khong chi tim tinh/thanh neu cau hoi co ten le hoi hoac dia danh cu the. Vi du 'Le hoi Gau Tao' phai tim le hoi truoc, khong chi tim Lao Cai/Ha Giang. " +
-                        "Neu la le hoi, exact_title_queries phai uu tien dang 'Le hoi [ten]' truoc ten ngan. Vi du 'gau tao' phai sinh core_topic='Le hoi Gau Tao', entity_type='festival', exact_title_queries=['Le hoi Gau Tao'], fallback_queries=['Gau Tao le hoi nguoi H'Mong','Gau Tao nguoi Mong'], avoid_queries=['gau tao thung','gau tao do vat','go','tre']. " +
-                        "Neu hoi tim le hoi/su kien de di ma thieu dia diem hoac thoi gian, intent_type can the hien can_clarify va question_focus ghi ro thong tin can hoi lai. " +
-                        "negative_hints va avoid_queries ghi nhung chu de de tim nham can tranh nhu bao chi, truyen hinh, duong cao toc, do vat, vat lieu, tour thuong mai, gia ve neu nguoi dung khong hoi. " +
-                        "Khong tu bia dia danh, so lieu, ngay thang hay ten le hoi. Neu khong co chu de cu the, tra topics rong."
-                },
-                new
-                {
-                    role = "user",
-                    content =
-                        "Cau hoi hien tai:\n" + message.Trim() +
-                        "\n\nNgu canh ung dung neu co:\n" + (appContext ?? string.Empty).Trim()
-                }
-            };
-
-            var payload = new
-            {
-                model,
-                messages = extractionMessages,
-                temperature = 0.0,
-                max_tokens = 1200,
-                reasoning = BuildOpenRouterMinimalReasoningOptions()
-            };
-
-            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, openRouterEndpoint);
-            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            httpRequest.Headers.TryAddWithoutValidation("HTTP-Referer", siteUrl);
-            httpRequest.Headers.TryAddWithoutValidation("X-Title", appName);
-            httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
-            using var response = await http.SendAsync(httpRequest);
-            var responseText = await response.Content.ReadAsStringAsync();
-            if (!response.IsSuccessStatusCode)
-            {
-                return null;
-            }
-
-            var root = JsonNode.Parse(responseText);
-            var content = root?["choices"]?[0]?["message"]?["content"]?.ToString();
-            if (string.IsNullOrWhiteSpace(content))
-            {
-                return null;
-            }
-
-            return BuildGuideSearchPlanFromJson(TryParseAiJsonObject(content), message);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static GuideSearchPlan? BuildGuideSearchPlanFromJson(JsonObject? json, string? fallbackQuestion)
-    {
-        if (json is null) return null;
-
-        var topics = new List<GuideSearchTopic>();
-        if (json["topics"] is JsonArray topicArray)
-        {
-            var index = 1;
-            foreach (var item in topicArray)
-            {
-                if (item is not JsonObject topicJson) continue;
-                var topic = BuildGuideSearchTopicFromJson(topicJson, index);
-                if (topic is null) continue;
-                topics.Add(topic);
-                index++;
-            }
-        }
-
-        if (topics.Count == 0) return null;
-
-        return new GuideSearchPlan
-        {
-            OriginalQuestion = (json["original_question"]?.ToString() ?? fallbackQuestion ?? string.Empty).Trim(),
-            IntentType = NormalizeGuideIntentType(json["intent_type"]?.ToString()),
-            NeedsTrustedSource = json["needs_trusted_source"]?.GetValue<bool>() ?? true,
-            QuestionFocus = (json["question_focus"]?.ToString() ?? string.Empty).Trim(),
-            AnswerStyle = NormalizeGuideAnswerStyle(json["answer_style"]?.ToString()),
-            NegativeHints = CleanGuideIntentQueries(ReadJsonStringArray(json, "negative_hints"), 8),
-            Topics = topics
-        };
-    }
-
-    private static GuideSearchTopic? BuildGuideSearchTopicFromJson(JsonObject json, int index)
-    {
-        var searchPlan = BuildGuideTopicSearchPlanFromJson(json["search_plan"] as JsonObject);
-        var coreTopic = CleanWikipediaCoreQuery(json["core_topic"]?.ToString());
-        var normalizedTopic = CleanWikipediaCoreQuery(json["normalized_topic"]?.ToString());
-
-        var allQueries = searchPlan.ExactTitleQueries
-            .Concat(searchPlan.FallbackQueries)
-            .Concat(searchPlan.LocationQueries)
-            .Concat(searchPlan.AspectQueries)
-            .ToList();
-
-        if (string.IsNullOrWhiteSpace(coreTopic) && allQueries.Count > 0)
-        {
-            coreTopic = allQueries[0];
-        }
-
-        if (string.IsNullOrWhiteSpace(coreTopic) && allQueries.Count == 0)
-        {
-            return null;
-        }
-
-        if (string.IsNullOrWhiteSpace(normalizedTopic))
-        {
-            normalizedTopic = coreTopic;
-        }
-
-        return new GuideSearchTopic
-        {
-            Id = string.IsNullOrWhiteSpace(json["id"]?.ToString()) ? $"topic_{index}" : json["id"]!.ToString()!.Trim(),
-            CoreTopic = coreTopic,
-            NormalizedTopic = normalizedTopic,
-            EntityType = NormalizeGuideEntityType(json["entity_type"]?.ToString()),
-            Role = NormalizeGuideTopicRole(json["role"]?.ToString()),
-            Aspects = NormalizeGuideAspectList(ReadJsonStringArray(json, "aspects")),
-            LocationHints = CleanGuideIntentQueries(ReadJsonStringArray(json, "location_hints"), 6),
-            CultureHints = CleanGuideIntentQueries(ReadJsonStringArray(json, "culture_hints"), 6),
-            TimeHints = ReadJsonStringArray(json, "time_hints").Take(6).ToList(),
-            MustAnswerAspects = ReadGuideAspectQuestions(json),
-            SearchPlan = searchPlan
-        };
-    }
-
-    private static GuideTopicSearchPlan BuildGuideTopicSearchPlanFromJson(JsonObject? json)
-    {
-        if (json is null)
-        {
-            return new GuideTopicSearchPlan();
-        }
-
-        return new GuideTopicSearchPlan
-        {
-            ExactTitleQueries = CleanGuideIntentQueries(ReadJsonStringArray(json, "exact_title_queries"), 8),
-            FallbackQueries = CleanGuideIntentQueries(ReadJsonStringArray(json, "fallback_queries"), 8),
-            LocationQueries = CleanGuideIntentQueries(ReadJsonStringArray(json, "location_queries"), 8),
-            AspectQueries = CleanGuideIntentQueries(ReadJsonStringArray(json, "aspect_queries"), 10),
-            AvoidQueries = CleanGuideIntentQueries(ReadJsonStringArray(json, "avoid_queries"), 10)
-        };
-    }
-
-    private static IReadOnlyList<GuideAspectQuestion> ReadGuideAspectQuestions(JsonObject json)
-    {
-        if (json["must_answer_aspects"] is not JsonArray array) return Array.Empty<GuideAspectQuestion>();
-
-        return array
-            .OfType<JsonObject>()
-            .Select(item => new GuideAspectQuestion
-            {
-                Aspect = NormalizeGuideAspect(item["aspect"]?.ToString()),
-                Question = (item["question"]?.ToString() ?? string.Empty).Trim()
-            })
-            .Where(item => !string.IsNullOrWhiteSpace(item.Aspect) || !string.IsNullOrWhiteSpace(item.Question))
-            .Take(8)
-            .ToList();
-    }
-
-    private static IReadOnlyList<string> ReadJsonStringArray(JsonObject json, string propertyName)
-    {
-        if (json[propertyName] is not JsonArray array) return Array.Empty<string>();
-
-        return array
-            .Select(item => item?.ToString()?.Trim() ?? string.Empty)
-            .Where(item => !string.IsNullOrWhiteSpace(item))
-            .ToList();
-    }
-
-    private static IReadOnlyList<string> CleanGuideIntentQueries(IEnumerable<string?> values, int maxCount)
-    {
-        var results = new List<string>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var value in values)
-        {
-            var cleaned = CleanWikipediaCoreQuery(value);
-            if (string.IsNullOrWhiteSpace(cleaned)) continue;
-            if (cleaned.Length > 100) cleaned = cleaned[..100].Trim();
-            if (!IsUsefulWikipediaSearchQuery(cleaned)) continue;
-
-            var key = NormalizeVietnameseForSearch(cleaned);
-            if (string.IsNullOrWhiteSpace(key) || !seen.Add(key)) continue;
-
-            results.Add(cleaned);
-            if (results.Count >= maxCount) break;
-        }
-
-        return results;
-    }
-
-    private static IReadOnlyList<string> NormalizeGuideAspectList(IEnumerable<string> values)
-    {
-        return values
-            .Select(NormalizeGuideAspect)
-            .Where(item => !string.IsNullOrWhiteSpace(item))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(10)
-            .ToList();
-    }
-
-    private static string NormalizeGuideAspect(string? value)
-    {
-        var text = NormalizeVietnameseForSearch(value ?? string.Empty);
-        return text switch
-        {
-            "origin" or "nguon goc" => "origin",
-            "culture" or "van hoa" or "y nghia van hoa" => "culture",
-            "history" or "lich su" => "history",
-            "festival" or "le hoi" => "festival",
-            "landmark" or "dia danh" or "di tich" or "du lich" => "landmark",
-            "date" or "ngay thang" or "thoi gian" => "date",
-            "activity" or "hoat dong" or "nghi thuc" => "activity",
-            "interesting facts" or "interesting_facts" or "dieu thu vi" => "interesting_facts",
-            "overview" or "tong quan" => "overview",
-            _ => text
-        };
-    }
-
-    private static string NormalizeGuideIntentType(string? value)
-    {
-        var text = NormalizeVietnameseForSearch(value ?? string.Empty);
-        return string.IsNullOrWhiteSpace(text) ? "explain" : text;
-    }
-
-    private static string NormalizeGuideAnswerStyle(string? value)
-    {
-        var text = NormalizeVietnameseForSearch(value ?? string.Empty);
-        return string.IsNullOrWhiteSpace(text) ? "tour_guide_explanation" : text;
-    }
-
-    private static string NormalizeGuideEntityType(string? value)
-    {
-        var text = NormalizeVietnameseForSearch(value ?? string.Empty);
-        return text switch
-        {
-            "festival" or "le hoi" => "festival",
-            "place" or "dia diem" => "place",
-            "landmark" or "di tich" or "dia danh" => "landmark",
-            "province" or "tinh thanh" => "province",
-            "person" or "nhan vat" => "person",
-            "culture" or "van hoa" => "culture",
-            "event" or "su kien" => "event",
-            _ => "topic"
-        };
-    }
-
-    private static string NormalizeGuideTopicRole(string? value)
-    {
-        var text = NormalizeVietnameseForSearch(value ?? string.Empty);
-        return string.IsNullOrWhiteSpace(text) ? "primary" : text;
-    }
-
-
-    private static async Task<string> BuildWikipediaContextBlockAsync(HttpClient http, string? message, string? appContext, bool includeDateInformation, GuideSearchPlan? searchPlan)
-    {
-        var page = await FindBestWikipediaPageAsync(http, message, appContext, searchPlan);
-        if (page is null) return string.Empty;
-        if (!IsGuideCandidateCompatible(message, page.Title, page, searchPlan)) return string.Empty;
-
-        var extract = PrepareWikipediaExtractForQuestion(page.Extract, message, includeDateInformation, 3400);
-        if (string.IsNullOrWhiteSpace(extract)) return string.Empty;
-
-        var source = string.IsNullOrWhiteSpace(page.Url) ? page.Title : $"{page.Title} ({page.Url})";
-        return "CONTEXT TỪ WIKIPEDIA TIẾNG VIỆT. Đây là nguồn ưu tiên số 1 và đã được chọn vì khớp nhất với câu hỏi. Người dùng hỏi: " + (message ?? string.Empty).Trim() + ". Hãy dùng nội dung này để diễn giải đúng trọng tâm câu hỏi, không chép nguyên văn toàn đoạn và không mở đầu bằng Theo Wikipedia. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh hoặc lễ hội thì chỉ tập trung đúng mảng đó. Nếu người dùng hỏi nhiều mảng cùng lúc, hãy trả lời đủ các mảng có trong nguồn. Không suy luận thêm ngoài nội dung nguồn. Nếu nội dung không đủ cho đúng khía cạnh người dùng hỏi, hãy nói chưa đủ thông tin từ nguồn Wiki/Wikipedia. Nếu có thể, ghi Nguồn ở cuối câu trả lời: " + source + ". Nội dung: " + extract;
-    }
-
-
-    private static async Task<string> BuildWikivoyageContextBlockAsync(HttpClient http, string? message, string? appContext, bool includeDateInformation, GuideSearchPlan? searchPlan)
-    {
-        var page = await FindBestWikivoyagePageAsync(http, message, appContext, searchPlan);
-        if (page is null) return string.Empty;
-        if (!IsGuideCandidateCompatible(message, page.Title, page, searchPlan)) return string.Empty;
-
-        var extract = PrepareWikipediaExtractForQuestion(page.Extract, message, includeDateInformation, 3400);
-        if (string.IsNullOrWhiteSpace(extract)) return string.Empty;
-
-        var source = string.IsNullOrWhiteSpace(page.Url) ? page.Title : $"{page.Title} ({page.Url})";
-        return "CONTEXT TỪ WIKIVOYAGE TIẾNG VIỆT. Đây là nguồn Wiki thay thế khi Wikipedia tiếng Việt không có thông tin phù hợp. Người dùng hỏi: " + (message ?? string.Empty).Trim() + ". Hãy dùng nội dung này để diễn giải đúng trọng tâm câu hỏi, không chép nguyên văn toàn đoạn và không mở đầu bằng Theo Wikivoyage hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh hoặc lễ hội thì chỉ tập trung đúng mảng đó. Nếu nội dung không đủ cho đúng khía cạnh người dùng hỏi, hãy nói chưa đủ thông tin từ nguồn Wiki/Wikipedia. Nếu có thể, ghi Nguồn ở cuối câu trả lời: " + source + ". Nội dung: " + extract;
-    }
-
-    private static async Task<(string Block, string SourceName)> BuildOpenWebContextBlockAsync(HttpClient http, string? message, string? appContext, bool includeDateInformation, GuideSearchPlan? searchPlan)
-    {
-        var candidates = new List<WikipediaPageCandidate>();
-
-        var englishWikipedia = await FindBestMediaWikiPageAsync(
-            http,
-            message,
-            appContext,
-            searchPlan,
-            "https://en.wikipedia.org/w/api.php",
-            "Wikipedia tiếng Anh",
-            "TravelwAI/1.0 (guide chatbot; en.wikipedia.org lookup)",
-            tryFestivalTitle: true);
-        if (englishWikipedia is not null) candidates.Add(englishWikipedia);
-
-        var englishWikivoyage = await FindBestMediaWikiPageAsync(
-            http,
-            message,
-            appContext,
-            searchPlan,
-            "https://en.wikivoyage.org/w/api.php",
-            "Wikivoyage tiếng Anh",
-            "TravelwAI/1.0 (guide chatbot; en.wikivoyage.org lookup)",
-            tryFestivalTitle: false);
-        if (englishWikivoyage is not null) candidates.Add(englishWikivoyage);
-
-        candidates.AddRange(await SearchDuckDuckGoCandidatesAsync(http, message, appContext, searchPlan));
-        candidates.AddRange(await SearchWikidataCandidatesAsync(http, message, appContext, searchPlan));
-
-        var selected = candidates
-            .Where(item => item.Score >= TrustedWikipediaMinimumScore)
-            .Where(item => IsGuideCandidateCompatible(message, item.Title, item, searchPlan))
-            .GroupBy(item => NormalizeVietnameseForSearch(string.IsNullOrWhiteSpace(item.Url) ? $"{item.SourceName} {item.Title}" : item.Url))
-            .Select(group => group.OrderByDescending(item => item.Score).First())
-            .OrderByDescending(item => item.Score)
-            .Take(3)
-            .ToList();
-
-        if (selected.Count == 0) return (string.Empty, string.Empty);
-
-        var sourceBlocks = new List<string>();
-        foreach (var candidate in selected)
-        {
-            var extract = PrepareWikipediaExtractForQuestion(candidate.Extract, message, includeDateInformation, 1400);
-            if (Regex.Matches(extract, @"[\p{L}\p{N}]+").Count < 12) continue;
-
-            var sourceName = string.IsNullOrWhiteSpace(candidate.SourceName) ? "Nguồn công khai" : candidate.SourceName;
-            var source = string.IsNullOrWhiteSpace(candidate.Url)
-                ? candidate.Title
-                : $"{candidate.Title} ({candidate.Url})";
-            sourceBlocks.Add($"{sourceName}: {source}. Nội dung: {extract}");
-        }
-
-        if (sourceBlocks.Count == 0) return (string.Empty, string.Empty);
-
-        var displaySourceName = sourceBlocks.Count >= 2
-            ? "nhiều nguồn công khai"
-            : (selected.FirstOrDefault()?.SourceName ?? "nguồn công khai bổ sung");
-
-        var block = "THÔNG TIN NỀN TỪ NGUỒN CÔNG KHAI BỔ SUNG CHO OPENROUTER DIỄN GIẢI. " +
-                    "Đây là lớp tìm kiếm sau Wikipedia tiếng Việt và Wikivoyage tiếng Việt. " +
-                    "Chỉ dùng các nội dung dưới đây nếu chúng khớp trực tiếp với câu hỏi; nếu các nguồn mâu thuẫn hoặc không đủ ý, hãy nói chưa có nguồn đủ chắc thay vì đoán. " +
-                    "Trả lời bằng tiếng Việt tự nhiên, không chép nguyên văn, không mở đầu bằng Theo nguồn. Người dùng hỏi: " +
-                    (message ?? string.Empty).Trim() + ". Nguồn tham khảo nội bộ: " + string.Join(" || ", sourceBlocks);
-
-        return (block, displaySourceName);
-    }
-
-    private static string BuildGuideTrustedLocalContextBlock(string? message, string? appContext, bool includeDateInformation, GuideSearchPlan? searchPlan)
-    {
-        var contextBlock = BuildAiContextBlock(appContext, "guide", includeDateInformation);
-        if (!string.IsNullOrWhiteSpace(contextBlock))
-        {
-            return "THÔNG TIN NỀN TỪ DỮ LIỆU TRAVELWAI CHO OPENROUTER DIỄN GIẢI. Đây là nguồn thay thế khi các nguồn công khai đã tra không có thông tin phù hợp. OpenRouter chỉ dùng đúng dữ liệu này để trả lời, không tự thêm chi tiết ngoài nguồn. " + contextBlock;
-        }
-
-        var trustedLocalReply = TryBuildGuideTrustedLocalReply(message, appContext, includeDateInformation);
-        if (string.IsNullOrWhiteSpace(trustedLocalReply)) return string.Empty;
-
-        return "THÔNG TIN NỀN TỪ DỮ LIỆU TRAVELWAI CHO OPENROUTER DIỄN GIẢI. Đây là nguồn thay thế khi các nguồn công khai đã tra không có thông tin phù hợp. Hãy diễn giải tự nhiên theo nội dung sau, không tự thêm chi tiết ngoài nguồn. Nội dung: " + trustedLocalReply;
-    }
-
-    private static async Task<WikipediaPageCandidate?> FindBestWikivoyagePageAsync(HttpClient http, string? message, string? appContext, GuideSearchPlan? searchPlan)
-    {
-        var queries = BuildWikipediaSearchQueries(message, appContext, searchPlan);
-        if (queries.Count == 0) return null;
-
-        WikipediaPageCandidate? best = null;
-
-        foreach (var query in queries.Take(8))
-        {
-            var exactCandidate = FilterGuideCandidateForQuestion(message, query, await FetchWikivoyageTitleCandidateAsync(http, query), searchPlan);
-            best = PickBetterWikipediaCandidate(best, exactCandidate);
-            if (best is not null && best.Score >= TrustedWikipediaStrongMatchScore) return best;
-
-            var searchCandidate = FilterGuideCandidateForQuestion(message, query, await SearchWikivoyageCandidateAsync(http, query), searchPlan);
-            best = PickBetterWikipediaCandidate(best, searchCandidate);
-            if (best is not null && best.Score >= TrustedWikipediaStrongMatchScore) return best;
-        }
-
-        return best is not null && best.Score >= TrustedWikipediaMinimumScore ? best : null;
-    }
-
-    private static async Task<WikipediaPageCandidate?> FetchWikivoyageTitleCandidateAsync(HttpClient http, string query)
-    {
-        if (string.IsNullOrWhiteSpace(query)) return null;
-
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                "https://vi.wikivoyage.org/w/api.php?action=query&redirects=1&prop=extracts|info&explaintext=1&exsectionformat=plain&inprop=url&format=json&origin=*&titles=" + Uri.EscapeDataString(query));
-            request.Headers.TryAddWithoutValidation("User-Agent", "TravelwAI/1.0 (guide chatbot; vi.wikivoyage.org lookup)");
-
-            using var response = await http.SendAsync(request);
-            if (!response.IsSuccessStatusCode) return null;
-
-            var responseText = await response.Content.ReadAsStringAsync();
-            var root = JsonNode.Parse(responseText);
-            var pages = root?["query"]?["pages"]?.AsObject();
-            if (pages is null || pages.Count == 0) return null;
-
-            return pages
-                .Select(item => BuildWikipediaCandidate(query, item.Value))
-                .Where(item => item is not null)
-                .OrderByDescending(item => item!.Score)
-                .FirstOrDefault();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static async Task<WikipediaPageCandidate?> SearchWikivoyageCandidateAsync(HttpClient http, string query)
-    {
-        if (string.IsNullOrWhiteSpace(query)) return null;
-
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                "https://vi.wikivoyage.org/w/api.php?action=query&generator=search&gsrlimit=10&prop=extracts|info&explaintext=1&exsectionformat=plain&inprop=url&format=json&origin=*&gsrsearch=" + Uri.EscapeDataString(query));
-            request.Headers.TryAddWithoutValidation("User-Agent", "TravelwAI/1.0 (guide chatbot; vi.wikivoyage.org lookup)");
-
-            using var response = await http.SendAsync(request);
-            if (!response.IsSuccessStatusCode) return null;
-
-            var responseText = await response.Content.ReadAsStringAsync();
-            var root = JsonNode.Parse(responseText);
-            var pages = root?["query"]?["pages"]?.AsObject();
-            if (pages is null || pages.Count == 0) return null;
-
-            return pages
-                .Select(item => BuildWikipediaCandidate(query, item.Value))
-                .Where(item => item is not null)
-                .OrderByDescending(item => item!.Score)
-                .FirstOrDefault();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static async Task<WikipediaPageCandidate?> FindBestWikipediaPageAsync(HttpClient http, string? message, string? appContext, GuideSearchPlan? searchPlan)
-    {
-        var queries = BuildWikipediaSearchQueries(message, appContext, searchPlan);
-        if (queries.Count == 0) return null;
-
-        WikipediaPageCandidate? best = null;
-
-        foreach (var query in queries.Take(8))
-        {
-            var exactCandidate = FilterGuideCandidateForQuestion(message, query, await FetchWikipediaTitleCandidateAsync(http, query), searchPlan);
-            best = PickBetterWikipediaCandidate(best, exactCandidate);
-            if (best is not null && best.Score >= TrustedWikipediaStrongMatchScore) return best;
-
-            if (QueryAsksFestival(BuildGuideQuestionSignal(message, query, searchPlan), searchPlan)
-                && !NormalizeVietnameseForSearch(query).StartsWith("le hoi ", StringComparison.OrdinalIgnoreCase))
-            {
-                var festivalTitleCandidate = FilterGuideCandidateForQuestion(message, "Lễ hội " + query.Trim(), await FetchWikipediaTitleCandidateAsync(http, "Lễ hội " + query.Trim()), searchPlan);
-                best = PickBetterWikipediaCandidate(best, festivalTitleCandidate);
-                if (best is not null && best.Score >= TrustedWikipediaStrongMatchScore) return best;
-            }
-
-            var searchCandidate = FilterGuideCandidateForQuestion(message, query, await SearchWikipediaCandidateAsync(http, query), searchPlan);
-            best = PickBetterWikipediaCandidate(best, searchCandidate);
-            if (best is not null && best.Score >= TrustedWikipediaStrongMatchScore) return best;
-        }
-
-        return best is not null && best.Score >= TrustedWikipediaMinimumScore ? best : null;
-    }
-
-    private static WikipediaPageCandidate? PickBetterWikipediaCandidate(WikipediaPageCandidate? current, WikipediaPageCandidate? next)
-    {
-        if (next is null) return current;
-        if (current is null) return next;
-        return next.Score > current.Score ? next : current;
-    }
-
-    private static async Task<WikipediaPageCandidate?> FetchWikipediaTitleCandidateAsync(HttpClient http, string query)
-    {
-        if (string.IsNullOrWhiteSpace(query)) return null;
-
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                "https://vi.wikipedia.org/w/api.php?action=query&redirects=1&prop=extracts|info&explaintext=1&exsectionformat=plain&inprop=url&format=json&origin=*&titles=" + Uri.EscapeDataString(query));
-            request.Headers.TryAddWithoutValidation("User-Agent", "TravelwAI/1.0 (guide chatbot; vi.wikipedia.org lookup)");
-
-            using var response = await http.SendAsync(request);
-            if (!response.IsSuccessStatusCode) return null;
-
-            var responseText = await response.Content.ReadAsStringAsync();
-            var root = JsonNode.Parse(responseText);
-            var pages = root?["query"]?["pages"]?.AsObject();
-            if (pages is null || pages.Count == 0) return null;
-
-            return pages
-                .Select(item => BuildWikipediaCandidate(query, item.Value))
-                .Where(item => item is not null)
-                .OrderByDescending(item => item!.Score)
-                .FirstOrDefault();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static async Task<WikipediaPageCandidate?> SearchWikipediaCandidateAsync(HttpClient http, string query)
-    {
-        if (string.IsNullOrWhiteSpace(query)) return null;
-
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                "https://vi.wikipedia.org/w/api.php?action=query&generator=search&gsrlimit=10&prop=extracts|info&explaintext=1&exsectionformat=plain&inprop=url&format=json&origin=*&gsrsearch=" + Uri.EscapeDataString(query));
-            request.Headers.TryAddWithoutValidation("User-Agent", "TravelwAI/1.0 (guide chatbot; vi.wikipedia.org lookup)");
-
-            using var response = await http.SendAsync(request);
-            if (!response.IsSuccessStatusCode) return null;
-
-            var responseText = await response.Content.ReadAsStringAsync();
-            var root = JsonNode.Parse(responseText);
-            var pages = root?["query"]?["pages"]?.AsObject();
-            if (pages is null || pages.Count == 0) return null;
-
-            return pages
-                .Select(item => BuildWikipediaCandidate(query, item.Value))
-                .Where(item => item is not null)
-                .OrderByDescending(item => item!.Score)
-                .FirstOrDefault();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static async Task<WikipediaPageCandidate?> FindBestMediaWikiPageAsync(
-        HttpClient http,
-        string? message,
-        string? appContext,
-        GuideSearchPlan? searchPlan,
-        string apiEndpoint,
-        string sourceName,
-        string userAgent,
-        bool tryFestivalTitle)
-    {
-        var queries = BuildWikipediaSearchQueries(message, appContext, searchPlan);
-        if (queries.Count == 0) return null;
-
-        WikipediaPageCandidate? best = null;
-        var normalizedMessage = NormalizeVietnameseForSearch(message ?? string.Empty);
-
-        foreach (var query in queries.Take(8))
-        {
-            var exactCandidate = FilterGuideCandidateForQuestion(message, query, await FetchMediaWikiTitleCandidateAsync(http, apiEndpoint, sourceName, userAgent, query), searchPlan);
-            best = PickBetterWikipediaCandidate(best, exactCandidate);
-            if (best is not null && best.Score >= TrustedWikipediaStrongMatchScore) return best;
-
-            if (tryFestivalTitle
-                && QueryAsksFestival(BuildGuideQuestionSignal(message, query, searchPlan), searchPlan)
-                && !NormalizeVietnameseForSearch(query).StartsWith("le hoi ", StringComparison.OrdinalIgnoreCase))
-            {
-                var festivalQuery = "Festival " + query.Trim();
-                var festivalTitleCandidate = FilterGuideCandidateForQuestion(message, festivalQuery, await FetchMediaWikiTitleCandidateAsync(http, apiEndpoint, sourceName, userAgent, festivalQuery), searchPlan);
-                best = PickBetterWikipediaCandidate(best, festivalTitleCandidate);
-                if (best is not null && best.Score >= TrustedWikipediaStrongMatchScore) return best;
-            }
-
-            var searchCandidate = FilterGuideCandidateForQuestion(message, query, await SearchMediaWikiCandidateAsync(http, apiEndpoint, sourceName, userAgent, query), searchPlan);
-            best = PickBetterWikipediaCandidate(best, searchCandidate);
-            if (best is not null && best.Score >= TrustedWikipediaStrongMatchScore) return best;
-        }
-
-        return best is not null && best.Score >= TrustedWikipediaMinimumScore ? best : null;
-    }
-
-    private static async Task<WikipediaPageCandidate?> FetchMediaWikiTitleCandidateAsync(HttpClient http, string apiEndpoint, string sourceName, string userAgent, string query)
-    {
-        if (string.IsNullOrWhiteSpace(query)) return null;
-
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                BuildMediaWikiApiUrl(apiEndpoint, "action=query&redirects=1&prop=extracts|info&explaintext=1&exsectionformat=plain&inprop=url&format=json&origin=*&titles=" + Uri.EscapeDataString(query)));
-            request.Headers.TryAddWithoutValidation("User-Agent", userAgent);
-
-            using var response = await http.SendAsync(request);
-            if (!response.IsSuccessStatusCode) return null;
-
-            var responseText = await response.Content.ReadAsStringAsync();
-            var root = JsonNode.Parse(responseText);
-            var pages = root?["query"]?["pages"]?.AsObject();
-            if (pages is null || pages.Count == 0) return null;
-
-            return pages
-                .Select(item => BuildWikipediaCandidate(query, item.Value, sourceName))
-                .Where(item => item is not null)
-                .OrderByDescending(item => item!.Score)
-                .FirstOrDefault();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static async Task<WikipediaPageCandidate?> SearchMediaWikiCandidateAsync(HttpClient http, string apiEndpoint, string sourceName, string userAgent, string query)
-    {
-        if (string.IsNullOrWhiteSpace(query)) return null;
-
-        try
-        {
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                BuildMediaWikiApiUrl(apiEndpoint, "action=query&generator=search&gsrlimit=10&prop=extracts|info&explaintext=1&exsectionformat=plain&inprop=url&format=json&origin=*&gsrsearch=" + Uri.EscapeDataString(query)));
-            request.Headers.TryAddWithoutValidation("User-Agent", userAgent);
-
-            using var response = await http.SendAsync(request);
-            if (!response.IsSuccessStatusCode) return null;
-
-            var responseText = await response.Content.ReadAsStringAsync();
-            var root = JsonNode.Parse(responseText);
-            var pages = root?["query"]?["pages"]?.AsObject();
-            if (pages is null || pages.Count == 0) return null;
-
-            return pages
-                .Select(item => BuildWikipediaCandidate(query, item.Value, sourceName))
-                .Where(item => item is not null)
-                .OrderByDescending(item => item!.Score)
-                .FirstOrDefault();
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static string BuildMediaWikiApiUrl(string apiEndpoint, string queryString)
-    {
-        var separator = apiEndpoint.Contains("?", StringComparison.Ordinal) ? "&" : "?";
-        return apiEndpoint + separator + queryString;
-    }
-
-    private static async Task<IReadOnlyList<WikipediaPageCandidate>> SearchDuckDuckGoCandidatesAsync(HttpClient http, string? message, string? appContext, GuideSearchPlan? searchPlan)
-    {
-        var queries = BuildWikipediaSearchQueries(message, appContext, searchPlan);
-        var candidates = new List<WikipediaPageCandidate>();
-        if (queries.Count == 0) return candidates;
-
-        foreach (var query in queries.Take(6))
-        {
-            try
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Get,
-                    "https://api.duckduckgo.com/?format=json&no_html=1&skip_disambig=1&kl=vn-vi&q=" + Uri.EscapeDataString(query));
-                request.Headers.TryAddWithoutValidation("User-Agent", "TravelwAI/1.0 (guide chatbot; duckduckgo instant answer lookup)");
-
-                using var response = await http.SendAsync(request);
-                if (!response.IsSuccessStatusCode) continue;
-
-                var responseText = await response.Content.ReadAsStringAsync();
-                var root = JsonNode.Parse(responseText) as JsonObject;
-                if (root is null) continue;
-
-                AddOpenWebCandidate(
-                    candidates,
-                    query,
-                    root["Heading"]?.ToString() ?? string.Empty,
-                    root["AbstractText"]?.ToString() ?? string.Empty,
-                    root["AbstractURL"]?.ToString() ?? string.Empty,
-                    "DuckDuckGo Instant Answer");
-
-                if (root["RelatedTopics"] is JsonArray relatedTopics)
-                {
-                    foreach (var topic in EnumerateDuckDuckGoRelatedTopics(relatedTopics).Take(8))
-                    {
-                        AddOpenWebCandidate(
-                            candidates,
-                            query,
-                            topic["Result"]?.ToString() ?? string.Empty,
-                            topic["Text"]?.ToString() ?? string.Empty,
-                            topic["FirstURL"]?.ToString() ?? string.Empty,
-                            "DuckDuckGo Instant Answer");
-                    }
-                }
-            }
-            catch
-            {
-            }
-        }
-
-        return candidates;
-    }
-
-    private static IEnumerable<JsonObject> EnumerateDuckDuckGoRelatedTopics(JsonArray topics)
-    {
-        foreach (var item in topics)
-        {
-            if (item is not JsonObject obj) continue;
-
-            if (obj["Text"] is not null || obj["Result"] is not null)
-            {
-                yield return obj;
-            }
-
-            if (obj["Topics"] is JsonArray nested)
-            {
-                foreach (var nestedItem in EnumerateDuckDuckGoRelatedTopics(nested))
-                {
-                    yield return nestedItem;
-                }
-            }
-        }
-    }
-
-    private static async Task<IReadOnlyList<WikipediaPageCandidate>> SearchWikidataCandidatesAsync(HttpClient http, string? message, string? appContext, GuideSearchPlan? searchPlan)
-    {
-        var queries = BuildWikipediaSearchQueries(message, appContext, searchPlan);
-        var candidates = new List<WikipediaPageCandidate>();
-        if (queries.Count == 0) return candidates;
-
-        foreach (var query in queries.Take(5))
-        {
-            foreach (var language in new[] { "vi", "en" })
-            {
-                try
-                {
-                    using var request = new HttpRequestMessage(HttpMethod.Get,
-                        "https://www.wikidata.org/w/api.php?action=wbsearchentities&type=item&limit=5&format=json&origin=*&language=" + language + "&uselang=" + language + "&search=" + Uri.EscapeDataString(query));
-                    request.Headers.TryAddWithoutValidation("User-Agent", "TravelwAI/1.0 (guide chatbot; wikidata lookup)");
-
-                    using var response = await http.SendAsync(request);
-                    if (!response.IsSuccessStatusCode) continue;
-
-                    var responseText = await response.Content.ReadAsStringAsync();
-                    var root = JsonNode.Parse(responseText) as JsonObject;
-                    if (root?["search"] is not JsonArray searchResults) continue;
-
-                    foreach (var result in searchResults.OfType<JsonObject>().Take(5))
-                    {
-                        var label = result["label"]?.ToString() ?? string.Empty;
-                        var description = result["description"]?.ToString() ?? string.Empty;
-                        var id = result["id"]?.ToString() ?? string.Empty;
-                        var conceptUri = result["concepturi"]?.ToString() ?? string.Empty;
-                        var aliases = result["aliases"] is JsonArray aliasArray
-                            ? string.Join(", ", aliasArray.Select(item => item?.ToString()).Where(item => !string.IsNullOrWhiteSpace(item)).Take(8))
-                            : string.Empty;
-
-                        var extractParts = new List<string>();
-                        if (!string.IsNullOrWhiteSpace(label)) extractParts.Add("Nhãn: " + label);
-                        if (!string.IsNullOrWhiteSpace(description)) extractParts.Add("Mô tả: " + description);
-                        if (!string.IsNullOrWhiteSpace(aliases)) extractParts.Add("Tên gọi khác: " + aliases);
-                        if (!string.IsNullOrWhiteSpace(id)) extractParts.Add("Mã Wikidata: " + id);
-
-                        AddOpenWebCandidate(
-                            candidates,
-                            query,
-                            label,
-                            string.Join(". ", extractParts),
-                            conceptUri,
-                            language == "vi" ? "Wikidata tiếng Việt" : "Wikidata tiếng Anh");
-                    }
-                }
-                catch
-                {
-                }
-            }
-        }
-
-        return candidates;
-    }
-
-    private static void AddOpenWebCandidate(List<WikipediaPageCandidate> candidates, string query, string title, string extract, string url, string sourceName)
-    {
-        var cleanTitle = CleanOpenWebText(title);
-        var cleanExtract = CleanOpenWebText(extract);
-        var cleanUrl = CleanOpenWebText(url);
-
-        if (string.IsNullOrWhiteSpace(cleanTitle) && !string.IsNullOrWhiteSpace(cleanExtract))
-        {
-            var dashIndex = cleanExtract.IndexOf(" - ", StringComparison.Ordinal);
-            cleanTitle = dashIndex > 0 ? cleanExtract[..dashIndex].Trim() : query;
-        }
-
-        if (string.IsNullOrWhiteSpace(cleanTitle)) cleanTitle = query;
-        if (string.IsNullOrWhiteSpace(cleanExtract)) return;
-
-        var score = ScoreOpenWebResult(query, cleanTitle, cleanExtract);
-        if (score < TrustedWikipediaMinimumScore) return;
-
-        candidates.Add(new WikipediaPageCandidate(cleanTitle, cleanExtract, cleanUrl, score, sourceName));
-    }
-
-    private static string CleanOpenWebText(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
-
-        var cleaned = WebUtility.HtmlDecode(value);
-        cleaned = Regex.Replace(cleaned, "<[^>]+>", " ");
-        cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
-        return cleaned;
-    }
-
-    private static int ScoreOpenWebResult(string query, string? title, string extract)
-    {
-        var strictScore = ScoreWikipediaResult(query, title, extract);
-        if (strictScore > 0) return strictScore;
-
-        var normalizedQuery = NormalizeVietnameseForSearch(query ?? string.Empty);
-        var normalizedTitle = NormalizeVietnameseForSearch(title ?? string.Empty);
-        var normalizedExtract = NormalizeVietnameseForSearch(extract ?? string.Empty);
-        var normalizedSource = (normalizedTitle + " " + normalizedExtract).Trim();
-
-        if (string.IsNullOrWhiteSpace(normalizedQuery) || string.IsNullOrWhiteSpace(normalizedSource)) return 0;
-        if (IsGenericWikipediaQuery(normalizedQuery)) return 0;
-        if (LooksLikeTransportInfrastructureArticle(normalizedTitle, normalizedExtract) && !QueryAsksTransportInfrastructure(normalizedQuery)) return 0;
-        if (LooksLikeMediaAgencyArticle(normalizedTitle, normalizedExtract) && !QueryAsksMediaAgency(normalizedQuery)) return 0;
-        if (!SourceMatchesGuideSemanticIntent(normalizedQuery, normalizedTitle, normalizedExtract, null)) return 0;
-
-        var queryTokens = normalizedQuery
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(token => token.Trim(',', '.', '-', ':', ';', '(', ')'))
-            .Where(token => token.Length >= 3)
-            .Where(token => !GuideWikipediaStopWords.Contains(token))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(10)
-            .ToList();
-
-        if (queryTokens.Count == 0) return 0;
-        if (normalizedTitle.Equals(normalizedQuery, StringComparison.OrdinalIgnoreCase)) return 100;
-        if (normalizedTitle.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase) || normalizedQuery.Contains(normalizedTitle, StringComparison.OrdinalIgnoreCase)) return 95;
-
-        var titleHits = queryTokens.Count(token => normalizedTitle.Contains(token, StringComparison.OrdinalIgnoreCase));
-        var sourceHits = queryTokens.Count(token => normalizedSource.Contains(token, StringComparison.OrdinalIgnoreCase));
-        if (sourceHits == 0) return 0;
-
-        var requiredHits = Math.Max(1, (int)Math.Ceiling(queryTokens.Count * 0.45d));
-        if (titleHits == 0 && sourceHits < requiredHits) return 0;
-
-        var score = sourceHits * 12 + titleHits * 24;
-        if (titleHits > 0) score += 25;
-        if (sourceHits >= requiredHits) score += 15;
-        if (sourceHits == queryTokens.Count) score += 20;
-        if (titleHits == queryTokens.Count) score += 20;
-
-        return Math.Min(score, 100);
-    }
-
-    private static WikipediaPageCandidate? BuildWikipediaCandidate(string query, JsonNode? page, string sourceName = "")
-    {
-        var title = page?["title"]?.ToString()?.Trim() ?? string.Empty;
-        var extract = page?["extract"]?.ToString()?.Trim() ?? string.Empty;
-        var url = page?["fullurl"]?.ToString()?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(extract)) return null;
-        if (title.StartsWith("Thảo luận:", StringComparison.OrdinalIgnoreCase)
-            || title.StartsWith("Thể loại:", StringComparison.OrdinalIgnoreCase)
-            || title.StartsWith("Wikipedia:", StringComparison.OrdinalIgnoreCase)
-            || title.StartsWith("Bản mẫu:", StringComparison.OrdinalIgnoreCase)
-            || title.StartsWith("Tập tin:", StringComparison.OrdinalIgnoreCase)) return null;
-
-        var score = ScoreWikipediaResult(query, title, extract);
-        return score < TrustedWikipediaMinimumScore ? null : new WikipediaPageCandidate(title, extract, url, score, sourceName);
-    }
-
-    private static string PrepareWikipediaExtractForReply(string extract, bool includeDateInformation, int maxChars)
-    {
-        if (string.IsNullOrWhiteSpace(extract)) return string.Empty;
-
-        extract = Regex.Replace(extract, @"\[[^\]]*\]", " ");
-        extract = Regex.Replace(extract, @"\s+", " ").Trim();
-        if (!includeDateInformation)
-        {
-            extract = RemoveGuideDateMentions(extract);
-        }
-
-        return LimitWikipediaText(extract, maxChars);
-    }
-
-    private static string PrepareWikipediaExtractForQuestion(string extract, string? message, bool includeDateInformation, int maxChars)
-    {
-        if (string.IsNullOrWhiteSpace(extract)) return string.Empty;
-
-        var cleaned = Regex.Replace(extract, @"\[[^\]]*\]", " ");
-        cleaned = cleaned.Replace("\r\n", "\n").Replace('\r', '\n');
-        cleaned = Regex.Replace(cleaned, @"[ \t]+", " ");
-        cleaned = Regex.Replace(cleaned, @"\n{3,}", "\n\n").Trim();
-        if (!includeDateInformation)
-        {
-            cleaned = RemoveGuideDateMentions(cleaned);
-        }
-
-        var aspectKeywords = GetGuideAspectKeywords(message);
-        if (aspectKeywords.Count > 0)
-        {
-            var selectedBlocks = SplitWikipediaExtractBlocks(cleaned)
-                .Select((block, index) => new { Block = block, Index = index, Score = ScoreWikipediaBlockForQuestion(block, aspectKeywords) })
-                .Where(item => item.Score > 0)
-                .OrderByDescending(item => item.Score)
-                .ThenBy(item => item.Index)
-                .Take(5)
-                .OrderBy(item => item.Index)
-                .Select(item => item.Block)
-                .ToList();
-
-            var selected = string.Join(" ", selectedBlocks).Trim();
-            if (Regex.Matches(selected, @"[\p{L}\p{N}]+").Count >= 25)
-            {
-                return LimitWikipediaText(selected, maxChars);
-            }
-        }
-
-        return LimitWikipediaText(cleaned, maxChars);
-    }
-
-    private static IReadOnlyList<string> SplitWikipediaExtractBlocks(string text)
-    {
-        var blocks = new List<string>();
-        if (string.IsNullOrWhiteSpace(text)) return blocks;
-
-        var current = new StringBuilder();
-        foreach (var rawLine in text.Split('\n'))
-        {
-            var line = rawLine.Trim();
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                if (current.Length > 0)
-                {
-                    blocks.Add(current.ToString().Trim());
-                    current.Clear();
-                }
-                continue;
-            }
-
-            var isHeading = Regex.IsMatch(line, @"^=+\s*[^=]+\s*=+$");
-            if (isHeading && current.Length > 0)
-            {
-                blocks.Add(current.ToString().Trim());
-                current.Clear();
-            }
-
-            if (current.Length > 0) current.Append(' ');
-            current.Append(Regex.Replace(line, @"^=+\s*|\s*=+$", ""));
-        }
-
-        if (current.Length > 0) blocks.Add(current.ToString().Trim());
-
-        if (blocks.Count >= 3)
-        {
-            return blocks.Where(block => Regex.Matches(block, @"[\p{L}\p{N}]+").Count >= 5).ToList();
-        }
-
-        var sentences = Regex.Split(Regex.Replace(text, @"\s+", " ").Trim(), @"(?<=[.!?])\s+")
-            .Where(sentence => !string.IsNullOrWhiteSpace(sentence))
-            .ToList();
-        blocks.Clear();
-        for (var i = 0; i < sentences.Count; i += 3)
-        {
-            blocks.Add(string.Join(" ", sentences.Skip(i).Take(3)).Trim());
-        }
-
-        return blocks.Where(block => Regex.Matches(block, @"[\p{L}\p{N}]+").Count >= 5).ToList();
-    }
-
-    private static int ScoreWikipediaBlockForQuestion(string block, IReadOnlyList<string> aspectKeywords)
-    {
-        if (string.IsNullOrWhiteSpace(block)) return 0;
-        var normalizedBlock = NormalizeVietnameseForSearch(block);
-        if (LooksLikeMediaOrPressText(normalizedBlock)) return 0;
-        var score = 0;
-
-        foreach (var keyword in aspectKeywords)
-        {
-            if (normalizedBlock.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-            {
-                score += keyword.Contains(" ", StringComparison.Ordinal) ? 25 : 12;
-            }
-        }
-
-        if (Regex.IsMatch(block, @"^\s*(Văn hóa|Văn hoá|Lịch sử|Du lịch|Địa danh|Di tích|Danh lam|Lễ hội|Kinh tế|Xã hội)\b", RegexOptions.IgnoreCase))
-        {
-            score += 35;
-        }
-
-        return score;
-    }
-
-    private static IReadOnlyList<string> GetGuideAspectKeywords(string? message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message ?? string.Empty);
-        var keywords = new List<string>();
-
-        if (Regex.IsMatch(normalized, @"\b(van hoa|phong tuc|tap quan|truyen thong|ban sac|am thuc|cong chieng|dan toc)\b", RegexOptions.IgnoreCase))
-        {
-            keywords.AddRange(new[] { "van hoa", "phong tuc", "tap quan", "truyen thong", "ban sac", "am thuc", "le hoi", "nghe thuat", "dan toc", "cong chieng", "gia rai", "jarai", "ba na", "bahnar", "tay nguyen" });
-        }
-
-        if (Regex.IsMatch(normalized, @"\b(lich su|nguon goc|hinh thanh|trieu dai|chien tranh|khoi nghia|thoi ky|thoi dai)\b", RegexOptions.IgnoreCase))
-        {
-            keywords.AddRange(new[] { "lich su", "hinh thanh", "nguon goc", "thoi ky", "chien tranh", "khoi nghia", "trieu dai", "sap nhap", "thanh lap" });
-        }
-
-        if (Regex.IsMatch(normalized, @"\b(dia danh|di tich|danh lam|diem den|du lich|tham quan|choi dau|co gi|noi bat)\b", RegexOptions.IgnoreCase))
-        {
-            keywords.AddRange(new[] { "du lich", "dia danh", "di tich", "danh lam", "thang canh", "diem den", "tham quan", "bao tang", "thac", "ho", "nui", "chua", "den", "khu du lich" });
-        }
-
-        if (Regex.IsMatch(normalized, @"\b(le hoi|ngay le|tet)\b", RegexOptions.IgnoreCase))
-        {
-            keywords.AddRange(new[] { "le hoi", "hoi", "nghi le", "nghi thuc", "tin nguong", "cau", "cung", "truyen thong" });
-        }
-
-        return keywords
-            .Select(NormalizeVietnameseForSearch)
-            .Where(keyword => !string.IsNullOrWhiteSpace(keyword))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
-
-    private static string DetectGuideQuestionAspect(string? message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message ?? string.Empty);
-        var hasFestival = Regex.IsMatch(normalized, @"\b(le hoi|ngay le|tet|hoi lim|gau tao|gio to|den hung|ok om bok|kate|katê|long tong|nong tong|roong pooc|rong pooc)\b", RegexOptions.IgnoreCase);
-        var hasEvent = Regex.IsMatch(normalized, @"\b(su kien|event|festival|chuong trinh|lich dien ra|dang dien ra|sap dien ra)\b", RegexOptions.IgnoreCase);
-        var hasCulture = Regex.IsMatch(normalized, @"\b(van hoa|phong tuc|tap quan|truyen thong|ban sac|cong chieng|dan toc|di san phi vat the|di san vat the)\b", RegexOptions.IgnoreCase);
-        var hasHistory = Regex.IsMatch(normalized, @"\b(lich su|nguon goc|hinh thanh|trieu dai|chien tranh|khoi nghia|thoi ky|thoi dai|su tich|truyen thuyet|giai thoai)\b", RegexOptions.IgnoreCase);
-        var hasCraftVillage = Regex.IsMatch(normalized, @"\b(lang nghe|nghe truyen thong|gom|lua|det|son mai|lam non|dan lat|moc|ren|theu)\b", RegexOptions.IgnoreCase);
-        var hasCuisine = Regex.IsMatch(normalized, @"\b(am thuc|mon an|dac san|an gi|quan an|nha hang|bun|pho|banh|nem|che|hai san)\b", RegexOptions.IgnoreCase);
-        var hasItinerary = Regex.IsMatch(normalized, @"\b(lich trinh|ke hoach di|di may ngay|tour|sap xep lich|di trong|ngay dem)\b", RegexOptions.IgnoreCase);
-        var hasExperience = Regex.IsMatch(normalized, @"\b(kinh nghiem|luu y|nen di|nen tranh|di tu tuc|gia dinh|cap doi|tre em|nguoi lon tuoi|chup anh|tam linh|dong duc|thoi tiet|phuong tien|ngan sach)\b", RegexOptions.IgnoreCase);
-        var hasLandmark = Regex.IsMatch(normalized, @"\b(dia danh|di tich|danh lam|diem den|tham quan|choi dau|co gi|noi bat|den|dinh|chua|thap|thanh co|pho co|bao tang)\b", RegexOptions.IgnoreCase);
-
-        var count = new[] { hasFestival, hasEvent, hasCulture, hasHistory, hasCraftVillage, hasCuisine, hasItinerary, hasExperience, hasLandmark }.Count(value => value);
-        if (count >= 2) return "overview";
-        if (hasFestival) return "festival";
-        if (hasEvent) return "event";
-        if (hasItinerary) return "itinerary";
-        if (hasExperience) return "travel_experience";
-        if (hasCuisine) return "cuisine";
-        if (hasCraftVillage) return "craft_village";
-        if (hasCulture) return "culture";
-        if (hasHistory) return "history";
-        if (hasLandmark) return "landmark";
-        return "general";
-    }
-
-
-    private static string BuildGuideAspectInstruction(string? message)
-    {
-        return DetectGuideQuestionAspect(message) switch
-        {
-            "overview" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi nhiều mảng cùng lúc. Chỉ trả lời các mảng có dữ liệu trong CONTEXT; không tự chọn sai chủ đề và không thêm thông tin ngoài nguồn.",
-            "festival" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về lễ hội. Nếu nguồn có, trình bày tên lễ hội, địa điểm/vùng liên quan, thời gian, nguồn gốc, ý nghĩa, hoạt động hoặc nghi thức. Chỉ nêu chi tiết có trong CONTEXT.",
-            "event" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về sự kiện. Chỉ nêu địa điểm, thời gian, bối cảnh, hoạt động hoặc ý nghĩa nếu CONTEXT có; nếu thiếu dữ liệu thì nói rõ phần còn thiếu.",
-            "culture" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về văn hoá. Chỉ liên hệ vùng miền, cộng đồng cư dân, phong tục, tôn giáo, di sản hoặc lễ hội nếu nguồn có nhắc đến.",
-            "history" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về lịch sử. Phân biệt rõ thông tin lịch sử được nguồn nhắc đến với truyền thuyết, giai thoại và yếu tố văn hoá/dân gian nếu có.",
-            "landmark" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về địa danh/di tích. Hãy ưu tiên: địa danh ở đâu, thuộc tỉnh/thành nào nếu nguồn có, là loại địa danh gì, điểm nổi bật và bối cảnh lịch sử/văn hoá. Nếu có nhiều nơi trùng tên trong nguồn, trình bày các khả năng chính.",
-            "craft_village" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về làng nghề. Chỉ nêu địa điểm, nghề chính, bối cảnh văn hoá, sản phẩm hoặc cộng đồng làm nghề nếu CONTEXT có.",
-            "cuisine" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về ẩm thực. Chỉ nêu món/đặc sản, địa phương gắn với món đó và bối cảnh văn hoá nếu CONTEXT có. Không bịa quán, giá hoặc giờ mở cửa.",
-            "itinerary" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi lịch trình/tour. Không tạo lịch trình, không xếp kế hoạch theo ngày, không bán tour. Chỉ có thể chuyển sang giới thiệu địa danh, văn hoá, lịch sử nếu CONTEXT có.",
-            "travel_experience" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi kinh nghiệm thực tế. Không tư vấn phương tiện, chi phí, thời tiết, độ đông, booking hoặc giờ mở cửa nếu CONTEXT không có; chỉ trả lời phần thông tin địa danh/văn hoá/lịch sử có nguồn.",
-            _ => string.Empty
-        };
-    }
-
-
-
-    private static string TryBuildGuideClarifyingReply(string? message, string? appContext)
-    {
-        var normalized = NormalizeVietnameseForSearch(message ?? string.Empty);
-        if (string.IsNullOrWhiteSpace(normalized)) return string.Empty;
-
-        if (Regex.IsMatch(normalized, @"\b(dat ve|dat phong|dat xe|dat nha hang|booking|mua ve|gia ve|chi phi|thoi tiet|phuong tien|dong duc|ngan sach)\b", RegexOptions.IgnoreCase))
-        {
-            return "Mình không tư vấn booking, giá vé, chi phí, thời tiết, phương tiện hoặc độ đông nếu CONTEXT không có. Mình chỉ giới thiệu địa danh, văn hoá, lịch sử và lễ hội dựa trên nguồn Wiki/Wikipedia.";
-        }
-
-        if (DetectGuideQuestionAspect(message) is "itinerary")
-        {
-            return "Mình không tạo lịch trình du lịch, không sắp xếp kế hoạch theo ngày và không gợi ý tour. Mình có thể giới thiệu địa danh, di tích, danh thắng, văn hoá, lịch sử hoặc lễ hội dựa trên nguồn Wiki/Wikipedia trong CONTEXT.";
-        }
-
-        return string.Empty;
-    }
-
-    private static bool LooksLikeGuideSearchOrTravelNeed(string normalized)
-    {
-        if (string.IsNullOrWhiteSpace(normalized)) return false;
-        return Regex.IsMatch(normalized, @"\b(tim|goi y|nen di|muon di|di dau|di choi|tham quan|tham gia|xem|lich trinh|ke hoach|su kien nao|le hoi nao|co gi|sap toi|cuoi tuan|thang nay|nam nay)\b", RegexOptions.IgnoreCase);
-    }
-
-    private static bool HasGuideTimeHint(string normalized)
-    {
-        if (string.IsNullOrWhiteSpace(normalized)) return false;
-        return Regex.IsMatch(normalized, @"\b(hom nay|ngay mai|cuoi tuan|thang|mua|nam nay|am lich|duong lich|tet|xuan|he|thu|dong|le|dip|\d{1,2}/\d{1,2}|\d{4})\b", RegexOptions.IgnoreCase);
-    }
-
-    private static bool HasGuideDurationHint(string normalized)
-    {
-        if (string.IsNullOrWhiteSpace(normalized)) return false;
-        return Regex.IsMatch(normalized, @"\b(\d{1,2}\s*(ngay|dem)|mot ngay|hai ngay|ba ngay|cuoi tuan|nua ngay|trong ngay)\b", RegexOptions.IgnoreCase);
-    }
-
-    private static bool HasMonthWithoutCalendarType(string normalized)
-    {
-        if (string.IsNullOrWhiteSpace(normalized)) return false;
-        if (normalized.Contains("am lich", StringComparison.OrdinalIgnoreCase) || normalized.Contains("duong lich", StringComparison.OrdinalIgnoreCase)) return false;
-        return Regex.IsMatch(normalized, @"\b(thang\s+\d{1,2}|\d{1,2}/\d{1,2})\b", RegexOptions.IgnoreCase);
-    }
-
-    private static bool HasSpecificLocationHint(string normalized)
-    {
-        if (string.IsNullOrWhiteSpace(normalized)) return false;
-        var locationTerms = new[]
-        {
-            "mien bac", "mien trung", "mien nam", "tay bac", "dong bac", "tay nguyen", "dong bang song hong", "dong bang song cuu long",
-            "bac ninh", "phu tho", "ha noi", "hue", "da nang", "hoi an", "lao cai", "ha giang", "son la", "ninh binh", "quang tri", "son tay"
-        };
-        return locationTerms.Any(term => normalized.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool HasAmbiguousGuidePlaceName(string normalized)
-    {
-        if (string.IsNullOrWhiteSpace(normalized)) return false;
-        if (Regex.IsMatch(normalized, @"\bthanh co\b", RegexOptions.IgnoreCase)
-            && !Regex.IsMatch(normalized, @"\b(quang tri|son tay|ha noi|dien khanh|vinh long)\b", RegexOptions.IgnoreCase)) return true;
-        if (Regex.IsMatch(normalized, @"\bden mau\b", RegexOptions.IgnoreCase)
-            && !Regex.IsMatch(normalized, @"\b(lao cai|hung yen|lang son|nam dinh)\b", RegexOptions.IgnoreCase)) return true;
-        return false;
-    }
-
-    private static bool GuideIntentNeedsTimeInAnswer(string? message, GuideSearchPlan? searchPlan)
-    {
-        var aspect = DetectGuideQuestionAspect(message);
-        if (aspect is "festival" or "event") return true;
-        return searchPlan?.Topics.Any(topic => string.Equals(topic.EntityType, "festival", StringComparison.OrdinalIgnoreCase)
-                                              || string.Equals(topic.EntityType, "event", StringComparison.OrdinalIgnoreCase)
-                                              || topic.Aspects.Any(aspectValue => string.Equals(aspectValue, "date", StringComparison.OrdinalIgnoreCase))) == true;
-    }
-
-    private static bool ShouldPreferLocalGuideContext(string? message, string? appContext, GuideSearchPlan? searchPlan)
-    {
-        var signal = BuildGuideQuestionSignal(message, appContext, searchPlan);
-        return signal.Contains("gau tao", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string BuildGuideQuestionSignal(string? message, string? extra, GuideSearchPlan? searchPlan)
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(message)) parts.Add(message!);
-        if (!string.IsNullOrWhiteSpace(extra)) parts.Add(extra!);
-        if (searchPlan is not null)
-        {
-            parts.Add(searchPlan.IntentType);
-            parts.Add(searchPlan.QuestionFocus);
-            parts.AddRange(searchPlan.NegativeHints);
-            foreach (var topic in searchPlan.Topics)
-            {
-                parts.Add(topic.CoreTopic);
-                parts.Add(topic.NormalizedTopic);
-                parts.Add(topic.EntityType);
-                parts.AddRange(topic.Aspects);
-                parts.AddRange(topic.LocationHints);
-                parts.AddRange(topic.CultureHints);
-                parts.AddRange(topic.TimeHints);
-                parts.AddRange(topic.SearchPlan.ExactTitleQueries);
-                parts.AddRange(topic.SearchPlan.FallbackQueries);
-                parts.AddRange(topic.SearchPlan.AspectQueries);
-                parts.AddRange(topic.SearchPlan.AvoidQueries);
-            }
-        }
-        return NormalizeVietnameseForSearch(string.Join(" ", parts.Where(item => !string.IsNullOrWhiteSpace(item))));
-    }
-
-    private static WikipediaPageCandidate? FilterGuideCandidateForQuestion(string? message, string query, WikipediaPageCandidate? candidate, GuideSearchPlan? searchPlan)
-    {
-        return IsGuideCandidateCompatible(message, query, candidate, searchPlan) ? candidate : null;
-    }
-
-    private static bool IsGuideCandidateCompatible(string? message, string query, WikipediaPageCandidate? candidate, GuideSearchPlan? searchPlan)
-    {
-        if (candidate is null) return false;
-        var questionSignal = BuildGuideQuestionSignal(message, query, searchPlan);
-        var normalizedTitle = NormalizeVietnameseForSearch(candidate.Title);
-        var normalizedExtract = NormalizeVietnameseForSearch(candidate.Extract);
-        return SourceMatchesGuideSemanticIntent(questionSignal, normalizedTitle, normalizedExtract, searchPlan);
-    }
-
-    private static bool SourceMatchesGuideSemanticIntent(string normalizedQuestionOrQuery, string normalizedTitle, string normalizedExtract, GuideSearchPlan? searchPlan)
-    {
-        var source = (normalizedTitle + " " + normalizedExtract).Trim();
-        if (string.IsNullOrWhiteSpace(normalizedQuestionOrQuery) || string.IsNullOrWhiteSpace(source)) return false;
-
-        if (QueryAsksFestival(normalizedQuestionOrQuery, searchPlan) && !LooksLikeFestivalArticle(source)) return false;
-        if (QueryAsksEvent(normalizedQuestionOrQuery, searchPlan) && !LooksLikeEventArticle(source) && !LooksLikeFestivalArticle(source)) return false;
-        if (QueryAsksCuisine(normalizedQuestionOrQuery) && !LooksLikeCuisineArticle(source)) return false;
-        if (QueryAsksCraftVillage(normalizedQuestionOrQuery) && !LooksLikeCraftVillageArticle(source)) return false;
-        if (QueryAsksHistory(normalizedQuestionOrQuery) && LooksLikePureModernServiceOrCommerce(source)) return false;
-
-        return true;
-    }
-
-    private static bool QueryAsksFestival(string normalizedQuestionOrQuery, GuideSearchPlan? searchPlan)
-    {
-        if (searchPlan?.Topics.Any(topic => string.Equals(topic.EntityType, "festival", StringComparison.OrdinalIgnoreCase)) == true) return true;
-        if (IsKnownFestivalTopic(normalizedQuestionOrQuery)) return true;
-        return Regex.IsMatch(normalizedQuestionOrQuery ?? string.Empty, @"\b(le hoi|ngay le|tet|hoi lim|gio to|den hung|ok om bok|kate|katê|long tong|nong tong|roong pooc|rong pooc)\b", RegexOptions.IgnoreCase);
-    }
-
-    private static bool QueryAsksEvent(string normalizedQuestionOrQuery, GuideSearchPlan? searchPlan)
-    {
-        if (searchPlan?.Topics.Any(topic => string.Equals(topic.EntityType, "event", StringComparison.OrdinalIgnoreCase)) == true) return true;
-        return Regex.IsMatch(normalizedQuestionOrQuery ?? string.Empty, @"\b(su kien|event|festival|chuong trinh|lich dien ra|dang dien ra|sap dien ra)\b", RegexOptions.IgnoreCase);
-    }
-
-    private static bool QueryAsksCuisine(string normalizedQuestionOrQuery)
-    {
-        return Regex.IsMatch(normalizedQuestionOrQuery ?? string.Empty, @"\b(am thuc|mon an|dac san|an gi|quan an|nha hang|bun|pho|banh|nem|che|hai san)\b", RegexOptions.IgnoreCase);
-    }
-
-    private static bool QueryAsksCraftVillage(string normalizedQuestionOrQuery)
-    {
-        return Regex.IsMatch(normalizedQuestionOrQuery ?? string.Empty, @"\b(lang nghe|nghe truyen thong|gom|lua|det|son mai|dan lat|moc|ren|theu)\b", RegexOptions.IgnoreCase);
-    }
-
-    private static bool QueryAsksHistory(string normalizedQuestionOrQuery)
-    {
-        return Regex.IsMatch(normalizedQuestionOrQuery ?? string.Empty, @"\b(lich su|nguon goc|hinh thanh|trieu dai|chien tranh|khoi nghia|thoi ky|thoi dai|su tich|truyen thuyet|giai thoai)\b", RegexOptions.IgnoreCase);
-    }
-
-    private static bool LooksLikeFestivalArticle(string normalizedSource)
-    {
-        var festivalTerms = new[]
-        {
-            "le hoi", "hoi", "ngay le", "nghi le", "nghi thuc", "tin nguong", "cau phuc", "cau menh", "cay neu",
-            "nguoi mong", "hmong", "h mong", "dan toc", "quan ho", "hat doi", "mua khen", "cong dong", "dau xuan", "mo hoi"
-        };
-        return festivalTerms.Any(term => normalizedSource.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool LooksLikeEventArticle(string normalizedSource)
-    {
-        var eventTerms = new[] { "su kien", "chuong trinh", "dien ra", "to chuc", "lich", "ngay", "festival", "le hoi" };
-        return eventTerms.Any(term => normalizedSource.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool LooksLikeCuisineArticle(string normalizedSource)
-    {
-        var cuisineTerms = new[] { "am thuc", "mon an", "dac san", "nguyen lieu", "che bien", "quan an", "nha hang", "bun", "pho", "banh", "nem", "che", "hai san" };
-        return cuisineTerms.Any(term => normalizedSource.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool LooksLikeCraftVillageArticle(string normalizedSource)
-    {
-        var craftTerms = new[] { "lang nghe", "nghe truyen thong", "thu cong", "nghe nhan", "san pham", "gom", "lua", "det", "son mai", "dan lat", "moc", "ren", "theu" };
-        return craftTerms.Any(term => normalizedSource.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool LooksLikePureModernServiceOrCommerce(string normalizedSource)
-    {
-        var terms = new[] { "cong ty", "doanh nghiep", "dich vu", "mua ban", "dat tour", "gia ve", "khuyen mai", "san pham thuong mai" };
-        return terms.Any(term => normalizedSource.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool IsKnownFestivalTopic(string normalizedSource)
-    {
-        if (string.IsNullOrWhiteSpace(normalizedSource)) return false;
-        var knownFestivalKeys = new[]
-        {
-            "gau tao", "hoi lim", "gio to hung vuong", "tet nguyen dan", "trung thu", "ok om bok", "kate", "long tong", "nong tong", "rong pooc", "roong pooc"
-        };
-        return knownFestivalKeys.Any(key => normalizedSource.Contains(key, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static IEnumerable<string> BuildKnownFestivalGuideTopicQueries(string normalizedSource)
-    {
-        if (string.IsNullOrWhiteSpace(normalizedSource)) yield break;
-
-        var knownFestivals = new (string Key, string[] Queries)[]
-        {
-            ("gau tao", new[] { "Lễ hội Gầu Tào", "Gầu Tào lễ hội người H'Mông", "Gầu Tào người Mông" }),
-            ("hoi lim", new[] { "Hội Lim", "Lễ hội Lim Bắc Ninh", "Hội Lim Quan họ" }),
-            ("gio to hung vuong", new[] { "Giỗ Tổ Hùng Vương", "Lễ hội Đền Hùng" }),
-            ("ok om bok", new[] { "Ok Om Bok", "Lễ hội Ok Om Bok" }),
-            ("kate", new[] { "Lễ hội Katê", "Katê" }),
-            ("long tong", new[] { "Lồng tồng", "Lễ hội Lồng tồng" }),
-            ("nong tong", new[] { "Lồng tồng", "Lễ hội Lồng tồng" }),
-            ("rong pooc", new[] { "Roóng Poọc", "Lễ hội Roóng Poọc" }),
-            ("roong pooc", new[] { "Roóng Poọc", "Lễ hội Roóng Poọc" })
-        };
-
-        foreach (var item in knownFestivals)
-        {
-            if (!normalizedSource.Contains(item.Key, StringComparison.OrdinalIgnoreCase)) continue;
-            foreach (var query in item.Queries)
-            {
-                yield return query;
-            }
-        }
-    }
-
-    private static string LimitWikipediaText(string text, int maxChars)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-
-        var cleaned = Regex.Replace(text, @"\s+", " ").Trim();
-        if (maxChars <= 0 || cleaned.Length <= maxChars) return cleaned;
-
-        cleaned = cleaned[..maxChars].Trim();
-        var lastSentence = cleaned.LastIndexOf(".", StringComparison.Ordinal);
-        if (lastSentence > 160) cleaned = cleaned[..(lastSentence + 1)].Trim();
-
-        return cleaned;
-    }
-
-    private static int ScoreWikipediaResult(string query, string? title, string extract)
-    {
-        var normalizedQuery = NormalizeVietnameseForSearch(query ?? string.Empty);
-        var normalizedTitle = NormalizeVietnameseForSearch(title ?? string.Empty);
-        var normalizedExtract = NormalizeVietnameseForSearch(extract ?? string.Empty);
-        var normalizedSource = normalizedTitle + " " + normalizedExtract;
-
-        if (string.IsNullOrWhiteSpace(normalizedQuery) || string.IsNullOrWhiteSpace(normalizedTitle) || string.IsNullOrWhiteSpace(normalizedExtract)) return 0;
-        if (IsGenericWikipediaQuery(normalizedQuery)) return 0;
-        if (LooksLikeTransportInfrastructureArticle(normalizedTitle, normalizedExtract) && !QueryAsksTransportInfrastructure(normalizedQuery)) return 0;
-        if (LooksLikeMediaAgencyArticle(normalizedTitle, normalizedExtract) && !QueryAsksMediaAgency(normalizedQuery)) return 0;
-        if (!SourceMatchesGuideSemanticIntent(normalizedQuery, normalizedTitle, normalizedExtract, null)) return 0;
-
-        var queryTokens = normalizedQuery
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(token => token.Trim(',', '.', '-', ':', ';', '(', ')'))
-            .Where(token => token.Length >= 3)
-            .Where(token => !GuideWikipediaStopWords.Contains(token))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(10)
-            .ToList();
-
-        if (queryTokens.Count == 0) return 0;
-
-        if (normalizedTitle.Equals(normalizedQuery, StringComparison.OrdinalIgnoreCase)) return 100;
-        if (normalizedTitle.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase) || normalizedQuery.Contains(normalizedTitle, StringComparison.OrdinalIgnoreCase))
-        {
-            if (queryTokens.Count <= 2 || HasKnownSpecificGuideTopic(normalizedQuery)) return 95;
-        }
-
-        var titleHits = queryTokens.Count(token => normalizedTitle.Contains(token, StringComparison.OrdinalIgnoreCase));
-        var sourceHits = queryTokens.Count(token => normalizedSource.Contains(token, StringComparison.OrdinalIgnoreCase));
-        if (sourceHits == 0) return 0;
-        if (queryTokens.Count <= 2 && titleHits == 0 && !HasKnownSpecificGuideTopic(normalizedQuery)) return 0;
-        if (queryTokens.Count >= 3 && sourceHits < Math.Min(3, queryTokens.Count) && titleHits == 0) return 0;
-
-        var score = sourceHits * 15 + titleHits * 20;
-        if (sourceHits == queryTokens.Count) score += 25;
-        if (titleHits == queryTokens.Count) score += 25;
-        if (queryTokens.Count <= 2 && sourceHits == queryTokens.Count) score += 20;
-
-        var titleCoverage = queryTokens.Count == 0 ? 0 : (double)titleHits / queryTokens.Count;
-        var sourceCoverage = queryTokens.Count == 0 ? 0 : (double)sourceHits / queryTokens.Count;
-        if (titleHits == 0 && queryTokens.Count <= 3) score -= 25;
-        if (sourceCoverage < 0.5d) score = 0;
-        if (titleCoverage >= 0.8d) score += 15;
-
-        return score;
-    }
-
-    private static bool IsGenericWikipediaQuery(string normalizedQuery)
-    {
-        if (string.IsNullOrWhiteSpace(normalizedQuery)) return true;
-        var broadTopics = new[] { "van hoa", "lich su", "di tich", "le hoi", "dia danh", "danh lam", "lang nghe", "di san" };
-        var broadCount = broadTopics.Count(topic => normalizedQuery.Contains(topic, StringComparison.OrdinalIgnoreCase));
-        if (broadCount < 2) return false;
-        if (HasKnownSpecificGuideTopic(normalizedQuery)) return false;
-
-        var tokens = normalizedQuery
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(token => token.Length >= 3)
-            .Where(token => !GuideWikipediaStopWords.Contains(token))
-            .ToList();
-
-        return tokens.Count == 0;
-    }
-
-    private static bool LooksLikeMediaAgencyArticle(string normalizedTitle, string normalizedExtract)
-    {
-        return LooksLikeMediaOrPressText((normalizedTitle + " " + normalizedExtract).Trim());
-    }
-
-    private static bool LooksLikeMediaOrPressText(string normalizedText)
-    {
-        if (string.IsNullOrWhiteSpace(normalizedText)) return false;
-
-        var mediaTerms = new[]
-        {
-            "bao va phat thanh", "phat thanh va truyen hinh", "phat thanh truyen hinh", "dai phat thanh",
-            "truyen hinh", "bao quang", "bao gia lai", "bao quang ngai", "trung tam truyen thong",
-            "co quan truyen thong", "co quan bao chi", "bao chi", "kenh truyen hinh", "dai truyen hinh"
-        };
-
-        return mediaTerms.Any(term => normalizedText.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool QueryAsksMediaAgency(string normalizedQuery)
-    {
-        if (string.IsNullOrWhiteSpace(normalizedQuery)) return false;
-
-        var mediaTerms = new[]
-        {
-            "bao", "phat thanh", "truyen hinh", "dai phat thanh", "bao chi", "trung tam truyen thong", "co quan truyen thong", "kenh truyen hinh"
-        };
-
-        return mediaTerms.Any(term => normalizedQuery.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool LooksLikeTransportInfrastructureArticle(string normalizedTitle, string normalizedExtract)
-    {
-        var source = (normalizedTitle + " " + normalizedExtract).Trim();
-        if (string.IsNullOrWhiteSpace(source)) return false;
-
-        var transportTerms = new[]
-        {
-            "duong cao toc", "cao toc", "quoc lo", "duong quoc lo", "duong sat", "tuyen duong sat", "tuyen duong bo"
-        };
-
-        return transportTerms.Any(term => source.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool QueryAsksTransportInfrastructure(string normalizedQuery)
-    {
-        if (string.IsNullOrWhiteSpace(normalizedQuery)) return false;
-
-        var transportTerms = new[]
-        {
-            "duong cao toc", "cao toc", "quoc lo", "duong quoc lo", "duong sat", "tuyen duong", "san bay", "cang", "cau"
-        };
-
-        return transportTerms.Any(term => normalizedQuery.Contains(term, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool IsWikipediaResultRelevant(string query, string? title, string extract)
-    {
-        return ScoreWikipediaResult(query, title, extract) >= TrustedWikipediaMinimumScore;
-    }
-
-    private static readonly HashSet<string> GuideWikipediaStopWords = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "hay", "cho", "toi", "biet", "ve", "la", "gi", "ai", "dau", "khi", "nao", "nhu", "the",
-        "gioi", "thieu", "kham", "pha", "nghia", "nguon", "goc", "lich", "su", "van", "hoa",
-        "huong", "dan", "vien", "travelwinne", "travelwai", "wiki", "wikipedia", "noi", "thong", "tin",
-        "giai", "thich", "le", "hoi", "tom", "tat", "ke", "chuyen", "ro", "phan", "tich",
-        "thoi", "gian", "to", "chuc", "dien", "ra", "ngay", "thang", "nam", "am", "duong",
-        "bao", "gio", "luc", "mung", "may", "xay", "dung", "nguoi", "dan", "tai", "o",
-        "di", "dia", "danh", "tich", "noi", "bat", "tieu", "bieu", "kieu", "trai", "nghiem", "mien", "cac", "nhung", "mot", "vung", "vung mien", "du", "lich", "va", "và",
-        "what", "who", "where", "when", "why", "how", "is", "are", "was", "were", "the", "a", "an", "of", "in", "on", "for", "to", "about", "tell", "me", "please", "many", "much", "tall", "high", "long", "wide", "deep"
-    };
-
-    private static IEnumerable<string> BuildProvinceWikipediaQueries(string provinceName)
-    {
-        if (string.IsNullOrWhiteSpace(provinceName)) yield break;
-
-        var name = Regex.Replace(provinceName.Trim(), @"\s+", " ");
-        var normalized = NormalizeVietnameseForSearch(name);
-
-        if (normalized.StartsWith("thanh pho ", StringComparison.OrdinalIgnoreCase))
-        {
-            yield return name;
-            var shortName = Regex.Replace(name, @"^Thành\s+phố\s+", "", RegexOptions.IgnoreCase).Trim();
-            if (!string.IsNullOrWhiteSpace(shortName)) yield return shortName;
-            yield break;
-        }
-
-        if (normalized.StartsWith("tinh ", StringComparison.OrdinalIgnoreCase))
-        {
-            var shortName = Regex.Replace(name, @"^Tỉnh\s+", "", RegexOptions.IgnoreCase).Trim();
-            if (!string.IsNullOrWhiteSpace(shortName)) yield return shortName;
-            yield return name;
-            yield break;
-        }
-
-        yield return name;
-        yield return "Tỉnh " + name;
-    }
-
-    private static bool IsProvinceOverviewGuideQuestion(string normalizedSource, IReadOnlyList<string> provinceNames, GuideSearchPlan? searchPlan)
-    {
-        if (provinceNames.Count == 0 || string.IsNullOrWhiteSpace(normalizedSource)) return false;
-
-        var normalizedProvinceNames = provinceNames
-            .Select(NormalizeVietnameseForSearch)
-            .Where(item => !string.IsNullOrWhiteSpace(item))
-            .ToList();
-
-        if (searchPlan is not null && searchPlan.Topics.Count > 0)
-        {
-            var hasProvinceTopic = searchPlan.Topics.Any(topic =>
-            {
-                var core = NormalizeVietnameseForSearch((topic.CoreTopic + " " + topic.NormalizedTopic).Trim());
-                return string.Equals(topic.EntityType, "province", StringComparison.OrdinalIgnoreCase)
-                    || normalizedProvinceNames.Any(province => core.Equals(province, StringComparison.OrdinalIgnoreCase)
-                        || core.Equals("tinh " + province, StringComparison.OrdinalIgnoreCase)
-                        || core.Equals("thanh pho " + province, StringComparison.OrdinalIgnoreCase));
-            });
-
-            if (hasProvinceTopic) return true;
-
-            var hasSpecificNonProvinceTopic = searchPlan.Topics.Any(topic =>
-            {
-                var core = NormalizeVietnameseForSearch((topic.CoreTopic + " " + topic.NormalizedTopic).Trim());
-                if (string.IsNullOrWhiteSpace(core)) return false;
-                if (normalizedProvinceNames.Any(province => core.Equals(province, StringComparison.OrdinalIgnoreCase))) return false;
-                return topic.EntityType is "festival" or "landmark" or "person" or "event" or "culture";
-            });
-
-            if (hasSpecificNonProvinceTopic) return false;
-        }
-
-        if (HasKnownSpecificGuideTopic(normalizedSource)) return false;
-
-        if (Regex.IsMatch(normalizedSource, @"\b(le hoi|di tich|dia danh|danh lam)\s+(?!noi\s+bat|tieu\s+bieu|dac\s+sac|o\b|tai\b|cua\b|va\b)[a-z0-9]{3,}", RegexOptions.IgnoreCase))
-        {
-            return false;
-        }
-
-        var broadProvinceKeywords = new[]
-        {
-            "kham pha", "tim hieu", "gioi thieu", "thuyet minh", "van hoa", "lich su", "di tich",
-            "le hoi", "dia danh", "danh lam", "noi bat", "tieu bieu", "du lich", "tinh thanh"
-        };
-
-        return broadProvinceKeywords.Any(keyword => normalizedSource.Contains(keyword, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static IReadOnlyList<string> BuildWikipediaSearchQueries(string? message, string? appContext, GuideSearchPlan? searchPlan = null)
-    {
-        var source = !string.IsNullOrWhiteSpace(message) ? message! : appContext ?? string.Empty;
-        var queries = new List<string>();
-        if (string.IsNullOrWhiteSpace(source)) return queries;
-
-        source = Regex.Replace(source, @"https?://\S+", " ", RegexOptions.IgnoreCase);
-        source = Regex.Replace(source, @"[^\p{L}\p{M}\p{N}\s,.'\-""“”]", " ");
-        source = Regex.Replace(source, @"\s+", " ").Trim();
-        if (string.IsNullOrWhiteSpace(source)) return queries;
-
-        var normalizedSource = NormalizeVietnameseForSearch(source);
-        if (IsGenericGuideExplorationMessage(source) && (searchPlan is null || searchPlan.Topics.Count == 0)) return queries;
-        var provinceNames = FindProvinceNamesInText(source).ToList();
-
-        void AddQuery(string? value)
-        {
-            if (string.IsNullOrWhiteSpace(value)) return;
-            var cleanedValue = CleanWikipediaCoreQuery(value);
-            if (string.IsNullOrWhiteSpace(cleanedValue)) return;
-            if (cleanedValue.Length > 80) cleanedValue = cleanedValue[..80].Trim();
-            if (cleanedValue.Length < 2) return;
-            if (!IsUsefulWikipediaSearchQuery(cleanedValue)) return;
-            if (!queries.Any(item => string.Equals(NormalizeVietnameseForSearch(item), NormalizeVietnameseForSearch(cleanedValue), StringComparison.OrdinalIgnoreCase)))
-            {
-                queries.Add(cleanedValue);
-            }
-        }
-
-        if (IsProvinceOverviewGuideQuestion(normalizedSource, provinceNames, searchPlan))
-        {
-            foreach (var provinceName in provinceNames)
-            {
-                foreach (var provinceQuery in BuildProvinceWikipediaQueries(provinceName))
-                {
-                    AddQuery(provinceQuery);
-                }
-            }
-        }
-
-        void AddTopicQueries(GuideSearchTopic topic)
-        {
-            foreach (var query in topic.SearchPlan.ExactTitleQueries)
-            {
-                AddQuery(query);
-            }
-
-            AddQuery(topic.NormalizedTopic);
-            AddQuery(topic.CoreTopic);
-
-            if (string.Equals(topic.EntityType, "festival", StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(topic.CoreTopic) &&
-                !NormalizeVietnameseForSearch(topic.CoreTopic).StartsWith("le hoi ", StringComparison.OrdinalIgnoreCase))
-            {
-                AddQuery("Le hoi " + topic.CoreTopic);
-            }
-
-            foreach (var query in topic.SearchPlan.FallbackQueries)
-            {
-                AddQuery(query);
-            }
-
-            foreach (var query in topic.SearchPlan.LocationQueries)
-            {
-                AddQuery(query);
-            }
-
-            foreach (var hint in topic.LocationHints)
-            {
-                AddQuery(topic.CoreTopic + " " + hint);
-            }
-
-            foreach (var hint in topic.CultureHints)
-            {
-                AddQuery(topic.CoreTopic + " " + hint);
-            }
-
-            foreach (var query in topic.SearchPlan.AspectQueries)
-            {
-                AddQuery(query);
-            }
-        }
-
-        if (searchPlan is not null)
-        {
-            foreach (var topic in searchPlan.Topics.Take(5))
-            {
-                AddTopicQueries(topic);
-            }
-        }
-
-        // Ưu tiên tên được đặt trong ngoặc kép vì đó thường là từ khoá cốt lõi.
-        var quoted = Regex.Matches(source, @"[""“”']([^""“”']{3,80})[""“”']")
-            .Cast<Match>()
-            .Select(match => match.Groups[1].Value.Trim())
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
-        AddQuery(quoted);
-
-        foreach (var knownFestivalQuery in BuildKnownFestivalGuideTopicQueries(normalizedSource))
-        {
-            AddQuery(knownFestivalQuery);
-        }
-
-        foreach (var knownTopic in BuildKnownGuideTopicQueries(normalizedSource))
-        {
-            AddQuery(knownTopic);
-        }
-
-        // Nếu câu hỏi có cả chủ đề cụ thể và tỉnh/thành, vẫn phải tra chủ đề trước.
-        // Ví dụ "Hội Lim ở Bắc Ninh" phải ưu tiên "Hội Lim", không được chỉ tra "Bắc Ninh".
-        var coreTopic = ExtractGuideWikipediaCoreTopic(source);
-        var normalizedCore = NormalizeVietnameseForSearch(coreTopic);
-        if (!string.IsNullOrWhiteSpace(coreTopic))
-        {
-            if ((normalizedSource.Contains("le hoi", StringComparison.OrdinalIgnoreCase) || IsKnownFestivalTopic(normalizedSource))
-                && !normalizedCore.StartsWith("le hoi ", StringComparison.OrdinalIgnoreCase))
-            {
-                AddQuery("Lễ hội " + coreTopic);
-            }
-
-            AddQuery(coreTopic);
-        }
-
-        foreach (var provinceName in provinceNames)
-        {
-            foreach (var provinceQuery in BuildProvinceWikipediaQueries(provinceName))
-            {
-                AddQuery(provinceQuery);
-            }
-        }
-
-        return queries.Take(10).ToList();
-    }
-
-    private static IEnumerable<string> BuildKnownGuideTopicQueries(string normalizedSource)
-    {
-        if (string.IsNullOrWhiteSpace(normalizedSource)) yield break;
-
-        var knownTopics = new (string Key, string Query)[]
-        {
-            ("hoang thanh thang long", "Hoàng thành Thăng Long"),
-            ("van mieu quoc tu giam", "Văn Miếu - Quốc Tử Giám"),
-            ("quoc tu giam", "Văn Miếu - Quốc Tử Giám"),
-            ("van mieu", "Văn Miếu - Quốc Tử Giám"),
-            ("co loa", "Cổ Loa"),
-            ("ho hoan kiem", "Hồ Hoàn Kiếm"),
-            ("ho guom", "Hồ Hoàn Kiếm"),
-            ("hoi an", "Hội An"),
-            ("ha long", "Vịnh Hạ Long"),
-            ("vinh ha long", "Vịnh Hạ Long"),
-            ("festival hue", "Festival Huế"),
-            ("co do hue", "Quần thể di tích Cố đô Huế"),
-            ("gau tao", "Lễ hội Gầu Tào"),
-            ("hoi lim", "Hội Lim"),
-            ("gio to hung vuong", "Giỗ Tổ Hùng Vương"),
-            ("den hung", "Đền Hùng"),
-            ("tet nguyen dan", "Tết Nguyên Đán"),
-            ("trung thu", "Tết Trung thu"),
-            ("quoc khanh", "Ngày Quốc khánh Việt Nam"),
-            ("ok om bok", "Ok Om Bok"),
-            ("kate", "Lễ hội Katê"),
-            ("long tong", "Lồng tồng"),
-            ("nong tong", "Lồng tồng"),
-            ("rong pooc", "Roóng Poọc"),
-            ("roong pooc", "Roóng Poọc"),
-            ("dan ca xoan", "Hát xoan"),
-            ("hat xoan", "Hát xoan"),
-            ("nha tho duc ba", "Nhà thờ chính tòa Đức Bà Sài Gòn"),
-            ("dinh doc lap", "Dinh Độc Lập"),
-            ("dia dao cu chi", "Địa đạo Củ Chi"),
-            ("thanh dia my son", "Thánh địa Mỹ Sơn"),
-            ("my son", "Thánh địa Mỹ Sơn"),
-            ("thanh nha ho", "Thành nhà Hồ"),
-            ("khong gian van hoa cong chieng tay nguyen", "Không gian văn hóa Cồng Chiêng Tây Nguyên"),
-            ("cong chieng tay nguyen", "Không gian văn hóa Cồng Chiêng Tây Nguyên"),
-            ("viet nam", "Việt Nam")
-        };
-
-        foreach (var item in knownTopics)
-        {
-            if (normalizedSource.Contains(item.Key, StringComparison.OrdinalIgnoreCase))
-            {
-                yield return item.Query;
-            }
-        }
+        if (start >= 0 && end > start) cleaned = cleaned[start..(end + 1)];
+        try { return JsonNode.Parse(cleaned) as JsonObject; } catch { return null; }
     }
 
-    private static string ExtractGuideWikipediaCoreTopic(string source)
-    {
-        if (string.IsNullOrWhiteSpace(source)) return string.Empty;
-
-        var cleaned = source;
-        cleaned = Regex.Replace(cleaned, @"https?://\S+", " ", RegexOptions.IgnoreCase);
-        cleaned = Regex.Replace(cleaned, @"[""“”']", " ");
-        cleaned = Regex.Replace(cleaned, @"\b(hãy|hay|vui\s*lòng|cho\s+tôi|cho\s+toi|giúp\s+tôi|giup\s+toi|mình\s+muốn|minh\s+muon|tôi\s+muốn|toi\s+muon|bạn\s+có\s+thể|ban\s+co\s+the)\b", " ", RegexOptions.IgnoreCase);
-        cleaned = Regex.Replace(cleaned, @"\b(khám\s+phá|kham\s+pha|tìm\s+hiểu|tim\s+hieu|giới\s+thiệu|gioi\s+thieu|thuyết\s+minh|thuyet\s+minh|giải\s+thích|giai\s+thich|kể\s+chuyện|ke\s+chuyen|kể\s+về|ke\s+ve|nói\s+về|noi\s+ve|phân\s+tích|phan\s+tich|tóm\s+tắt|tom\s+tat)\b", " ", RegexOptions.IgnoreCase);
-        cleaned = Regex.Replace(cleaned, @"\b(văn\s+hoá|văn\s+hóa|van\s+hoa|lịch\s+sử|lich\s+su|địa\s+danh|dia\s+danh|di\s+tích|di\s+tich|danh\s+lam|ngày\s+lễ|ngay\s+le|du\s+lịch|du\s+lich)\b", " ", RegexOptions.IgnoreCase);
-        cleaned = Regex.Replace(cleaned, @"\b(lễ\s+hội|le\s+hoi)\b", " ", RegexOptions.IgnoreCase);
-        cleaned = Regex.Replace(cleaned, @"\b(nổi\s+bật|noi\s+bat|tiêu\s+biểu|tieu\s+bieu|ở\s+đâu|o\s+dau|là\s+gì|la\s+gi|có\s+gì|co\s+gi|như\s+thế\s+nào|nhu\s+the\s+nao)\b", " ", RegexOptions.IgnoreCase);
-        cleaned = Regex.Replace(cleaned, @"\b(của|cua|về|ve|ở|o|tại|tai|trong|và|va|hoặc|hoac|các|cac|những|nhung|một|mot|này|nay|kia|đó|do|cho|toi|tôi|bạn|ban|mình|minh)\b", " ", RegexOptions.IgnoreCase);
-        cleaned = Regex.Replace(cleaned, @"[^\p{L}\p{M}\p{N}\s.'\-]", " ");
-        cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim(' ', ',', '.', '-', ':', ';', '\'', '"');
-
-        return CleanWikipediaCoreQuery(cleaned);
-    }
-
-    private static string CleanWikipediaCoreQuery(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
-
-        var cleaned = Regex.Replace(value, @"\s+", " ").Trim(' ', ',', '.', '-', ':', ';', '\'', '"', '“', '”');
-        cleaned = Regex.Replace(cleaned, @"^(về|ve|ở|o|tại|tai|của|cua)\s+", "", RegexOptions.IgnoreCase).Trim();
-        cleaned = Regex.Replace(cleaned, @"\s+(là\s+gì|la\s+gi|ở\s+đâu|o\s+dau)$", "", RegexOptions.IgnoreCase).Trim();
-        cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim(' ', ',', '.', '-', ':', ';', '\'', '"', '“', '”');
-
-        var normalized = NormalizeVietnameseForSearch(cleaned);
-        var blockedWholeQueries = new[]
-        {
-            "van hoa", "lich su", "dia danh", "di tich", "danh lam", "le hoi", "ngay le", "du lich", "noi bat", "tieu bieu",
-            "kham pha", "tim hieu", "gioi thieu", "giai thich", "thuyet minh", "ke chuyen"
-        };
-        if (blockedWholeQueries.Contains(normalized, StringComparer.OrdinalIgnoreCase)) return string.Empty;
-
-        return cleaned;
-    }
-
-
-
-    private static bool IsUsefulWikipediaSearchQuery(string? query)
-    {
-        var normalized = NormalizeVietnameseForSearch(query ?? string.Empty);
-        if (string.IsNullOrWhiteSpace(normalized)) return false;
-        if (IsGenericGuideExplorationMessage(query)) return false;
-
-        var meaningfulTokens = normalized
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(token => token.Trim(',', '.', '-', ':', ';', '(', ')'))
-            .Where(token => token.Length >= 2)
-            .Where(token => !GuideWikipediaStopWords.Contains(token))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        return meaningfulTokens.Count > 0 || HasKnownSpecificGuideTopic(normalized);
-    }
-
-    private static string BuildWikipediaSearchQuery(string? message, string? appContext)
-    {
-        return BuildWikipediaSearchQueries(message, appContext).FirstOrDefault() ?? string.Empty;
-    }
-
-    private static string TryBuildGuideTrustedLocalReply(string? message, string? appContext, bool includeDateInformation)
-    {
-        var normalized = NormalizeVietnameseForSearch((message ?? string.Empty) + " " + (appContext ?? string.Empty));
-        if (string.IsNullOrWhiteSpace(normalized)) return string.Empty;
-
-        var provinceOverviewReply = TryBuildProvinceOverviewLocalReply(message, appContext);
-        if (!string.IsNullOrWhiteSpace(provinceOverviewReply)) return provinceOverviewReply;
-
-        if (normalized.Contains("gau tao", StringComparison.OrdinalIgnoreCase))
-        {
-            var reply = "Lễ hội Gầu Tào là lễ hội của đồng bào H'Mông, gắn với việc cầu phúc hoặc cầu mệnh. Gia đình xin mở hội thường dựng cây nêu ở nơi cao, làm lễ cúng tổ tiên và thần linh để cầu con cái, sức khỏe, bình an, mùa màng và vật nuôi tốt lành. Phần hội là dịp cộng đồng gặp gỡ, vui chơi, hát giao duyên, múa khèn và giữ gìn bản sắc Mông.";
-            if (includeDateInformation)
-            {
-                reply += " Lễ hội thường gắn với dịp đầu xuân sau Tết, nhưng thời gian cụ thể có thể khác theo từng địa phương.";
-            }
-            return reply;
-        }
-
-        return string.Empty;
-    }
-
-    private static string TryBuildProvinceOverviewLocalReply(string? message, string? appContext)
-    {
-        var source = ((message ?? string.Empty) + " " + (appContext ?? string.Empty)).Trim();
-        var provinceNames = FindProvinceNamesInText(source).ToList();
-        if (!IsProvinceOverviewGuideQuestion(NormalizeVietnameseForSearch(source), provinceNames, null)) return string.Empty;
-
-        var provinceName = provinceNames.FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(provinceName)) return string.Empty;
-
-        var province = PlanCatalog.DefaultProvinceTags().FirstOrDefault(item =>
-        {
-            var name = item.GetValueOrDefault("name")?.ToString()
-                       ?? item.GetValueOrDefault("province_name")?.ToString()
-                       ?? string.Empty;
-            return string.Equals(NormalizeVietnameseForSearch(name), NormalizeVietnameseForSearch(provinceName), StringComparison.OrdinalIgnoreCase);
-        });
-
-        if (province is null) return string.Empty;
-
-        var nameText = province.GetValueOrDefault("name")?.ToString()
-                       ?? province.GetValueOrDefault("province_name")?.ToString()
-                       ?? provinceName;
-        var area = province.GetValueOrDefault("area")?.ToString() ?? string.Empty;
-        var region = province.GetValueOrDefault("region")?.ToString() ?? string.Empty;
-        var description = province.GetValueOrDefault("description")?.ToString() ?? string.Empty;
-        var tags = PlanCatalog.ToStringList(province.GetValueOrDefault("tags"));
-
-        var parts = new List<string> { nameText };
-        if (!string.IsNullOrWhiteSpace(area) || !string.IsNullOrWhiteSpace(region))
-        {
-            parts.Add("khu vực: " + string.Join(" - ", new[] { area, region }.Where(item => !string.IsNullOrWhiteSpace(item))));
-        }
-        if (tags.Count > 0)
-        {
-            parts.Add("chủ đề nổi bật: " + string.Join(", ", tags));
-        }
-        if (!string.IsNullOrWhiteSpace(description))
-        {
-            parts.Add("mô tả TravelwAI: " + description);
-        }
-
-        parts.Add("Nếu người dùng hỏi văn hoá, lịch sử, di tích và lễ hội, hãy chỉ diễn giải từ các dữ liệu trên; phần nào dữ liệu chưa nêu rõ thì nói là TravelwAI chưa có nguồn đủ chi tiết cho phần đó.");
-        return string.Join(". ", parts) + ".";
-    }
-
-    private static string KeepOnlyCompletedSentences(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-
-        var cleaned = text.Trim();
-        var sentenceEnds = Regex.Matches(cleaned, @"[.](?=\s|$)").Cast<Match>().ToList();
-        if (sentenceEnds.Count == 0) return string.Empty;
-
-        var lastSentenceEnd = sentenceEnds[^1];
-        return cleaned[..(lastSentenceEnd.Index + 1)].Trim();
-    }
-
-    private static string CleanSimpleChatbotReply(string text, int maxWords, bool dropUnfinishedTail = false)
-    {
-        if (string.IsNullOrWhiteSpace(text) || maxWords <= 0) return string.Empty;
-
-        var cleaned = text.Trim();
-        cleaned = Regex.Replace(cleaned, @"^```(?:\w+)?\s*", "", RegexOptions.IgnoreCase).Trim();
-        cleaned = Regex.Replace(cleaned, @"\s*```$", "", RegexOptions.IgnoreCase).Trim();
-
-        var lines = cleaned
-            .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-            .Select(line => Regex.Replace(line.Trim(), @"^[-*•●▪▫►>\d]+[.)]?\s*", ""))
-            .Where(line => !string.IsNullOrWhiteSpace(line));
-        cleaned = string.Join(" ", lines);
-
-        cleaned = Regex.Replace(cleaned, @"(\*\*|\*|__|_|`|#{1,6}|>|~|\[|\]|\{|\}|\||•|●|▪|▫|►|→|=>)", " ");
-
-        var builder = new StringBuilder(cleaned.Length);
-        foreach (var ch in cleaned)
-        {
-            if (char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch))
-            {
-                builder.Append(ch);
-                continue;
-            }
-
-            if (ch is '.' or ',' or '(' or ')' or '/' or '-')
-            {
-                builder.Append(ch);
-            }
-            else if (ch is '!' or '?' or ':' or ';' or '\u2026')
-            {
-                builder.Append('.');
-            }
-            else
-            {
-                builder.Append(' ');
-            }
-        }
-
-        cleaned = builder.ToString();
-        cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
-        cleaned = Regex.Replace(cleaned, @"\s+([,./-])", "$1");
-        cleaned = Regex.Replace(cleaned, @"([,.]){2,}", "$1");
-        cleaned = ExpandVietnameseDateRanges(cleaned);
-
-        var wordMatches = Regex.Matches(cleaned, @"[\p{L}\p{N}]+").Cast<Match>().ToList();
-        var wasWordLimited = false;
-        if (wordMatches.Count > maxWords)
-        {
-            wasWordLimited = true;
-            var lastWord = wordMatches[maxWords - 1];
-            cleaned = cleaned[..(lastWord.Index + lastWord.Length)].Trim();
-        }
-
-        cleaned = Regex.Replace(cleaned, @"[^\p{L}\p{N})/.-]+$", "").Trim();
-
-        if (dropUnfinishedTail || wasWordLimited)
-        {
-            cleaned = KeepOnlyCompletedSentences(cleaned);
-        }
-
-        if (string.IsNullOrWhiteSpace(cleaned)) return string.Empty;
-
-        if (!Regex.IsMatch(cleaned, @"[.]$"))
-        {
-            cleaned += ".";
-        }
-
-        return cleaned;
-    }
-
-    private static string StripGuideSourceLeadIn(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-
-        var cleaned = Regex.Replace(
-            text.Trim(),
-            @"^\s*theo\s+(?:dữ\s+liệu\s+ứng\s+dụng|dữ\s+liệu|nguồn|wikipedia(?:\s+tiếng\s+việt)?|wikivoyage(?:\s+tiếng\s+việt)?|thông\s+tin\s+nền)(?:\s+[^,.:\n]{0,80})?\s*[:,.-]?\s*",
-            "",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-
-        return string.IsNullOrWhiteSpace(cleaned) ? text.Trim() : cleaned.Trim();
-    }
-
-    private static string ExpandVietnameseDateRanges(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text)) return text;
-
-        text = Regex.Replace(
-            text,
-            "\\b([0-3]?\\d)\\s*[-\u2013\u2014]\\s*([0-3]?\\d/\\d{1,2})(?=\\s*(?:âm\\s+lịch|am\\s+lich|dương\\s+lịch|duong\\s+lich|AL|DL|[,.)]|$))",
-            match => FormatVietnameseDateRange(match.Groups[1].Value, match.Groups[2].Value));
-
-        text = Regex.Replace(
-            text,
-            "\\b([0-3]?\\d)\\s+([0-3]?\\d/\\d{1,2})(?=\\s*(?:âm\\s+lịch|am\\s+lich|dương\\s+lịch|duong\\s+lich|AL|DL|[,.)]|$))",
-            match => FormatVietnameseDateRange(match.Groups[1].Value, match.Groups[2].Value, match.Value));
-
-        return text;
-    }
-
-    private static string FormatVietnameseDateRange(string startText, string endDateText, string fallback = "")
-    {
-        if (!int.TryParse(startText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var startDay))
-        {
-            return string.IsNullOrEmpty(fallback) ? $"{startText} đến {endDateText}" : fallback;
-        }
-
-        var parts = endDateText.Split('/', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 2 ||
-            !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var endDay) ||
-            !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var month) ||
-            startDay < 1 || startDay > 31 || endDay < 1 || endDay > 31 || month < 1 || month > 12 || endDay <= startDay)
-        {
-            return string.IsNullOrEmpty(fallback) ? $"{startText} đến {endDateText}" : fallback;
-        }
-
-        return $"{startDay} đến {endDay}/{month:00}";
-    }
+    private static bool IsOpenRouterAnswerCutOff(string? finishReason) => string.Equals(finishReason, "length", StringComparison.OrdinalIgnoreCase);
 
     private string? GetOpenRouterApiKey()
     {
         var apiKey = GetOpenRouterConfigValue("ApiKey", "OPENROUTER_API_KEY", string.Empty);
-        if (IsMissingOpenRouterSecret(apiKey))
-        {
-            return null;
-        }
-
-        return apiKey.Trim();
+        return IsMissingOpenRouterSecret(apiKey) ? null : apiKey.Trim();
     }
 
     private string GetOpenRouterConfigValue(string key, string envName, string fallback)
     {
         var value = _configuration[$"OpenRouter:{key}"];
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            value = _configuration[envName];
-        }
-
+        if (string.IsNullOrWhiteSpace(value)) value = _configuration[envName];
         return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
     }
 
     private Uri BuildOpenRouterChatCompletionsUri()
     {
         var baseUrl = GetOpenRouterConfigValue("BaseUrl", "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1");
-        if (!Uri.TryCreate(baseUrl.TrimEnd('/') + "/", UriKind.Absolute, out var uri))
-        {
-            uri = new Uri("https://openrouter.ai/api/v1/");
-        }
-
+        if (!Uri.TryCreate(baseUrl.TrimEnd('/') + "/", UriKind.Absolute, out var uri)) uri = new Uri("https://openrouter.ai/api/v1/");
         return new Uri(uri, "chat/completions");
     }
 
-    private static object BuildOpenRouterMinimalReasoningOptions()
-    {
-        return new
-        {
-            effort = "minimal",
-            exclude = true
-        };
-    }
+    private static object BuildOpenRouterMinimalReasoningOptions() => new { effort = "minimal", exclude = true };
 
     private static bool IsMissingOpenRouterSecret(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return true;
-
         var clean = value.Trim();
         return clean.Equals("PASTE_OPENROUTER_API_KEY_HERE", StringComparison.OrdinalIgnoreCase)
             || clean.Equals("YOUR_OPENROUTER_API_KEY", StringComparison.OrdinalIgnoreCase)
@@ -3559,31 +481,10 @@ public sealed class ChatController : ApiControllerBase
     private static string BuildOpenRouterErrorMessage(int statusCode, string responseText)
     {
         var message = responseText;
-
-        try
-        {
-            message = JsonNode.Parse(responseText)?["error"]?["message"]?.ToString() ?? responseText;
-        }
-        catch
-        {
-
-        }
-
-        if (statusCode == 401)
-        {
-            return "AI chưa được cấu hình đúng. Vui lòng kiểm tra cấu hình API key.";
-        }
-
-        if (statusCode == 429 || message.Contains("rate", StringComparison.OrdinalIgnoreCase) || message.Contains("limit", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Hiện chưa trả lời được. Bạn thử lại sau.";
-        }
-
-        if (statusCode == 404 || message.Contains("unavailable", StringComparison.OrdinalIgnoreCase) || message.Contains("not found", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Model AI hiện không khả dụng. Vui lòng kiểm tra lại cấu hình model.";
-        }
-
+        try { message = JsonNode.Parse(responseText)?["error"]?["message"]?.ToString() ?? responseText; } catch { }
+        if (statusCode == 401) return "AI chưa được cấu hình đúng. Vui lòng kiểm tra cấu hình API key.";
+        if (statusCode == 429 || message.Contains("rate", StringComparison.OrdinalIgnoreCase) || message.Contains("limit", StringComparison.OrdinalIgnoreCase)) return "Hiện chưa trả lời được. Bạn thử lại sau.";
+        if (statusCode == 404 || message.Contains("unavailable", StringComparison.OrdinalIgnoreCase) || message.Contains("not found", StringComparison.OrdinalIgnoreCase)) return "Model AI hiện không khả dụng. Vui lòng kiểm tra lại cấu hình model.";
         return "Hiện chưa trả lời được. Bạn thử lại sau.";
     }
 
@@ -3825,12 +726,6 @@ public sealed class ChatController : ApiControllerBase
             conversation_id = conversationId,
             message = "Đã gửi tin nhắn cho Admin."
         });
-    }
-
-    private static string NormalizeAiAssistantMode(string? value)
-    {
-        var text = (value ?? string.Empty).Trim().ToLowerInvariant();
-        return text is "guide" or "travelwinne" or "travelwinne-guide" or "huong-dan-vien" ? "guide" : "travelwai";
     }
 
     [HttpGet("users")]

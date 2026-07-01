@@ -18,7 +18,7 @@ let aiMessageSending = false;
 let outgoingFriendRequestKeys = new Set();
 let pendingAiContextByAssistant = {};
 const API_BASE_URL = "/api";
-const CLIENT_CACHE_VERSION = "2026-06-29-wiki-strict-v40";
+const CLIENT_CACHE_VERSION = "2026-07-01-clean-v1";
 const USERS_CACHE_TTL_MS = 5 * 60 * 1000;
 const FRIEND_CACHE_TTL_MS = 30 * 1000;
 const CONVERSATION_CACHE_TTL_MS = 15 * 1000;
@@ -27,7 +27,6 @@ const FRIEND_REFRESH_MS = 30 * 1000;
 const MAX_CHAT_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const CHAT_MESSAGE_PAYLOAD_TYPE = "travelwai-chat-message";
 const AI_CONVERSATION_ID = "travelwai-ai-conversation";
-const GUIDE_AI_CONVERSATION_ID = "travelwinne-guide-ai-conversation";
 const AI_STORAGE_PREFIX = "travelwai-ai-chat-history";
 const AI_PENDING_PROMPT_KEY = "travelwai-ai-pending-prompt";
 const AI_AVATAR_VERSION_KEY = "travelwaiAiAvatarVersion";
@@ -54,13 +53,6 @@ const AI_ASSISTANT_USER = {
   email: "manager@travelwai.local",
   profilePic: buildAiAvatarUrl("travelwai-manager-avatar.webp"),
 };
-const GUIDE_AI_ASSISTANT_USER = {
-  id: "travelwinne-guide-ai",
-  username: "Hướng dẫn viên Travelwinne",
-  name: "Hướng dẫn viên Travelwinne",
-  email: "guide@travelwai.local",
-  profilePic: buildAiAvatarUrl("travelwinne-guide-avatar.webp"),
-};
 const AI_ASSISTANT_CONFIGS = {
   travelwai: {
     key: "travelwai",
@@ -76,27 +68,11 @@ const AI_ASSISTANT_CONFIGS = {
       "Tôi muốn xem bản đồ",
       "Tôi muốn đổi mật khẩu"
     ]
-  },
-  guide: {
-    key: "guide",
-    mode: "guide",
-    conversationId: GUIDE_AI_CONVERSATION_ID,
-    displayName: "Hướng dẫn viên Travelwinne",
-    statusText: "Hướng dẫn văn hoá lịch sử",
-    defaultLastMessage: "Hướng dẫn văn hoá lịch sử",
-    user: GUIDE_AI_ASSISTANT_USER,
-    welcome: "Xin chào, mình là Hướng dẫn viên Travelwinne. Bạn có thể hỏi mình về văn hoá, lịch sử, di tích, nhân vật, truyền thuyết và lễ hội Việt Nam.",
-    suggestions: [
-      "Khám phá Festival Huế",
-      "Kể chuyện Hoàng thành Thăng Long",
-      "Giải thích lễ hội Gầu Tào"
-    ]
   }
 };
 
 function refreshAiAvatarUrls() {
   AI_ASSISTANT_USER.profilePic = buildAiAvatarUrl("travelwai-manager-avatar.webp");
-  GUIDE_AI_ASSISTANT_USER.profilePic = buildAiAvatarUrl("travelwinne-guide-avatar.webp");
 }
 
 function refreshAiAvatarInMessages() {
@@ -109,9 +85,6 @@ function normalizeAiMessageAvatars(messages) {
   return (messages || []).map((message) => {
     if (message?.sender_id === AI_ASSISTANT_USER.id) {
       return { ...message, sender_info: AI_ASSISTANT_USER };
-    }
-    if (message?.sender_id === GUIDE_AI_ASSISTANT_USER.id) {
-      return { ...message, sender_info: GUIDE_AI_ASSISTANT_USER };
     }
     return message;
   });
@@ -434,15 +407,12 @@ function getUserAvatarUrl(user) {
 }
 
 function normalizeAiAssistantKey(value) {
-  const text = String(value || "").trim().toLowerCase();
-  if (["guide", "travelwinne", "travelwinne-guide", "huong-dan-vien", "huong dan vien"].includes(text)) return "guide";
   return "travelwai";
 }
 
 function getAiConfig(value) {
   if (typeof value === "string") return AI_ASSISTANT_CONFIGS[normalizeAiAssistantKey(value)] || AI_ASSISTANT_CONFIGS.travelwai;
   const id = value?.id || value?.conversation_id || value?.conversationId;
-  if (id === GUIDE_AI_CONVERSATION_ID || value?.assistant_key === "guide" || value?.assistant === "guide") return AI_ASSISTANT_CONFIGS.guide;
   return AI_ASSISTANT_CONFIGS.travelwai;
 }
 
@@ -460,7 +430,7 @@ function getAiWelcomeMessage(configValue) {
 
 function isAiConversation(conversation) {
   const id = conversation?.id || conversation?.conversation_id || conversation?.conversationId;
-  return Boolean(conversation?.is_ai) || id === AI_CONVERSATION_ID || id === GUIDE_AI_CONVERSATION_ID;
+  return Boolean(conversation?.is_ai) || id === AI_CONVERSATION_ID ;
 }
 
 function isGroupConversation(conversation) {
@@ -555,7 +525,7 @@ function getAiConversation(configValue = "travelwai") {
 
 function getAiConversations() {
 
-  return [getAiConversation("travelwai"), getAiConversation("guide")];
+  return [getAiConversation("travelwai")];
 }
 
 function getAiVisibleMessages(configValue = currentConversation || "travelwai") {
@@ -595,84 +565,9 @@ function consumePendingAiContext(assistantKey) {
   return value;
 }
 
-function getGuideSharedLogic() {
-  return window.TravelwAIGuideChatbot || null;
-}
-
-function guideQuestionRequestsDate(text) {
-  return !!getGuideSharedLogic()?.questionRequestsDate(text);
-}
-
-function guideQuestionNeedsWikipedia(text) {
-  return !!getGuideSharedLogic()?.questionNeedsWikipedia(text);
-}
-
-function buildGuideNoWikipediaReply() {
-  return getGuideSharedLogic()?.buildNoWikipediaReply() || "Mình chưa tìm được nguồn đủ khớp để nói chắc về câu hỏi này. Bạn gửi lại đúng tên địa danh, lễ hội hoặc kèm thêm tỉnh/thành nhé, mình sẽ tra sát hơn.";
-}
-
-function buildGuideConversationFallbackReply(text) {
-  return getGuideSharedLogic()?.buildConversationFallbackReply(text) || "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ tra Wikipedia để trả lời chính xác.";
-}
-
-function stripGuideDateText(text) {
-  return getGuideSharedLogic()?.stripDateText(text) || "";
-}
-
-function formatProvinceGuideContext(info, includeDates = true) {
-  return getGuideSharedLogic()?.formatProvinceContext(info, includeDates) || "";
-}
-
-function findGuideProvinceNamesFromText(text) {
-  return getGuideSharedLogic()?.findProvinceNamesFromText(text) || [];
-}
-
-function getGuideKnownLandmarkReply(text) {
-  return getGuideSharedLogic()?.getKnownLandmarkReply(text) || "";
-}
-
-function getGuideWikipediaSearchQuery(text) {
-  return getGuideSharedLogic()?.getWikipediaSearchQuery(text) || "";
-}
-
-function isGuideWikipediaResultRelevant(query, title, extract) {
-  return !!getGuideSharedLogic()?.isWikipediaResultRelevant(query, title, extract);
-}
-
-function cleanGuideWikipediaExtract(value) {
-  return getGuideSharedLogic()?.cleanWikipediaExtract(value) || "";
-}
-
-function trimGuideWikipediaReply(value) {
-  return getGuideSharedLogic()?.trimWikipediaReply(value) || "";
-}
-
-async function fetchGuideWikipediaReply(text) {
-  return await (getGuideSharedLogic()?.fetchWikipediaReply(text) || "");
-}
-
-function findGuideFestivalContextFromText(text, provinceNames, includeDates = true) {
-  return getGuideSharedLogic()?.findFestivalContextFromText(text, provinceNames, includeDates) || "";
-}
-
-function buildGuideContextForMessage(text) {
-  const context = getGuideSharedLogic()?.buildContextForMessage(text) || "";
-  return clampAiContextText(context);
-}
-
-function buildGuideLocalFallbackReply(text) {
-  return getGuideSharedLogic()?.buildLocalFallbackReply(text) || "Mình chưa lấy được phản hồi AI lúc này. Bạn có thể hỏi ngắn hơn theo tên tỉnh, địa danh hoặc lễ hội, ví dụ: Đà Nẵng có gì nổi bật, Huế có lễ hội gì, Phú Quốc nên đi đâu.";
-}
-
 function buildAiContextForRequest(aiConfig, text) {
   const pendingContext = consumePendingAiContext(aiConfig.key);
-  if (pendingContext) return pendingContext;
-
-  if (aiConfig?.key === "guide" || aiConfig?.mode === "guide") {
-    return buildGuideContextForMessage(text);
-  }
-
-  return "";
+  return pendingContext || "";
 }
 
 function isAdminSupportChatRequested() {
@@ -796,7 +691,7 @@ async function handlePendingDirectChat() {
 async function handlePendingAiPrompt() {
   const params = new URLSearchParams(window.location.search);
   const aiParam = params.get("ai") || params.get("assistant") || "";
-  const shouldOpenAi = aiParam === "1" || aiParam === "guide" || aiParam === "travelwai";
+  const shouldOpenAi = aiParam === "1" || aiParam === "travelwai";
   let pending = null;
 
   try {
@@ -1163,7 +1058,7 @@ function renderConversations(searchQuery = activeConversationSearchQuery) {
       normalizeForSearch(displayName).includes(normalizedQuery) ||
       normalizeForSearch(lastMessage).includes(normalizedQuery) ||
       normalizeForSearch(participantText).includes(normalizedQuery) ||
-      (isAiConversation(conversation) && normalizeForSearch("ai hoi tri tue nhan tao quan ly travelwai huong dan vien travelwinne van hoa lich su le hoi truyen thuyet dieu huong web lap lich trinh doi mat khau dang xuat").includes(normalizedQuery))
+      (isAiConversation(conversation) && normalizeForSearch("ai hoi tri tue nhan tao quan ly travelwai dieu huong web lap lich trinh doi mat khau dang xuat").includes(normalizedQuery))
     );
   });
 
@@ -2442,31 +2337,6 @@ async function sendAiMessage(options = {}) {
     }
     if (aiKey === "travelwai") {
       appendLocalAiAssistantReply(getTravelwaiManagerFallbackReply(), "travelwai");
-    } else if (aiKey === "guide") {
-      let guideFallback = "";
-      if (guideQuestionNeedsWikipedia(typedContent)) {
-        guideFallback = await fetchGuideWikipediaReply(typedContent);
-        if (!guideFallback) guideFallback = buildGuideLocalFallbackReply(typedContent);
-        if (!guideFallback) guideFallback = buildGuideNoWikipediaReply();
-      } else {
-        guideFallback = buildGuideLocalFallbackReply(typedContent) || buildGuideConversationFallbackReply(typedContent);
-      }
-      const aiMessage = {
-        id: `ai-error-${Date.now()}`,
-        sender_id: aiConfig.user.id,
-        sender_info: aiConfig.user,
-        content: guideFallback,
-        time_sent: new Date().toISOString(),
-      };
-      const latestMessages = loadStoredAiMessages(aiKey);
-      const messagesAfterReply = [...latestMessages, aiMessage];
-      saveStoredAiMessages(messagesAfterReply, aiKey);
-      if (currentConversation?.id === activeConversationIdAtSend) {
-        currentMessages = messagesAfterReply;
-        appendMessage(aiMessage);
-      } else if (options.background) {
-        showMessagingToast(`${aiConfig.displayName} đã trả lời.`, "success");
-      }
       renderConversations(activeConversationSearchQuery);
       updateConversationSelection();
     } else if (options.background) {

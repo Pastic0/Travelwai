@@ -69,16 +69,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-function stripGuideDateText(text) {
-    if (!text) return '';
-    return String(text)
-        .replace(/\b(?:ngày\s*)?(?:mùng\s*)?\d{1,2}\s*(?:đến|[-–—])\s*\d{1,2}\/\d{1,2}\s*(?:âm\s*lịch|dương\s*lịch|AL|DL)?/gi, '')
-        .replace(/\b(?:ngày\s*)?(?:mùng\s*)?\d{1,2}\/\d{1,2}\s*(?:âm\s*lịch|dương\s*lịch|AL|DL)?/gi, '')
-        .replace(/\btháng\s*\d{1,2}\s*(?:âm\s*lịch|dương\s*lịch|AL|DL)?/gi, '')
-        .replace(/\s+([,.;:])/g, '$1')
-        .replace(/\s{2,}/g, ' ')
-        .trim();
-}
+function stripDateText(text) { return text || ""; }
 
 function getMergedProvinceDetailText(culture, keys, stripDates = false) {
     const source = culture || {};
@@ -87,7 +78,7 @@ function getMergedProvinceDetailText(culture, keys, stripDates = false) {
     return list
         .map((key) => {
             const raw = (source[key] || '').toString().trim();
-            return stripDates ? stripGuideDateText(raw) : raw;
+            return stripDates ? stripDateText(raw) : raw;
         })
         .filter(Boolean)
         .filter((value) => {
@@ -99,37 +90,14 @@ function getMergedProvinceDetailText(culture, keys, stripDates = false) {
         .join('; ');
 }
 
-function buildProvinceDetailGuideContext(provinceName, description) {
-    let localInfo = null;
-    if (typeof window.getStaticProvinceInfoFromLocal34 === 'function') {
-        localInfo = window.getStaticProvinceInfoFromLocal34(provinceName);
-    } else if (typeof window.getLocalProvinceInfo === 'function') {
-        localInfo = window.getLocalProvinceInfo(provinceName);
-    }
-
-    const culture = localInfo?.culture || {};
-    const landmarkAndRelicText = getMergedProvinceDetailText(culture, ['dia_danh_noi_tieng', 'cau_chuyen_di_tich']);
-    const festivalText = getMergedProvinceDetailText(culture, ['le_hoi_dan_toc', 'le_hoi_cac_dan_toc', 'le_hoi_dia_phuong', 'le_hoi_theo_thang'], true);
-    const craftText = getMergedProvinceDetailText(culture, ['nganh_nghe_truyen_thong', 'nghe_truyen_thong_mai_mot']);
-
-    return [
-        `Tỉnh/thành: ${localInfo?.province_name || localInfo?.name || provinceName}`,
-        description || localInfo?.description ? `Mô tả: ${description || localInfo?.description}` : '',
-        landmarkAndRelicText ? `Địa danh nổi tiếng và câu chuyện di tích: ${landmarkAndRelicText}` : '',
-        festivalText ? `Lễ hội dân tộc và địa phương: ${festivalText}` : '',
-        craftText ? `Ngành nghề truyền thống: ${craftText}` : '',
-        culture.nhan_vat_lich_su ? `Nhân vật lịch sử: ${culture.nhan_vat_lich_su}` : '',
-        culture.truyen_thuyet_dia_phuong ? `Truyền thuyết địa phương: ${culture.truyen_thuyet_dia_phuong}` : '',
-        localInfo?.current_festival_summary ? `Lễ hội đang diễn ra: ${localInfo.current_festival_summary}` : ''
-    ].filter(Boolean).join('\n').slice(0, 3400);
-}
+function buildProvinceDetailAiContext(provinceName, description) { return ""; }
 
 function askAiAboutCurrentProvince() {
     const button = document.getElementById('askAiProvinceDetailBtn');
     const provinceName = button?.dataset?.province || document.querySelector('.province-name')?.textContent?.trim() || 'tỉnh/thành này';
     const description = button?.dataset?.description || (document.querySelector('.province-detail-lead') || document.querySelector('.province-description'))?.textContent?.trim() || '';
     const prompt = `Khám phá văn hoá, lịch sử, di tích và lễ hội nổi bật ở ${provinceName}.`;
-    const context = buildProvinceDetailGuideContext(provinceName, description);
+    const context = buildProvinceDetailAiContext(provinceName, description);
     trackProvinceDetailView(provinceName, 'province-detail-ai-button');
 
     try {
@@ -137,7 +105,7 @@ function askAiAboutCurrentProvince() {
             prompt,
             context,
             province: provinceName,
-            assistant: 'guide',
+            assistant: 'travelwai',
             source: 'province-detail',
             createdAt: new Date().toISOString(),
         }));
@@ -145,7 +113,7 @@ function askAiAboutCurrentProvince() {
         console.warn('Không thể lưu câu hỏi AI trước khi chuyển trang:', error);
     }
 
-    window.location.href = '/messaging?ai=guide';
+    window.location.href = '/messaging?ai=travelwai';
 }
 
 function fetchProvinceData(provinceId) {
