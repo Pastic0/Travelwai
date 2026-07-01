@@ -35,6 +35,18 @@ public sealed class SupabaseSchemaInitializer
             create index if not exists ix_app_documents_data_gin
                 on app_documents using gin(data jsonb_path_ops);
 
+            create index if not exists ix_app_documents_heritage_chunks_source_id
+                on app_documents((data ->> 'source_id'))
+                where collection = 'heritage_chunks';
+
+            create index if not exists ix_app_documents_heritage_chunks_status
+                on app_documents((data ->> 'approval_status'))
+                where collection = 'heritage_chunks';
+
+            create index if not exists ix_app_documents_heritage_sources_status
+                on app_documents((data ->> 'approval_status'))
+                where collection = 'heritage_sources';
+
             create table if not exists app_users_auth (
                 id text primary key,
                 email text not null unique,

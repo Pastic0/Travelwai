@@ -109,6 +109,7 @@ builder.Services.AddScoped<TourOrderAutomation>();
 builder.Services.AddScoped<TourOfferService>();
 builder.Services.AddScoped<EmailNotificationService>();
 builder.Services.AddScoped<PlanQueueService>();
+builder.Services.AddScoped<HeritageKnowledgeService>();
 builder.Services.AddHostedService<TourOrderExpirationHostedService>();
 builder.Services.AddHostedService<PlanGroupExpirationHostedService>();
 builder.Services.AddHostedService<AccountPlanQueueHostedService>();

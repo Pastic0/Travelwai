@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using TravelwAI.Business.Interfaces;
 using TravelwAI.Models.Requests;
+using TravelwAI.Web.Services;
 
 namespace TravelwAI.Web.Controllers.Api;
 
@@ -24,6 +25,7 @@ public sealed class ChatController : ApiControllerBase
     private readonly IChatService _chatService;
     private readonly IFriendService _friendService;
     private readonly IFileStorageService _fileStorage;
+    private readonly HeritageKnowledgeService _heritageKnowledge;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
 
@@ -32,12 +34,14 @@ public sealed class ChatController : ApiControllerBase
         IChatService chatService,
         IFriendService friendService,
         IFileStorageService fileStorage,
+        HeritageKnowledgeService heritageKnowledge,
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration) : base(authService)
     {
         _chatService = chatService;
         _friendService = friendService;
         _fileStorage = fileStorage;
+        _heritageKnowledge = heritageKnowledge;
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
     }
@@ -50,7 +54,8 @@ public sealed class ChatController : ApiControllerBase
             return BadRequest(new { success = false, detail = "Bạn chưa nhập nội dung để hỏi AI." });
         }
 
-        var quickReply = TryBuildManagerQuickReply(request.Message);
+        var assistantKey = NormalizeAiAssistantKey(request.Assistant);
+        var quickReply = assistantKey == "travelwai" ? TryBuildManagerQuickReply(request.Message) : null;
         if (!string.IsNullOrWhiteSpace(quickReply))
         {
             return Ok(new { success = true, data = new { reply = quickReply }, message = "Quản lý TravelwAI đã xử lý nội bộ" });
@@ -64,10 +69,13 @@ public sealed class ChatController : ApiControllerBase
         }
         else
         {
+            var loginReply = assistantKey == "guide"
+                ? "Bạn vui lòng đăng ký hoặc đăng nhập để Hướng dẫn viên AI hỗ trợ đầy đủ hơn."
+                : "Bạn vui lòng đăng ký hoặc đăng nhập để Quản lý TravelwAI hỗ trợ đầy đủ các chức năng tài khoản, lịch trình, tour và tin nhắn.";
             return Ok(new
             {
                 success = true,
-                data = new { reply = "Bạn vui lòng đăng ký hoặc đăng nhập để Quản lý TravelwAI hỗ trợ đầy đủ các chức năng tài khoản, lịch trình, tour và tin nhắn." },
+                data = new { reply = loginReply },
                 message = "Cần đăng ký"
             });
         }
@@ -86,7 +94,7 @@ public sealed class ChatController : ApiControllerBase
             new
             {
                 role = "system",
-                content = "Bạn là Quản lý TravelwAI, trợ lý hỗ trợ người dùng sử dụng website TravelwAI. Không dùng markdown, không gạch đầu dòng, không emoji. Trả lời ngắn gọn bằng tiếng Việt. Hỗ trợ điều hướng trang, lịch trình, kế hoạch, nhắn tin, tour du lịch, hồ sơ, thông báo, phản hồi và tài khoản. Khi người dùng muốn mở trang, hướng dẫn dùng cú pháp: tới trang [tên trang]. Khi không chắc, hỏi lại một câu ngắn."
+                content = BuildAiChatSystemPrompt(assistantKey)
             }
         };
 
@@ -94,6 +102,13 @@ public sealed class ChatController : ApiControllerBase
         if (!string.IsNullOrWhiteSpace(contextBlock))
         {
             messages.Add(new { role = "system", content = contextBlock });
+        }
+
+        HeritageRetrievalResult? heritageRetrieval = null;
+        if (assistantKey == "guide")
+        {
+            heritageRetrieval = await _heritageKnowledge.RetrieveAsync(request.Message.Trim(), request.Context);
+            messages.Add(new { role = "system", content = _heritageKnowledge.BuildContextBlock(heritageRetrieval) });
         }
 
         if (request.History is not null)
@@ -121,6 +136,7 @@ public sealed class ChatController : ApiControllerBase
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         httpRequest.Headers.TryAddWithoutValidation("HTTP-Referer", siteUrl);
         httpRequest.Headers.TryAddWithoutValidation("X-Title", appName);
+        httpRequest.Headers.TryAddWithoutValidation("X-OpenRouter-Title", appName);
         httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         using var response = await http.SendAsync(httpRequest);
@@ -148,9 +164,36 @@ public sealed class ChatController : ApiControllerBase
             return StatusCode(502, new { success = false, detail = "AI chưa trả về nội dung hợp lệ.", raw = responseText });
         }
 
-        var cleaned = CleanSimpleChatbotReply(answer, 100, IsOpenRouterAnswerCutOff(finishReason));
+        var maxWords = assistantKey == "guide" ? 260 : 150;
+        var cleaned = CleanSimpleChatbotReply(answer, maxWords, IsOpenRouterAnswerCutOff(finishReason));
         if (string.IsNullOrWhiteSpace(cleaned)) cleaned = "Mình chưa nhận được câu trả lời hoàn chỉnh từ AI. Bạn hỏi lại giúp mình nhé.";
-        return Ok(new { success = true, data = new { reply = cleaned }, message = "AI đã trả lời" });
+        var sources = heritageRetrieval?.Chunks.Select(chunk => new
+        {
+            title = chunk.SourceTitle,
+            source = chunk.SourceName,
+            type = chunk.SourceType,
+            url = chunk.Url,
+            reliability_score = chunk.ReliabilityScore
+        }).ToList();
+        return Ok(new { success = true, data = new { reply = cleaned, sources }, message = "AI đã trả lời" });
+    }
+
+    private static string NormalizeAiAssistantKey(string? assistant)
+    {
+        var key = NormalizeVietnameseForSearch(assistant ?? string.Empty);
+        if (key.Contains("guide") || key.Contains("huong dan") || key.Contains("tourguide") || key.Contains("du lich") || key.Contains("heritage")) return "guide";
+        return "travelwai";
+    }
+
+    private static string BuildAiChatSystemPrompt(string assistantKey)
+    {
+        var today = GetVietnamToday().ToString("yyyy-MM-dd");
+        if (assistantKey == "guide")
+        {
+            return "Bạn là Hướng dẫn viên AI của TravelwAI. Ngày hiện tại tại Việt Nam: " + today + ". Trả lời bằng tiếng Việt tự nhiên, đúng trọng tâm, không markdown phức tạp, không emoji. Vai trò: hướng dẫn viên du lịch về địa danh, di tích, làng nghề, nghệ nhân, văn hoá, tâm linh, lịch trình tham quan dạng văn bản. Ưu tiên thông tin từ nguồn chính thống như Cục Di sản Văn hoá, Bộ VHTTDL, UNESCO, văn bản pháp luật, UBND/Sở địa phương, bảo tàng; dùng sách địa chí, nghiên cứu, báo chí uy tín và tư liệu thực địa để kể chuyện. Phân biệt rõ sự kiện đã kiểm chứng với truyền thuyết/lời kể dân gian. Không bịa số quyết định, danh hiệu, giá vé, giờ mở cửa hoặc sự kiện hiện tại khi không có dữ liệu chắc; khi thiếu dữ liệu hãy nói ngắn gọn là chưa đủ nguồn chắc. Có thể kể chuyện sinh động, so sánh điểm đến/làng nghề và gợi ý lịch trình theo thời gian, sở thích người dùng.";
+        }
+
+        return "Bạn là Quản lý TravelwAI, trợ lý hỗ trợ người dùng sử dụng website TravelwAI. Ngày hiện tại tại Việt Nam: " + today + ". Không dùng markdown, không gạch đầu dòng, không emoji. Trả lời ngắn gọn bằng tiếng Việt. Hỗ trợ điều hướng trang, lịch trình, kế hoạch, nhắn tin, tour du lịch, hồ sơ, thông báo, phản hồi và tài khoản. Khi người dùng muốn mở trang, hướng dẫn dùng cú pháp: tới trang [tên trang]. Khi không chắc, hỏi lại một câu ngắn.";
     }
 
     private IActionResult? TryConsumeAiChatQuota(string userId, Dictionary<string, object?>? authUser)
@@ -249,6 +292,7 @@ public sealed class ChatController : ApiControllerBase
         httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         httpRequest.Headers.TryAddWithoutValidation("HTTP-Referer", siteUrl);
         httpRequest.Headers.TryAddWithoutValidation("X-Title", appName);
+        httpRequest.Headers.TryAddWithoutValidation("X-OpenRouter-Title", appName);
         httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         using var response = await http.SendAsync(httpRequest);

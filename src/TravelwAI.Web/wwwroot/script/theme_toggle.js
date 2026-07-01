@@ -16,10 +16,19 @@
       subtitle: "Hỏi nhanh cách dùng website",
       avatar: "/logo/travelwai-manager-avatar.webp",
       welcome: "Xin chào, mình là Quản lý TravelwAI. Bạn cần hỗ trợ gì trên website?"
+    },
+    guide: {
+      key: "guide",
+      mode: "guide",
+      buttonIcon: "🧭",
+      title: "Hướng dẫn viên AI",
+      subtitle: "Di tích, làng nghề, lịch trình",
+      avatar: "/logo/travelwinne-guide-avatar.webp",
+      welcome: "Xin chào, mình là Hướng dẫn viên AI. Bạn muốn tìm hiểu địa danh, di tích, làng nghề hay cần gợi ý lịch trình?"
     }
   };
 
-  const miniChatHistories = { travelwai: [] };
+  const miniChatHistories = { travelwai: [], guide: [] };
   let activeMiniChatKey = "travelwai";
 
 
@@ -651,18 +660,6 @@
       return;
     }
 
-    if (activeMiniChatKey === "travelwai") {
-      pushMiniChat("assistant", getMiniChatManagerFallbackReply());
-      renderMiniChatMessages();
-      return;
-    }
-
-    if (!token && activeMiniChatKey === "travelwai") {
-      pushMiniChat("assistant", "Bạn vui lòng đăng ký hoặc đăng nhập để Quản lý TravelwAI hỗ trợ đầy đủ các chức năng tài khoản, lịch trình, tour và tin nhắn.");
-      renderMiniChatMessages();
-      return;
-    }
-
     if (form) form.classList.add("loading");
 
     const headers = { "Content-Type": "application/json" };
@@ -698,10 +695,6 @@
         window.TravelwAIPricingPopup.showFreeAiPopup(error.message);
         return;
       }
-      if (activeMiniChatKey === "travelwai") {
-        pushMiniChat("assistant", getMiniChatManagerFallbackReply());
-        return;
-      }
       pushMiniChat("assistant", "Không gửi được tin nhắn. Vui lòng thử lại.");
     }).finally(function () {
       if (form) form.classList.remove("loading");
@@ -714,6 +707,7 @@
   document.addEventListener("DOMContentLoaded", function () {
     const host = ensureFloatingToolsHost();
     ensureMiniChatButton(host, "travelwai");
+    ensureMiniChatButton(host, "guide");
     ensureReloadButton(host);
     ensureCacheButton(host);
     ensureThemeButton(host);
