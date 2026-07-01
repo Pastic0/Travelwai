@@ -595,11 +595,12 @@ function consumePendingAiContext(assistantKey) {
 }
 
 function buildAiContextForRequest(aiConfig, text) {
+  if (aiConfig.key === "guide") {
+    consumePendingAiContext(aiConfig.key);
+    return "";
+  }
   const pendingContext = consumePendingAiContext(aiConfig.key);
   if (pendingContext) return pendingContext;
-  if (aiConfig.key === "guide" && window.TravelwAIGuideChatbot && typeof window.TravelwAIGuideChatbot.buildContextForMessage === "function") {
-    return window.TravelwAIGuideChatbot.buildContextForMessage(text) || "";
-  }
   return "";
 }
 

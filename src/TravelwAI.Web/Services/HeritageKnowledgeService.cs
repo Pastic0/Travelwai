@@ -254,9 +254,8 @@ public sealed class HeritageKnowledgeService
 
         var builder = new StringBuilder();
         builder.AppendLine("KHO TRI THỨC NỘI BỘ ĐÃ TRUY XUẤT CHO HƯỚNG DẪN VIÊN AI");
-        builder.AppendLine("Luồng bắt buộc: thu thập nguồn -> xử lý/làm sạch/chia đoạn/gắn nguồn -> lưu kho tri thức -> nhận diện ý định -> truy xuất -> xếp hạng -> sinh câu trả lời -> kiểm tra mâu thuẫn -> trả lời -> cập nhật sau khi admin duyệt.");
         builder.AppendLine("Ý định nhận diện: " + retrieval.Intent);
-        builder.AppendLine("Quy tắc trả lời: chỉ dùng các đoạn dưới làm nguồn chính; ưu tiên reliability_score cao và source_type chính thống; nếu có mâu thuẫn, nêu rõ khác biệt; không bịa thông tin ngoài nguồn.");
+        builder.AppendLine("QUY TẮC BẮT BUỘC: Các đoạn dưới là nguồn thông tin duy nhất được phép dùng. OpenRouter/model không phải nguồn thông tin. Không dùng kiến thức nền, Wikipedia, dữ liệu frontend hoặc suy đoán. Nếu nguồn không nêu chi tiết được hỏi thì trả lời là chưa có nguồn đã duyệt phù hợp. Ưu tiên reliability_score cao và source_type chính thống. Nếu nguồn mâu thuẫn, nêu rõ là các nguồn chưa thống nhất.");
 
         for (var i = 0; i < retrieval.Chunks.Count; i++)
         {
@@ -421,25 +420,28 @@ public sealed class HeritageKnowledgeService
         var topicText = NormalizeVietnameseForSearch(JsonSerializer.Serialize(item.GetValueOrDefault("topics") ?? ""));
         var keywordText = NormalizeVietnameseForSearch(JsonSerializer.Serialize(item.GetValueOrDefault("keywords") ?? ""));
 
-        var score = 0d;
+        var relevanceScore = 0d;
         foreach (var token in queryTokens)
         {
-            if (searchText.Contains(token, StringComparison.Ordinal)) score += 5;
-            if (title.Contains(token, StringComparison.Ordinal)) score += 7;
-            if (objectName.Contains(token, StringComparison.Ordinal)) score += 9;
-            if (province.Contains(token, StringComparison.Ordinal)) score += 4;
-            if (topicText.Contains(token, StringComparison.Ordinal)) score += 5;
-            if (keywordText.Contains(token, StringComparison.Ordinal)) score += 4;
+            if (searchText.Contains(token, StringComparison.Ordinal)) relevanceScore += 5;
+            if (title.Contains(token, StringComparison.Ordinal)) relevanceScore += 7;
+            if (objectName.Contains(token, StringComparison.Ordinal)) relevanceScore += 9;
+            if (province.Contains(token, StringComparison.Ordinal)) relevanceScore += 4;
+            if (topicText.Contains(token, StringComparison.Ordinal)) relevanceScore += 5;
+            if (keywordText.Contains(token, StringComparison.Ordinal)) relevanceScore += 4;
         }
 
         var importantPhrases = ExtractImportantPhrases(normalizedQuery);
         foreach (var phrase in importantPhrases)
         {
             if (phrase.Length < 6) continue;
-            if (searchText.Contains(phrase, StringComparison.Ordinal)) score += 14;
-            if (title.Contains(phrase, StringComparison.Ordinal) || objectName.Contains(phrase, StringComparison.Ordinal)) score += 18;
+            if (searchText.Contains(phrase, StringComparison.Ordinal)) relevanceScore += 14;
+            if (title.Contains(phrase, StringComparison.Ordinal) || objectName.Contains(phrase, StringComparison.Ordinal)) relevanceScore += 18;
         }
 
+        if (relevanceScore <= 0) return 0;
+
+        var score = relevanceScore;
         score += reliability / 10d;
         score += sourceType switch
         {

@@ -80,6 +80,26 @@ public sealed class ChatController : ApiControllerBase
             });
         }
 
+        HeritageRetrievalResult? heritageRetrieval = null;
+        if (assistantKey == "guide")
+        {
+            var retrievalQuery = BuildGuideRetrievalQuery(request.Message, request.History);
+            heritageRetrieval = await _heritageKnowledge.RetrieveAsync(retrievalQuery, null);
+            if (!heritageRetrieval.HasMatches || heritageRetrieval.Chunks.Count == 0)
+            {
+                return Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        reply = BuildNoApprovedSourceReply(heritageRetrieval.Intent),
+                        sources = Array.Empty<object>()
+                    },
+                    message = "Không có nguồn đã duyệt phù hợp"
+                });
+            }
+        }
+
         var apiKey = GetOpenRouterApiKey();
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -98,25 +118,26 @@ public sealed class ChatController : ApiControllerBase
             }
         };
 
-        var contextBlock = BuildAiContextBlock(request.Context);
-        if (!string.IsNullOrWhiteSpace(contextBlock))
-        {
-            messages.Add(new { role = "system", content = contextBlock });
-        }
-
-        HeritageRetrievalResult? heritageRetrieval = null;
         if (assistantKey == "guide")
         {
-            heritageRetrieval = await _heritageKnowledge.RetrieveAsync(request.Message.Trim(), request.Context);
-            messages.Add(new { role = "system", content = _heritageKnowledge.BuildContextBlock(heritageRetrieval) });
+            messages.Add(new { role = "system", content = _heritageKnowledge.BuildContextBlock(heritageRetrieval!) });
+            messages.Add(new { role = "system", content = BuildGuideConversationContext(request.History) });
         }
-
-        if (request.History is not null)
+        else
         {
-            foreach (var item in request.History.Where(item => !string.IsNullOrWhiteSpace(item.Content)).TakeLast(12))
+            var contextBlock = BuildAiContextBlock(request.Context);
+            if (!string.IsNullOrWhiteSpace(contextBlock))
             {
-                var role = string.Equals(item.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? "assistant" : "user";
-                messages.Add(new { role, content = item.Content!.Trim() });
+                messages.Add(new { role = "system", content = contextBlock });
+            }
+
+            if (request.History is not null)
+            {
+                foreach (var item in request.History.Where(item => !string.IsNullOrWhiteSpace(item.Content)).TakeLast(12))
+                {
+                    var role = string.Equals(item.Role, "assistant", StringComparison.OrdinalIgnoreCase) ? "assistant" : "user";
+                    messages.Add(new { role, content = item.Content!.Trim() });
+                }
             }
         }
 
@@ -126,7 +147,7 @@ public sealed class ChatController : ApiControllerBase
         {
             model,
             messages,
-            temperature = 0.35,
+            temperature = assistantKey == "guide" ? 0.1 : 0.35,
             max_tokens = 1200,
             reasoning = BuildOpenRouterMinimalReasoningOptions()
         };
@@ -185,12 +206,54 @@ public sealed class ChatController : ApiControllerBase
         return "travelwai";
     }
 
+    private static string BuildGuideRetrievalQuery(string? message, List<AiHistoryMessage>? history)
+    {
+        var parts = new List<string>();
+        if (history is not null)
+        {
+            parts.AddRange(history
+                .Where(item => string.Equals(item.Role, "user", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(item.Content))
+                .TakeLast(4)
+                .Select(item => item.Content!.Trim()));
+        }
+        if (!string.IsNullOrWhiteSpace(message)) parts.Add(message.Trim());
+        var query = string.Join(" ", parts);
+        query = Regex.Replace(query, @"\s+", " ").Trim();
+        return query.Length > 1400 ? query[^1400..] : query;
+    }
+
+    private static string BuildGuideConversationContext(List<AiHistoryMessage>? history)
+    {
+        if (history is null || history.Count == 0) return "NGỮ CẢNH HỘI THOẠI: Không có. Chỉ dùng kho tri thức đã truy xuất làm nguồn.";
+        var userTurns = history
+            .Where(item => string.Equals(item.Role, "user", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(item.Content))
+            .TakeLast(4)
+            .Select(item => Regex.Replace(item.Content!.Trim(), @"\s+", " "))
+            .Where(item => item.Length > 0)
+            .ToList();
+        if (userTurns.Count == 0) return "NGỮ CẢNH HỘI THOẠI: Không có. Chỉ dùng kho tri thức đã truy xuất làm nguồn.";
+        var context = string.Join(" | ", userTurns);
+        if (context.Length > 900) context = context[^900..];
+        return "NGỮ CẢNH HỘI THOẠI CHỈ ĐỂ HIỂU CÂU HỎI, KHÔNG PHẢI NGUỒN THÔNG TIN: " + context;
+    }
+
+    private static string BuildNoApprovedSourceReply(string intent)
+    {
+        return intent switch
+        {
+            "legal_verification" => "Mình chưa có nguồn đã duyệt phù hợp trong kho tri thức để xác minh thông tin pháp lý này.",
+            "current_visit_info" => "Mình chưa có nguồn đã duyệt phù hợp trong kho tri thức để xác nhận thông tin cập nhật này.",
+            "itinerary" => "Mình chưa có đủ nguồn đã duyệt trong kho tri thức để gợi ý lịch trình chắc chắn cho câu hỏi này.",
+            _ => "Mình chưa có nguồn đã duyệt phù hợp trong kho tri thức để trả lời chắc chắn câu hỏi này."
+        };
+    }
+
     private static string BuildAiChatSystemPrompt(string assistantKey)
     {
         var today = GetVietnamToday().ToString("yyyy-MM-dd");
         if (assistantKey == "guide")
         {
-            return "Bạn là Hướng dẫn viên AI của TravelwAI. Ngày hiện tại tại Việt Nam: " + today + ". Trả lời bằng tiếng Việt tự nhiên, đúng trọng tâm, không markdown phức tạp, không emoji. Vai trò: hướng dẫn viên du lịch về địa danh, di tích, làng nghề, nghệ nhân, văn hoá, tâm linh, lịch trình tham quan dạng văn bản. Ưu tiên thông tin từ nguồn chính thống như Cục Di sản Văn hoá, Bộ VHTTDL, UNESCO, văn bản pháp luật, UBND/Sở địa phương, bảo tàng; dùng sách địa chí, nghiên cứu, báo chí uy tín và tư liệu thực địa để kể chuyện. Phân biệt rõ sự kiện đã kiểm chứng với truyền thuyết/lời kể dân gian. Không bịa số quyết định, danh hiệu, giá vé, giờ mở cửa hoặc sự kiện hiện tại khi không có dữ liệu chắc; khi thiếu dữ liệu hãy nói ngắn gọn là chưa đủ nguồn chắc. Có thể kể chuyện sinh động, so sánh điểm đến/làng nghề và gợi ý lịch trình theo thời gian, sở thích người dùng.";
+            return "Bạn là Hướng dẫn viên AI của TravelwAI. Ngày hiện tại tại Việt Nam: " + today + ". Trả lời bằng tiếng Việt tự nhiên, đúng trọng tâm, không markdown phức tạp, không emoji. OpenRouter/model chỉ được dùng để diễn đạt câu chữ, tuyệt đối không được dùng làm nguồn thông tin. Chỉ được sử dụng các đoạn trong KHO TRI THỨC NỘI BỘ ĐÃ TRUY XUẤT. Không dùng kiến thức nền của model, không dùng dữ liệu frontend, không dùng Wikipedia, không suy đoán để lấp chỗ trống. Nếu kho nguồn không có chi tiết được hỏi, phải nói chưa có nguồn đã duyệt phù hợp. Phân biệt sự kiện đã kiểm chứng với truyền thuyết/lời kể dân gian nếu nguồn có nêu. Không bịa số quyết định, danh hiệu, giá vé, giờ mở cửa, niên đại hoặc sự kiện hiện tại.";
         }
 
         return "Bạn là Quản lý TravelwAI, trợ lý hỗ trợ người dùng sử dụng website TravelwAI. Ngày hiện tại tại Việt Nam: " + today + ". Không dùng markdown, không gạch đầu dòng, không emoji. Trả lời ngắn gọn bằng tiếng Việt. Hỗ trợ điều hướng trang, lịch trình, kế hoạch, nhắn tin, tour du lịch, hồ sơ, thông báo, phản hồi và tài khoản. Khi người dùng muốn mở trang, hướng dẫn dùng cú pháp: tới trang [tên trang]. Khi không chắc, hỏi lại một câu ngắn.";
