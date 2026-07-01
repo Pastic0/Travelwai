@@ -180,15 +180,6 @@ public sealed class ChatController : ApiControllerBase
                 }
             }
 
-            if (string.IsNullOrWhiteSpace(guideTrustedSourceBlock))
-            {
-                var openWebContext = await BuildOpenWebContextBlockAsync(http, request.Message, request.Context, guideQuestionAsksForDate || GuideIntentNeedsTimeInAnswer(request.Message, guideSearchPlan), guideSearchPlan);
-                if (!string.IsNullOrWhiteSpace(openWebContext.Block))
-                {
-                    guideTrustedSourceBlock = openWebContext.Block;
-                    guideTrustedSourceName = openWebContext.SourceName;
-                }
-            }
 
             if (string.IsNullOrWhiteSpace(guideTrustedSourceBlock))
             {
@@ -205,7 +196,7 @@ public sealed class ChatController : ApiControllerBase
                 return Ok(new
                 {
                     success = true,
-                    data = new { reply = "Mình chưa tìm được nguồn đủ khớp để nói chắc về câu hỏi này. Bạn gửi lại đúng tên địa danh, lễ hội, nhân vật hoặc kèm thêm tỉnh/thành nhé, mình sẽ tra sát hơn." },
+                    data = new { reply = "Mình chưa có đủ thông tin từ nguồn Wiki/Wikipedia để trả lời chính xác nội dung này." },
                     message = "Không tìm thấy nguồn đủ khớp"
                 });
             }
@@ -238,7 +229,7 @@ public sealed class ChatController : ApiControllerBase
         }
 
         var systemPrompt = assistantMode == "guide"
-            ? "Bạn là Hướng dẫn viên Travelwinne. Luôn xác định ý định người dùng trước khi trả lời: tìm lễ hội, sự kiện, văn hoá, lịch sử, di tích/địa danh, làng nghề, ẩm thực, gợi ý lịch trình hoặc kinh nghiệm du lịch. Tách thông tin quan trọng: địa điểm, thời gian, chủ đề, nhu cầu du lịch và ràng buộc như ngân sách, số ngày, phương tiện, thời tiết, độ đông đúc. Chỉ diễn giải từ nguồn nền đã được hệ thống cung cấp; không tự bịa nguồn, không nói chắc chắn nếu dữ liệu chưa đủ. Nếu thiếu thông tin quan trọng, hãy hỏi lại ngắn gọn thay vì đoán. Nếu tên địa danh mơ hồ hoặc có nhiều nơi trùng tên, hỏi lại địa điểm cụ thể. Với lễ hội/sự kiện, ưu tiên trả lời theo các ý: tên, địa điểm, thời gian âm lịch hay dương lịch nếu có, ý nghĩa, hoạt động chính, ai phù hợp, lưu ý, mức độ chắc chắn và nguồn tham khảo nội bộ nếu có. Với lịch sử, phân biệt rõ phần đã được xác minh với truyền thuyết, giai thoại và thông tin chưa đủ kiểm chứng; không trình bày truyền thuyết như sự thật lịch sử. Với văn hoá, liên hệ vùng miền, cộng đồng cư dân, di sản, lễ hội liên quan và không gian trải nghiệm thực tế. Với lịch trình, gợi ý thực tế, không nhồi quá nhiều điểm, ưu tiên tuyến đường hợp lý, nhắc lưu ý về mùa, trang phục và ứng xử tại nơi tâm linh/lịch sử. Thông tin dễ thay đổi như giờ mở cửa, giá vé, lịch năm nay, thời tiết hoặc độ đông cần nhắc nên kiểm tra nguồn chính thức trước khi đi. Trả lời tiếng Việt tự nhiên, thân thiện, rõ ràng, không dài dòng. Có thể xuống dòng hoặc dùng nhãn ngắn khi cần dễ đọc."
+            ? "Bạn là AI hướng dẫn viên du lịch, chuyên giới thiệu thông tin về điểm đến, địa danh, tỉnh thành, di tích, danh lam thắng cảnh, lễ hội, văn hoá, lịch sử, nhân vật lịch sử, kiến trúc, tôn giáo, phong tục và bối cảnh địa phương. Nguồn thông tin chính là dữ liệu Wiki/Wikipedia được hệ thống cung cấp trong CONTEXT. Chỉ sử dụng thông tin có trong CONTEXT hoặc nguồn nền Wiki/Wikipedia đã được backend đưa vào; không tự bịa, không suy đoán thêm dữ kiện chưa có trong nguồn. Trình bày như hướng dẫn viên đang thuyết minh tại điểm tham quan: tiếng Việt tự nhiên, thân thiện, dễ hiểu, không quá học thuật. Khi người dùng hỏi địa danh, hãy xác định tên địa danh chính, tên gọi khác hoặc tên cũ nếu có, loại địa danh, tỉnh/thành hoặc vùng miền trực thuộc nếu nguồn có, quốc gia nếu cần, bối cảnh lịch sử, văn hoá hoặc du lịch liên quan. Nếu nguồn có tỉnh/thành, nói rõ địa danh đó thuộc tỉnh/thành nào; nếu nguồn không nêu, phải nói nguồn Wiki/Wikipedia trong CONTEXT chưa nêu rõ thuộc tỉnh/thành nào. Nếu địa danh có nhiều nơi trùng tên trong nguồn, trình bày các khả năng chính thay vì tự chọn bừa. Khi hỏi tỉnh/thành, chỉ giới thiệu vị trí, tên gọi, đặc điểm, di tích/danh thắng, lễ hội, văn hoá, lịch sử được nguồn cung cấp. Khi nói lịch sử, phân biệt rõ thông tin lịch sử, truyền thuyết, giai thoại và yếu tố văn hoá dân gian nếu nguồn có nhắc đến. Khi nói lễ hội/văn hoá, chỉ nêu thời gian, nguồn gốc, ý nghĩa, hoạt động hoặc nghi thức nếu CONTEXT có. Không tạo lịch trình du lịch, không sắp xếp kế hoạch theo ngày, không gợi ý tour, không đặt vé/đặt phòng/đặt xe/đặt nhà hàng, không tư vấn giá vé, giờ mở cửa, thời tiết, phương tiện, chi phí, booking hoặc độ đông nếu CONTEXT không có. Nếu người dùng hỏi những nội dung ngoài phạm vi đó, hãy nói ngắn gọn rằng mình chỉ có thể giới thiệu thông tin địa danh/văn hoá/lịch sử dựa trên nguồn Wiki/Wikipedia trong CONTEXT. Nếu thiếu dữ liệu, trả lời: Mình chưa có đủ thông tin từ nguồn Wiki/Wikipedia để trả lời chính xác nội dung này. Có thể dùng nhãn ngắn như Tên địa danh, Thuộc tỉnh/thành, Loại địa danh, Điểm nổi bật, Bối cảnh lịch sử/văn hoá, Ý nghĩa với du khách, Nguồn khi phù hợp. Không quảng cáo, không bán tour."
             : "Bạn là Quản lí TravelwAI, trợ lí điều hướng và hướng dẫn sử dụng toàn bộ website TravelwAI. Chỉ trả lời bằng tiếng Việt đơn giản. Không dùng markdown, không gạch đầu dòng, không emoji, không ký hiệu lạ. Hướng dẫn ngắn gọn người dùng dùng các trang Lịch trình, Kế hoạch, Bản đồ Việt Nam, Nhắn tin, Tour du lịch, Sales, Admin, Hồ sơ, Thông báo và Phản hồi. Khi người dùng muốn mở trang, chỉ nhận cú pháp tới trang [tên trang] hoặc qua trang [tên trang]. Khi người dùng muốn xem hướng dẫn trang, nhận cú pháp chi tiết trang [tên trang] hoặc chỉ ghi đúng tên trang. Nếu người dùng ghi sai cú pháp mở trang, hãy hướng dẫn ghi đúng cú pháp thật ngắn. Với đổi mật khẩu hoặc đăng xuất, hãy xác nhận thao tác thật ngắn và giao diện sẽ tự chuyển trang nếu nhận diện được. Trả lời tối đa 100 chữ, ưu tiên câu ngắn, đủ ý. Nếu sắp vượt giới hạn, chỉ dừng ở câu đã hoàn chỉnh, không viết câu đang dở. Khi nói khoảng ngày, viết dạng 1 đến 15/01 âm lịch hoặc 5 đến 8/06 dương lịch, không viết 1-15/01 và không viết 1 15/01.";
 
         var messages = new List<object>
@@ -256,7 +247,7 @@ public sealed class ChatController : ApiControllerBase
             }
             else
             {
-                messages.Add(new { role = "system", content = string.IsNullOrWhiteSpace(contextBlock) ? "Không có dữ liệu nền cho câu hỏi hiện tại. Chỉ trả lời giao tiếp chung, không nêu thông tin chính xác nếu không có nguồn." : "Chỉ dùng dữ liệu ứng dụng TravelwAI nếu phù hợp và không tự thêm chi tiết ngoài nguồn." });
+                messages.Add(new { role = "system", content = string.IsNullOrWhiteSpace(contextBlock) ? "Không có dữ liệu nền cho câu hỏi hiện tại. Chỉ trả lời giao tiếp chung, không nêu thông tin chính xác nếu không có nguồn." : "Chỉ dùng CONTEXT do hệ thống cung cấp nếu phù hợp và không tự thêm chi tiết ngoài nguồn." });
             }
 
             if (!string.IsNullOrWhiteSpace(contextBlock) && !string.Equals(guideTrustedSourceName, "dữ liệu TravelwAI", StringComparison.OrdinalIgnoreCase))
@@ -270,7 +261,7 @@ public sealed class ChatController : ApiControllerBase
                 messages.Add(new { role = "system", content = guideAspectInstruction });
             }
 
-            messages.Add(new { role = "system", content = "QUY TẮC CHO HƯỚNG DẪN VIÊN TRAVELWINNE: Chỉ trả lời dựa trên nguồn nền đã cung cấp. Nguồn đã được backend chọn theo mức khớp địa điểm, loại nội dung, thời gian, alias, vùng lân cận nếu phù hợp, độ tin cậy và độ mới. Không trả lời chỉ vì tên gần giống. Không lấy nhầm Festival Huế với mọi lễ hội ở Huế, Hội Lim phải gắn Bắc Ninh/Quan họ, Đền Hùng phải gắn Phú Thọ/Giỗ Tổ Hùng Vương, Chùa Hương phải gắn Hà Nội, Thành cổ phải hỏi rõ nếu chưa rõ địa điểm. Nếu nguồn nền không đủ tin cậy, hãy nói: Mình chưa có đủ dữ liệu đã xác minh để khẳng định thông tin này. Không đọc lại nguyên văn nguồn và không mở đầu bằng Theo nguồn." });
+            messages.Add(new { role = "system", content = "QUY TẮC CHO HƯỚNG DẪN VIÊN TRAVELWAI: Chỉ trả lời dựa trên CONTEXT hoặc nguồn nền Wiki/Wikipedia đã cung cấp. Không tự thêm thông tin ngoài nguồn, không trả lời chỉ vì tên gần giống, không tự gán địa danh vào tỉnh/thành nếu nguồn không nêu. Nếu nguồn có nhiều kết quả trùng tên, hãy trình bày các khả năng chính trong nguồn hiện có; nếu nguồn không nêu rõ tỉnh/thành, nói rõ là CONTEXT chưa nêu rõ. Không lập lịch trình, không gợi ý tour, không tư vấn booking, giá vé, giờ mở cửa, thời tiết, phương tiện, chi phí hoặc độ đông nếu nguồn không có. Với lịch sử, phân biệt lịch sử, truyền thuyết, giai thoại và yếu tố văn hoá/dân gian. Nếu thiếu dữ liệu, hãy nói: Mình chưa có đủ thông tin từ nguồn Wiki/Wikipedia để trả lời chính xác nội dung này. Không đọc lại nguyên văn nguồn và không mở đầu bằng Theo nguồn." });
         }
         else if (!string.IsNullOrWhiteSpace(contextBlock))
         {
@@ -279,7 +270,7 @@ public sealed class ChatController : ApiControllerBase
 
         if (assistantMode == "guide" && !guideQuestionAsksForDate && !GuideIntentNeedsTimeInAnswer(request.Message, guideSearchPlan))
         {
-            messages.Add(new { role = "system", content = "Câu hỏi hiện tại không hỏi thời gian và không thuộc nhóm lễ hội/sự kiện/lịch trình. Khi trả lời, không tự nêu ngày/tháng nếu nguồn không cần thiết; chỉ tập trung đúng chủ đề người dùng hỏi." });
+            messages.Add(new { role = "system", content = "Câu hỏi hiện tại không hỏi thời gian và không thuộc nhóm lễ hội/sự kiện. Khi trả lời, không tự nêu ngày/tháng nếu nguồn không cần thiết; chỉ tập trung đúng chủ đề người dùng hỏi." });
         }
 
         var historyLimit = assistantMode == "guide"
@@ -1289,35 +1280,35 @@ public sealed class ChatController : ApiControllerBase
 
         if (Regex.IsMatch(normalized, @"\b(xin chao|chao|hi|hello|alo|hey)\b", RegexOptions.IgnoreCase))
         {
-            return "Chào bạn, mình là Hướng dẫn viên Travelwinne. Bạn muốn mình tư vấn chuyến đi, gợi ý điểm đến hay tra một câu chuyện lịch sử cụ thể?";
+            return "Chào bạn, mình là hướng dẫn viên du lịch. Mình có thể giới thiệu địa danh, tỉnh thành, di tích, danh thắng, lễ hội, văn hoá và lịch sử dựa trên nguồn Wiki/Wikipedia trong CONTEXT.";
         }
 
         if (normalized.Contains("cam on", StringComparison.OrdinalIgnoreCase) || normalized.Contains("thanks", StringComparison.OrdinalIgnoreCase))
         {
-            return "Không có gì. Bạn cần mình gợi ý điểm đến, lịch trình, cách di chuyển hoặc tra thông tin văn hoá lịch sử thì cứ nhắn tiếp nhé.";
+            return "Không có gì. Bạn gửi tên địa danh, tỉnh/thành, di tích, lễ hội hoặc nhân vật lịch sử, mình sẽ giới thiệu dựa trên nguồn Wiki/Wikipedia trong CONTEXT.";
         }
 
         if (normalized.Contains("ban la ai", StringComparison.OrdinalIgnoreCase) || normalized.Contains("lam duoc gi", StringComparison.OrdinalIgnoreCase) || normalized.Contains("giup duoc gi", StringComparison.OrdinalIgnoreCase))
         {
-            return "Mình là Hướng dẫn viên Travelwinne. Mình có thể tư vấn chuyến đi và tra nguồn trước khi trả lời câu hỏi thực tế. Nếu chưa có nguồn đủ chắc, mình sẽ nói rõ thay vì đoán.";
+            return "Mình là hướng dẫn viên du lịch. Mình giới thiệu nơi chốn, văn hoá, lịch sử, kiến trúc, tôn giáo, phong tục và lễ hội dựa trên nguồn Wiki/Wikipedia trong CONTEXT; không tự thêm thông tin ngoài nguồn.";
+        }
+
+        if (Regex.IsMatch(normalized, @"\b(lich trinh|ke hoach di|tour|dat ve|dat phong|dat xe|dat nha hang|booking|gia ve|chi phi|thoi tiet|phuong tien|dong duc|ngan sach)\b", RegexOptions.IgnoreCase))
+        {
+            return "Mình không tạo lịch trình, gợi ý tour, booking, giá vé, thời tiết, phương tiện hoặc chi phí nếu CONTEXT không có. Mình có thể giới thiệu địa danh, văn hoá, lịch sử và lễ hội dựa trên nguồn Wiki/Wikipedia.";
         }
 
         if (IsGenericGuideExplorationMessage(message))
         {
-            return "Được nhé. Bạn muốn khám phá tỉnh, thành phố, địa danh hoặc lễ hội nào? Ví dụ: Huế, Hội An, Hoàng thành Thăng Long hoặc lễ hội Gầu Tào. Có tên cụ thể mình mới tra Wikipedia tiếng Việt hoặc nguồn thay thế cho đúng, không lấy nhầm chủ đề.";
-        }
-
-        if (Regex.IsMatch(normalized, @"\b(tu van|goi y|nen di|muon di|du lich|lich trinh|di choi|nghi duong|bien|nui|team building|gia dinh|ban be|cap doi)\b", RegexOptions.IgnoreCase))
-        {
-            return "Có thể bắt đầu bằng ba lựa chọn an toàn: đi gần nếu ít ngày, chọn nơi có di chuyển thuận tiện nếu ngân sách chặt, và ưu tiên một chủ đề chính như biển, núi, nghỉ dưỡng hoặc văn hoá. Bạn gửi thêm điểm xuất phát, thời gian, số người và ngân sách, mình sẽ chốt gợi ý sát hơn.";
+            return "Mình đang hiểu bạn muốn tìm hiểu về địa danh, tỉnh thành, di tích, lễ hội, văn hoá hoặc lịch sử. Hãy gửi tên cụ thể, mình sẽ giới thiệu dựa trên nguồn Wiki/Wikipedia trong CONTEXT.";
         }
 
         if (normalized.Length <= 30)
         {
-            return "Bạn nói rõ hơn một chút nhé. Nếu hỏi về địa danh, tỉnh thành, lễ hội, lịch sử, văn hoá hoặc ngày lễ, mình sẽ ưu tiên Wikipedia tiếng Việt, nếu không có thì dùng nguồn thay thế đáng tin để trả lời.";
+            return "Bạn gửi rõ tên địa danh, tỉnh/thành, di tích, lễ hội hoặc nhân vật lịch sử nhé. Mình chỉ trả lời dựa trên nguồn Wiki/Wikipedia trong CONTEXT.";
         }
 
-        return "Mình nghe rồi. Nếu đây là câu hỏi thực tế, mình sẽ cố tra nguồn phù hợp trước khi trả lời. Nếu là tư vấn chuyến đi, bạn gửi thêm điểm xuất phát, thời gian, số người và ngân sách để mình gợi ý cụ thể hơn.";
+        return "Mình chưa có đủ thông tin từ nguồn Wiki/Wikipedia để trả lời chính xác nội dung này.";
     }
 
     private static bool IsGuideDateQuestion(string? message)
@@ -1432,8 +1423,8 @@ public sealed class ChatController : ApiControllerBase
 
         return assistantMode == "guide"
             ? (includeDateInformation
-                ? "THÔNG TIN NỀN CỦA TRAVELWAI. Đây là nguồn nội bộ, chỉ dùng khi nguồn công khai không có thông tin phù hợp hoặc khi dữ liệu này khớp trực tiếp hơn với ngữ cảnh người dùng. Khi dùng dữ liệu này, phải trả lời dựa trên phần này, không tự thêm chi tiết ngoài nguồn. Khi trả lời, đi thẳng vào nội dung và không dùng lời dẫn nguồn ở đầu câu. Thông tin: " + cleaned
-                : "THÔNG TIN NỀN CỦA TRAVELWAI. Đây là nguồn nội bộ. Câu hỏi không hỏi ngày tháng, nên không nêu thời gian. Chỉ dùng phần này khi nguồn công khai không có thông tin phù hợp hoặc khi dữ liệu này khớp trực tiếp hơn với ngữ cảnh người dùng. Khi dùng dữ liệu này, phải trả lời dựa trên tên lễ hội, tỉnh/thành, dân tộc, nguồn gốc, ý nghĩa và hoạt động trong phần này, không tự thêm chi tiết ngoài nguồn. Khi trả lời, đi thẳng vào nội dung và không dùng lời dẫn nguồn ở đầu câu. Thông tin: " + cleaned)
+                ? "CONTEXT DO HỆ THỐNG CUNG CẤP. Chỉ dùng phần CONTEXT này nếu nó khớp trực tiếp với câu hỏi. Không tự thêm chi tiết ngoài nguồn. Khi trả lời, đi thẳng vào nội dung và không dùng lời dẫn nguồn ở đầu câu. Thông tin: " + cleaned
+                : "CONTEXT DO HỆ THỐNG CUNG CẤP. Câu hỏi không hỏi ngày tháng, nên không tự nêu thời gian. Chỉ dùng phần CONTEXT này nếu nó khớp trực tiếp với câu hỏi. Không tự thêm chi tiết ngoài nguồn. Khi trả lời, đi thẳng vào nội dung và không dùng lời dẫn nguồn ở đầu câu. Thông tin: " + cleaned)
             : "NGỮ CẢNH TỪ ỨNG DỤNG TRAVELWAI. Dùng để trả lời hướng dẫn ngắn gọn nếu phù hợp. Dữ liệu: " + cleaned;
     }
 
@@ -1795,7 +1786,7 @@ public sealed class ChatController : ApiControllerBase
         if (string.IsNullOrWhiteSpace(extract)) return string.Empty;
 
         var source = string.IsNullOrWhiteSpace(page.Url) ? page.Title : $"{page.Title} ({page.Url})";
-        return "THÔNG TIN NỀN TỪ WIKIPEDIA TIẾNG VIỆT CHO OPENROUTER DIỄN GIẢI. Đây là nguồn ưu tiên số 1 và đã được chọn vì khớp nhất với câu hỏi. Người dùng hỏi: " + (message ?? string.Empty).Trim() + ". Hãy dùng nội dung này để tự diễn giải đúng trọng tâm câu hỏi, không chép nguyên văn toàn đoạn và không mở đầu bằng Theo Wikipedia. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh/du lịch hoặc lễ hội thì chỉ tập trung đúng mảng đó. Nếu người dùng hỏi nhiều mảng cùng lúc như văn hoá, lịch sử, di tích và lễ hội, hãy trả lời đủ các mảng được hỏi theo nguồn. Tuyệt đối không lấy nhầm sang báo chí, phát thanh, truyền hình, cơ quan truyền thông, đường cao tốc hoặc chủ đề không được hỏi. Không suy luận thêm ngoài nội dung nguồn. Nếu nội dung không đủ cho đúng khía cạnh người dùng hỏi, hãy nói chưa đủ thông tin từ Wikipedia tiếng Việt. Nếu thông tin Wikipedia và thông tin ứng dụng khác nhau, ưu tiên Wikipedia. Nguồn tham khảo nội bộ: " + source + ". Nội dung: " + extract;
+        return "CONTEXT TỪ WIKIPEDIA TIẾNG VIỆT. Đây là nguồn ưu tiên số 1 và đã được chọn vì khớp nhất với câu hỏi. Người dùng hỏi: " + (message ?? string.Empty).Trim() + ". Hãy dùng nội dung này để diễn giải đúng trọng tâm câu hỏi, không chép nguyên văn toàn đoạn và không mở đầu bằng Theo Wikipedia. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh hoặc lễ hội thì chỉ tập trung đúng mảng đó. Nếu người dùng hỏi nhiều mảng cùng lúc, hãy trả lời đủ các mảng có trong nguồn. Không suy luận thêm ngoài nội dung nguồn. Nếu nội dung không đủ cho đúng khía cạnh người dùng hỏi, hãy nói chưa đủ thông tin từ nguồn Wiki/Wikipedia. Nếu có thể, ghi Nguồn ở cuối câu trả lời: " + source + ". Nội dung: " + extract;
     }
 
 
@@ -1809,7 +1800,7 @@ public sealed class ChatController : ApiControllerBase
         if (string.IsNullOrWhiteSpace(extract)) return string.Empty;
 
         var source = string.IsNullOrWhiteSpace(page.Url) ? page.Title : $"{page.Title} ({page.Url})";
-        return "THÔNG TIN NỀN TỪ WIKIVOYAGE TIẾNG VIỆT CHO OPENROUTER DIỄN GIẢI. Đây là nguồn thay thế khi Wikipedia tiếng Việt không có thông tin phù hợp. Người dùng hỏi: " + (message ?? string.Empty).Trim() + ". Hãy dùng nội dung này để tự diễn giải đúng trọng tâm câu hỏi, không chép nguyên văn toàn đoạn và không mở đầu bằng Theo Wikivoyage hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh/du lịch hoặc lễ hội thì chỉ tập trung đúng mảng đó. Nếu người dùng hỏi nhiều mảng cùng lúc, hãy trả lời đủ các mảng được hỏi theo nguồn. Nếu nội dung không đủ cho đúng khía cạnh người dùng hỏi, hãy nói chưa đủ thông tin từ nguồn thay thế. Nguồn tham khảo nội bộ: " + source + ". Nội dung: " + extract;
+        return "CONTEXT TỪ WIKIVOYAGE TIẾNG VIỆT. Đây là nguồn Wiki thay thế khi Wikipedia tiếng Việt không có thông tin phù hợp. Người dùng hỏi: " + (message ?? string.Empty).Trim() + ". Hãy dùng nội dung này để diễn giải đúng trọng tâm câu hỏi, không chép nguyên văn toàn đoạn và không mở đầu bằng Theo Wikivoyage hoặc Theo nguồn. Nếu người dùng hỏi một mảng riêng như văn hoá, lịch sử, địa danh hoặc lễ hội thì chỉ tập trung đúng mảng đó. Nếu nội dung không đủ cho đúng khía cạnh người dùng hỏi, hãy nói chưa đủ thông tin từ nguồn Wiki/Wikipedia. Nếu có thể, ghi Nguồn ở cuối câu trả lời: " + source + ". Nội dung: " + extract;
     }
 
     private static async Task<(string Block, string SourceName)> BuildOpenWebContextBlockAsync(HttpClient http, string? message, string? appContext, bool includeDateInformation, GuideSearchPlan? searchPlan)
@@ -2584,16 +2575,16 @@ public sealed class ChatController : ApiControllerBase
     {
         return DetectGuideQuestionAspect(message) switch
         {
-            "overview" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi nhiều mảng cùng lúc. Hãy trả lời đúng các mảng được hỏi, không tự chọn sai chủ đề. Nếu có nhiều kết quả phù hợp, xếp hạng ngắn theo địa điểm, thời gian, nhu cầu du lịch và độ tin cậy nguồn.",
-            "festival" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về lễ hội. Nếu nguồn có, trình bày theo các nhãn ngắn: Tên lễ hội, Địa điểm, Thời gian, Ý nghĩa, Hoạt động chính, Phù hợp với, Lưu ý, Mức độ chắc chắn. Ghi rõ âm lịch/dương lịch nếu có; nếu lịch năm nay có thể thay đổi thì nhắc kiểm tra nguồn chính thức.",
-            "event" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về sự kiện. Ưu tiên địa điểm, thời gian, hoạt động chính, đối tượng phù hợp và lưu ý thay đổi lịch. Nếu thiếu địa điểm hoặc thời gian để tìm đúng sự kiện, hãy hỏi lại.",
-            "culture" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về văn hoá. Tránh nói chung chung; liên hệ vùng miền, cộng đồng cư dân, di sản vật thể/phi vật thể, lễ hội liên quan và nơi du khách có thể trải nghiệm thực tế.",
-            "history" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về lịch sử. Phân biệt rõ thông tin đã xác minh với truyền thuyết, giai thoại địa phương và phần chưa đủ nguồn kiểm chứng. Không trình bày truyền thuyết như sự thật lịch sử.",
-            "landmark" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về di tích/địa danh. Chỉ trả lời đúng địa điểm, lịch sử/văn hoá liên quan và lưu ý tham quan. Nếu tên địa danh có nhiều nơi trùng nhau thì hỏi lại.",
-            "craft_village" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về làng nghề. Nêu địa điểm, nghề chính, cộng đồng làm nghề, trải nghiệm thực tế, sản phẩm nên xem/mua và lưu ý ứng xử khi tham quan.",
-            "cuisine" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về ẩm thực. Nêu món/đặc sản, địa phương gắn với món đó, bối cảnh văn hoá và lưu ý thực tế. Không bịa quán, giá hoặc giờ mở cửa nếu không có nguồn.",
-            "itinerary" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi gợi ý lịch trình. Không nhồi quá nhiều điểm trong một ngày; ưu tiên tuyến đường hợp lý, thời gian tham quan, mùa, độ đông, trang phục và ứng xử ở nơi tâm linh/lịch sử.",
-            "travel_experience" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi kinh nghiệm du lịch. Trả lời thực tế theo nhu cầu: tự túc, gia đình, cặp đôi, người lớn tuổi, trẻ em, chụp ảnh, tâm linh, ngân sách, phương tiện và thời tiết nếu có.",
+            "overview" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi nhiều mảng cùng lúc. Chỉ trả lời các mảng có dữ liệu trong CONTEXT; không tự chọn sai chủ đề và không thêm thông tin ngoài nguồn.",
+            "festival" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về lễ hội. Nếu nguồn có, trình bày tên lễ hội, địa điểm/vùng liên quan, thời gian, nguồn gốc, ý nghĩa, hoạt động hoặc nghi thức. Chỉ nêu chi tiết có trong CONTEXT.",
+            "event" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về sự kiện. Chỉ nêu địa điểm, thời gian, bối cảnh, hoạt động hoặc ý nghĩa nếu CONTEXT có; nếu thiếu dữ liệu thì nói rõ phần còn thiếu.",
+            "culture" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về văn hoá. Chỉ liên hệ vùng miền, cộng đồng cư dân, phong tục, tôn giáo, di sản hoặc lễ hội nếu nguồn có nhắc đến.",
+            "history" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về lịch sử. Phân biệt rõ thông tin lịch sử được nguồn nhắc đến với truyền thuyết, giai thoại và yếu tố văn hoá/dân gian nếu có.",
+            "landmark" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về địa danh/di tích. Hãy ưu tiên: địa danh ở đâu, thuộc tỉnh/thành nào nếu nguồn có, là loại địa danh gì, điểm nổi bật và bối cảnh lịch sử/văn hoá. Nếu có nhiều nơi trùng tên trong nguồn, trình bày các khả năng chính.",
+            "craft_village" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về làng nghề. Chỉ nêu địa điểm, nghề chính, bối cảnh văn hoá, sản phẩm hoặc cộng đồng làm nghề nếu CONTEXT có.",
+            "cuisine" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi về ẩm thực. Chỉ nêu món/đặc sản, địa phương gắn với món đó và bối cảnh văn hoá nếu CONTEXT có. Không bịa quán, giá hoặc giờ mở cửa.",
+            "itinerary" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi lịch trình/tour. Không tạo lịch trình, không xếp kế hoạch theo ngày, không bán tour. Chỉ có thể chuyển sang giới thiệu địa danh, văn hoá, lịch sử nếu CONTEXT có.",
+            "travel_experience" => "Ý ĐỊNH CÂU HỎI: Người dùng hỏi kinh nghiệm thực tế. Không tư vấn phương tiện, chi phí, thời tiết, độ đông, booking hoặc giờ mở cửa nếu CONTEXT không có; chỉ trả lời phần thông tin địa danh/văn hoá/lịch sử có nguồn.",
             _ => string.Empty
         };
     }
@@ -2605,59 +2596,14 @@ public sealed class ChatController : ApiControllerBase
         var normalized = NormalizeVietnameseForSearch(message ?? string.Empty);
         if (string.IsNullOrWhiteSpace(normalized)) return string.Empty;
 
-        if (HasAmbiguousGuidePlaceName(normalized))
+        if (Regex.IsMatch(normalized, @"\b(dat ve|dat phong|dat xe|dat nha hang|booking|mua ve|gia ve|chi phi|thoi tiet|phuong tien|dong duc|ngan sach)\b", RegexOptions.IgnoreCase))
         {
-            return "Để tránh tìm nhầm, bạn đang nói đến địa điểm nào cụ thể? Ví dụ Thành cổ Quảng Trị, Thành cổ Sơn Tây hoặc một thành cổ khác.";
+            return "Mình không tư vấn booking, giá vé, chi phí, thời tiết, phương tiện hoặc độ đông nếu CONTEXT không có. Mình chỉ giới thiệu địa danh, văn hoá, lịch sử và lễ hội dựa trên nguồn Wiki/Wikipedia.";
         }
 
-        var aspect = DetectGuideQuestionAspect(message);
-        var asksFestivalOrEvent = aspect is "festival" or "event" || QueryAsksFestival(normalized, null) || normalized.Contains("su kien", StringComparison.OrdinalIgnoreCase);
-        var asksSearchOrTravel = LooksLikeGuideSearchOrTravelNeed(normalized);
-        var hasKnownSpecificTopic = HasKnownSpecificGuideTopic(normalized) || IsKnownFestivalTopic(normalized);
-        var hasLocation = FindProvinceNamesInText(message).Any() || HasSpecificLocationHint(normalized) || hasKnownSpecificTopic;
-        var hasTime = HasGuideTimeHint(normalized);
-
-        if (asksFestivalOrEvent && HasMonthWithoutCalendarType(normalized))
+        if (DetectGuideQuestionAspect(message) is "itinerary")
         {
-            return "Bạn muốn hỏi theo tháng dương lịch hay âm lịch? Với lễ hội truyền thống, nhiều sự kiện dùng âm lịch nên kết quả có thể khác.";
-        }
-
-        if (asksFestivalOrEvent && asksSearchOrTravel && !hasLocation)
-        {
-            return "Bạn muốn tìm ở tỉnh/thành hoặc khu vực nào?";
-        }
-
-        if (asksFestivalOrEvent && asksSearchOrTravel && !hasTime)
-        {
-            return "Bạn muốn đi vào tháng nào hoặc dịp nào?";
-        }
-
-        if (aspect is "itinerary")
-        {
-            if (!hasLocation)
-            {
-                return "Bạn muốn lập lịch trình ở tỉnh/thành hoặc khu vực nào?";
-            }
-            if (!HasGuideDurationHint(normalized))
-            {
-                return "Bạn muốn đi mấy ngày và đi tự túc, gia đình hay cặp đôi?";
-            }
-        }
-
-        if (aspect is "travel_experience")
-        {
-            if (!hasLocation && asksSearchOrTravel)
-            {
-                return "Bạn muốn hỏi kinh nghiệm du lịch ở tỉnh/thành hoặc khu vực nào?";
-            }
-        }
-
-        if (aspect is "culture" or "history" or "landmark" or "craft_village" or "cuisine")
-        {
-            if (asksSearchOrTravel && !hasLocation && !hasKnownSpecificTopic)
-            {
-                return "Để tránh tìm nhầm, bạn cho mình biết thêm tỉnh/thành hoặc khu vực bạn muốn tìm nhé.";
-            }
+            return "Mình không tạo lịch trình du lịch, không sắp xếp kế hoạch theo ngày và không gợi ý tour. Mình có thể giới thiệu địa danh, di tích, danh thắng, văn hoá, lịch sử hoặc lễ hội dựa trên nguồn Wiki/Wikipedia trong CONTEXT.";
         }
 
         return string.Empty;
@@ -2712,7 +2658,7 @@ public sealed class ChatController : ApiControllerBase
     private static bool GuideIntentNeedsTimeInAnswer(string? message, GuideSearchPlan? searchPlan)
     {
         var aspect = DetectGuideQuestionAspect(message);
-        if (aspect is "festival" or "event" or "itinerary") return true;
+        if (aspect is "festival" or "event") return true;
         return searchPlan?.Topics.Any(topic => string.Equals(topic.EntityType, "festival", StringComparison.OrdinalIgnoreCase)
                                               || string.Equals(topic.EntityType, "event", StringComparison.OrdinalIgnoreCase)
                                               || topic.Aspects.Any(aspectValue => string.Equals(aspectValue, "date", StringComparison.OrdinalIgnoreCase))) == true;
