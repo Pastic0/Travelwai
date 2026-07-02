@@ -881,6 +881,10 @@ html[data-travelwai-theme="dark"] .twai-mini-chat-form input {
   background-image: url('/logo/travelwai-manager-avatar.webp') !important;
 }
 
+.twai-mini-chat-toggle-guide {
+  background-image: url('/logo/travelwinne-guide-avatar.webp') !important;
+}
+
 .twai-mini-chat-toggle::after {
   content: "";
   position: absolute;
@@ -927,7 +931,7 @@ html[data-travelwai-theme="dark"] .twai-mini-chat-form input {
   right: 14px !important;
   top: 50% !important;
   width: 66px !important;
-  min-height: 350px !important;
+  min-height: 300px !important;
   padding: 8px 5px !important;
   gap: 10px !important;
   transform: translateY(-50%) !important;
@@ -989,7 +993,7 @@ html[data-travelwai-theme="dark"] .twai-mini-chat-form input {
   .twai-floating-tools-zone {
     right: 6px !important;
     width: 58px !important;
-    min-height: 332px !important;
+    min-height: 286px !important;
   }
 
   .twai-floating-tools-zone::before {
@@ -1163,8 +1167,4 @@ html[data-travelwai-theme="dark"] .twai-mini-chat-form input {
 
 .twai-pricing-bottom-close:hover {
   transform: translateY(-1px);
-}
-
-.twai-mini-chat-toggle-guide {
-  background-image: url('/logo/travelwinne-guide-avatar.webp') !important;
 }

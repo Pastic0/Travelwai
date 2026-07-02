@@ -19,12 +19,12 @@
     },
     guide: {
       key: "guide",
-      mode: "guide",
+      mode: "guide-rag",
       buttonIcon: "🧭",
-      title: "Hướng dẫn viên AI",
-      subtitle: "Di tích, làng nghề, lịch trình",
+      title: "Hướng dẫn viên RAG AI",
+      subtitle: "Di tích, làng nghề, nghệ nhân",
       avatar: "/logo/travelwinne-guide-avatar.webp",
-      welcome: "Xin chào, mình là Hướng dẫn viên AI. Bạn muốn tìm hiểu địa danh, di tích, làng nghề hay cần gợi ý lịch trình?"
+      welcome: "Xin chào, mình là Hướng dẫn viên RAG AI. Bạn muốn tra cứu địa danh, di tích, làng nghề, nghệ nhân hay gợi ý lịch trình?"
     }
   };
 
@@ -641,6 +641,15 @@
     miniChatHistories[activeMiniChatKey].push({ role: role === "user" ? "user" : "assistant", content: content || "" });
   }
 
+
+  function buildMiniChatContextForRequest(key, text) {
+    if (key !== "guide") return "";
+    if (window.TravelwAIGuideChatbot && typeof window.TravelwAIGuideChatbot.buildContextForMessage === "function") {
+      return window.TravelwAIGuideChatbot.buildContextForMessage(text) || "";
+    }
+    return "";
+  }
+
   function sendMiniChatMessage(event) {
     event.preventDefault();
     const input = document.getElementById("twaiMiniChatInput");
@@ -660,6 +669,18 @@
       return;
     }
 
+    if (activeMiniChatKey === "travelwai") {
+      pushMiniChat("assistant", getMiniChatManagerFallbackReply());
+      renderMiniChatMessages();
+      return;
+    }
+
+    if (!token && activeMiniChatKey === "travelwai") {
+      pushMiniChat("assistant", "Bạn vui lòng đăng ký hoặc đăng nhập để Quản lý TravelwAI hỗ trợ đầy đủ các chức năng tài khoản, lịch trình, tour và tin nhắn.");
+      renderMiniChatMessages();
+      return;
+    }
+
     if (form) form.classList.add("loading");
 
     const headers = { "Content-Type": "application/json" };
@@ -673,7 +694,7 @@
         message: text,
         assistant: config.mode,
         history: buildMiniChatHistoryForApi(activeMiniChatKey),
-        context: ""
+        context: buildMiniChatContextForRequest(activeMiniChatKey, text)
       })
     }).then(function (response) {
       return response.json().catch(function () { return {}; }).then(function (result) {
@@ -693,6 +714,10 @@
     }).catch(async function (error) {
       if (/free|nâng cấp|nang cap|upgrade_required|free_ai_quota_exceeded/i.test(error.message || "") && window.TravelwAIPricingPopup?.showFreeAiPopup) {
         window.TravelwAIPricingPopup.showFreeAiPopup(error.message);
+        return;
+      }
+      if (activeMiniChatKey === "travelwai") {
+        pushMiniChat("assistant", getMiniChatManagerFallbackReply());
         return;
       }
       pushMiniChat("assistant", "Không gửi được tin nhắn. Vui lòng thử lại.");

@@ -27,7 +27,6 @@ const FRIEND_REFRESH_MS = 30 * 1000;
 const MAX_CHAT_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const CHAT_MESSAGE_PAYLOAD_TYPE = "travelwai-chat-message";
 const AI_CONVERSATION_ID = "travelwai-ai-conversation";
-const AI_GUIDE_CONVERSATION_ID = "travelwai-guide-conversation";
 const AI_STORAGE_PREFIX = "travelwai-ai-chat-history";
 const AI_PENDING_PROMPT_KEY = "travelwai-ai-pending-prompt";
 const AI_AVATAR_VERSION_KEY = "travelwaiAiAvatarVersion";
@@ -54,13 +53,14 @@ const AI_ASSISTANT_USER = {
   email: "manager@travelwai.local",
   profilePic: buildAiAvatarUrl("travelwai-manager-avatar.webp"),
 };
-const AI_GUIDE_USER = {
-  id: "travelwai-guide-ai",
-  username: "Hướng dẫn viên AI",
-  name: "Hướng dẫn viên AI",
-  email: "guide@travelwai.local",
+const RAG_GUIDE_ASSISTANT_USER = {
+  id: "travelwai-rag-guide-ai",
+  username: "Hướng dẫn viên RAG AI",
+  name: "Hướng dẫn viên RAG AI",
+  email: "rag-guide@travelwai.local",
   profilePic: buildAiAvatarUrl("travelwinne-guide-avatar.webp"),
 };
+const RAG_GUIDE_CONVERSATION_ID = "travelwai-rag-guide-conversation";
 const AI_ASSISTANT_CONFIGS = {
   travelwai: {
     key: "travelwai",
@@ -79,13 +79,13 @@ const AI_ASSISTANT_CONFIGS = {
   },
   guide: {
     key: "guide",
-    mode: "guide",
-    conversationId: AI_GUIDE_CONVERSATION_ID,
-    displayName: "Hướng dẫn viên AI",
-    statusText: "Di tích, làng nghề, lịch trình",
-    defaultLastMessage: "Hỏi về điểm đến, di tích, làng nghề",
-    user: AI_GUIDE_USER,
-    welcome: "Xin chào, mình là Hướng dẫn viên AI. Bạn có thể hỏi về địa danh, di tích, làng nghề, nghệ nhân hoặc nhờ gợi ý lịch trình tham quan.",
+    mode: "guide-rag",
+    conversationId: RAG_GUIDE_CONVERSATION_ID,
+    displayName: "Hướng dẫn viên RAG AI",
+    statusText: "Tra cứu di sản, làng nghề và lộ trình",
+    defaultLastMessage: "Hỏi về di tích, làng nghề, nghệ nhân, lịch trình",
+    user: RAG_GUIDE_ASSISTANT_USER,
+    welcome: "Xin chào, mình là Hướng dẫn viên RAG AI của TravelwAI. Bạn có thể hỏi về di tích, làng nghề, nghệ nhân, văn hoá, tâm linh hoặc nhờ gợi ý lịch trình tham quan.",
     suggestions: [
       "Kể về Hoàng thành Thăng Long",
       "Gợi ý 1 ngày ở Hà Nội",
@@ -96,7 +96,7 @@ const AI_ASSISTANT_CONFIGS = {
 
 function refreshAiAvatarUrls() {
   AI_ASSISTANT_USER.profilePic = buildAiAvatarUrl("travelwai-manager-avatar.webp");
-  AI_GUIDE_USER.profilePic = buildAiAvatarUrl("travelwinne-guide-avatar.webp");
+  RAG_GUIDE_ASSISTANT_USER.profilePic = buildAiAvatarUrl("travelwinne-guide-avatar.webp");
 }
 
 function refreshAiAvatarInMessages() {
@@ -106,11 +106,12 @@ function refreshAiAvatarInMessages() {
 
 function normalizeAiMessageAvatars(messages) {
   refreshAiAvatarUrls();
-  const aiUsers = Object.values(AI_ASSISTANT_CONFIGS).map((config) => config.user);
   return (messages || []).map((message) => {
-    const matchedUser = aiUsers.find((user) => message?.sender_id === user.id);
-    if (matchedUser) {
-      return { ...message, sender_info: matchedUser };
+    if (message?.sender_id === AI_ASSISTANT_USER.id) {
+      return { ...message, sender_info: AI_ASSISTANT_USER };
+    }
+    if (message?.sender_id === RAG_GUIDE_ASSISTANT_USER.id) {
+      return { ...message, sender_info: RAG_GUIDE_ASSISTANT_USER };
     }
     return message;
   });
@@ -433,17 +434,17 @@ function getUserAvatarUrl(user) {
 }
 
 function normalizeAiAssistantKey(value) {
-  const key = normalizeForSearch(value || "");
-  if (key.includes("guide") || key.includes("huong dan") || key.includes("du lich") || key.includes("di tich") || key.includes("lang nghe")) return "guide";
+  const key = String(value || "").trim().toLowerCase();
+  if (["guide", "rag", "guide-rag", "travel-guide", "travel-guide-rag", "huong-dan-vien", "travelwinne"].includes(key)) return "guide";
   return "travelwai";
 }
 
 function getAiConfig(value) {
   if (typeof value === "string") return AI_ASSISTANT_CONFIGS[normalizeAiAssistantKey(value)] || AI_ASSISTANT_CONFIGS.travelwai;
   const id = value?.id || value?.conversation_id || value?.conversationId;
-  if (value?.assistant_key && AI_ASSISTANT_CONFIGS[value.assistant_key]) return AI_ASSISTANT_CONFIGS[value.assistant_key];
-  const byId = Object.values(AI_ASSISTANT_CONFIGS).find((config) => config.conversationId === id || config.user.id === id);
-  return byId || AI_ASSISTANT_CONFIGS.travelwai;
+  if (id === RAG_GUIDE_CONVERSATION_ID) return AI_ASSISTANT_CONFIGS.guide;
+  if (value?.assistant_key) return AI_ASSISTANT_CONFIGS[normalizeAiAssistantKey(value.assistant_key)] || AI_ASSISTANT_CONFIGS.travelwai;
+  return AI_ASSISTANT_CONFIGS.travelwai;
 }
 
 function getAiWelcomeMessage(configValue) {
@@ -460,7 +461,7 @@ function getAiWelcomeMessage(configValue) {
 
 function isAiConversation(conversation) {
   const id = conversation?.id || conversation?.conversation_id || conversation?.conversationId;
-  return Boolean(conversation?.is_ai) || Object.values(AI_ASSISTANT_CONFIGS).some((config) => config.conversationId === id);
+  return Boolean(conversation?.is_ai) || id === AI_CONVERSATION_ID || id === RAG_GUIDE_CONVERSATION_ID;
 }
 
 function isGroupConversation(conversation) {
@@ -595,13 +596,14 @@ function consumePendingAiContext(assistantKey) {
 }
 
 function buildAiContextForRequest(aiConfig, text) {
-  if (aiConfig.key === "guide") {
-    consumePendingAiContext(aiConfig.key);
-    return "";
-  }
   const pendingContext = consumePendingAiContext(aiConfig.key);
-  if (pendingContext) return pendingContext;
-  return "";
+  if (aiConfig.key !== "guide") return pendingContext || "";
+
+  const guideContext = window.TravelwAIGuideChatbot && typeof window.TravelwAIGuideChatbot.buildContextForMessage === "function"
+    ? window.TravelwAIGuideChatbot.buildContextForMessage(text)
+    : "";
+
+  return [pendingContext, guideContext].filter(Boolean).join("\n\n");
 }
 
 function isAdminSupportChatRequested() {
@@ -725,7 +727,7 @@ async function handlePendingDirectChat() {
 async function handlePendingAiPrompt() {
   const params = new URLSearchParams(window.location.search);
   const aiParam = params.get("ai") || params.get("assistant") || "";
-  const shouldOpenAi = aiParam === "1" || aiParam === "travelwai";
+  const shouldOpenAi = aiParam === "1" || aiParam === "travelwai" || normalizeAiAssistantKey(aiParam) === "guide";
   let pending = null;
 
   try {
@@ -1092,7 +1094,7 @@ function renderConversations(searchQuery = activeConversationSearchQuery) {
       normalizeForSearch(displayName).includes(normalizedQuery) ||
       normalizeForSearch(lastMessage).includes(normalizedQuery) ||
       normalizeForSearch(participantText).includes(normalizedQuery) ||
-      (isAiConversation(conversation) && normalizeForSearch(isAiConversation(conversation) ? (getAiConfig(conversation).displayName + " ai hoi tri tue nhan tao huong dan vien du lich di tich lang nghe nghe nhan lich trinh quan ly travelwai dieu huong web lap lich trinh doi mat khau dang xuat") : "").includes(normalizedQuery))
+      (isAiConversation(conversation) && normalizeForSearch("ai hoi tri tue nhan tao quan ly travelwai dieu huong web lap lich trinh doi mat khau dang xuat huong dan vien rag di tich lang nghe nghe nhan van hoa tam linh du lich").includes(normalizedQuery))
     );
   });
 
@@ -2306,6 +2308,11 @@ async function sendAiMessage(options = {}) {
     return;
   }
 
+  if (aiKey === "travelwai") {
+    appendLocalAiAssistantReply(getTravelwaiManagerFallbackReply(), "travelwai");
+    return;
+  }
+
   try {
     setAiSendButtonLoading(true);
     const aiContext = buildAiContextForRequest(aiConfig, typedContent);
@@ -2364,12 +2371,14 @@ async function sendAiMessage(options = {}) {
       window.TravelwAIPricingPopup.showFreeAiPopup(errorMessage);
       return;
     }
-    if (options.background) {
-      showMessagingToast(friendlyMessage, "error");
-    } else {
-      appendLocalAiAssistantReply(friendlyMessage, aiKey);
+    if (aiKey === "travelwai") {
+      appendLocalAiAssistantReply(getTravelwaiManagerFallbackReply(), "travelwai");
       renderConversations(activeConversationSearchQuery);
       updateConversationSelection();
+    } else if (options.background) {
+      showMessagingToast(friendlyMessage, "error");
+    } else {
+      showError(friendlyMessage);
     }
   } finally {
     setAiSendButtonLoading(false);
