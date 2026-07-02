@@ -76,7 +76,11 @@ public abstract class ApiControllerBase : ControllerBase
         var role = NormalizeAccountRole(authUser?.GetValueOrDefault("role"));
         if (string.Equals(role, "Free", StringComparison.OrdinalIgnoreCase)) return 3;
         if (string.Equals(role, "VIP", StringComparison.OrdinalIgnoreCase)) return 10;
-        return 0;
+        if (string.Equals(role, "Premium", StringComparison.OrdinalIgnoreCase)) return 0;
+        if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)) return 0;
+        if (string.Equals(role, "Sales", StringComparison.OrdinalIgnoreCase)) return 0;
+        if (string.Equals(role, "Business", StringComparison.OrdinalIgnoreCase)) return 0;
+        return 3;
     }
 
 }

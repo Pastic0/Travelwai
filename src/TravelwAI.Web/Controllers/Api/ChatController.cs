@@ -56,6 +56,21 @@ public sealed class ChatController : ApiControllerBase
 
         var assistantMode = NormalizeAiAssistantMode(request.Assistant);
 
+        var current = await CurrentUserAsync();
+        if (!current.ok)
+        {
+            return Unauthorized(new
+            {
+                success = false,
+                code = "ai_login_required",
+                detail = "Bạn cần đăng nhập để dùng Chatbot AI.",
+                message = "Bạn cần đăng nhập để dùng Chatbot AI."
+            });
+        }
+
+        var quotaError = TryConsumeAiChatQuota(current.userId!, current.authUser);
+        if (quotaError is not null) return quotaError;
+
         if (assistantMode == "travelwai")
         {
             var quickReply = TryBuildManagerQuickReply(request.Message);
@@ -63,22 +78,6 @@ public sealed class ChatController : ApiControllerBase
             {
                 return Ok(new { success = true, data = new { reply = quickReply }, message = "Quản lý TravelwAI đã xử lý nội bộ" });
             }
-        }
-
-        var current = await CurrentUserAsync();
-        if (current.ok)
-        {
-            var quotaError = TryConsumeAiChatQuota(current.userId!, current.authUser);
-            if (quotaError is not null) return quotaError;
-        }
-        else if (assistantMode == "travelwai")
-        {
-            return Ok(new
-            {
-                success = true,
-                data = new { reply = "Bạn vui lòng đăng ký hoặc đăng nhập để Quản lý TravelwAI hỗ trợ đầy đủ các chức năng tài khoản, lịch trình, tour và tin nhắn." },
-                message = "Cần đăng ký"
-            });
         }
 
         var apiKey = GetOpenRouterApiKey();
@@ -284,16 +283,23 @@ public sealed class ChatController : ApiControllerBase
             {
                 var role = NormalizeAccountRole(authUser?.GetValueOrDefault("role"));
                 var isFree = string.Equals(role, "Free", StringComparison.OrdinalIgnoreCase);
+                var resetSeconds = Math.Max(1, (int)Math.Ceiling((window.WindowStartUtc.AddMinutes(5) - now).TotalSeconds));
+                Response.Headers["Retry-After"] = resetSeconds.ToString(CultureInfo.InvariantCulture);
                 return StatusCode(429, new
                 {
                     success = false,
                     code = isFree ? "free_ai_quota_exceeded" : "ai_quota_exceeded",
+                    role,
+                    limit,
+                    used = window.Count,
+                    windowSeconds = 300,
+                    retryAfterSeconds = resetSeconds,
                     detail = isFree
-                        ? "Tài khoản Free đã dùng hết 3 câu hỏi trong 5 phút. Vui lòng nâng cấp gói."
-                        : $"Tài khoản {role} chỉ được hỏi chatbot AI {limit} câu trong 5 phút. Vui lòng thử lại sau.",
+                        ? "Tài khoản Free đã dùng hết 3 câu hỏi trong 5 phút. Vui lòng nâng cấp gói hoặc thử lại sau."
+                        : $"Tài khoản {role} đã dùng hết {limit} câu hỏi trong 5 phút. Vui lòng thử lại sau.",
                     message = isFree
                         ? "Tài khoản Free đã dùng hết 3 câu hỏi trong 5 phút."
-                        : $"Tài khoản {role} chỉ được hỏi chatbot AI {limit} câu trong 5 phút."
+                        : $"Tài khoản {role} đã dùng hết {limit} câu hỏi trong 5 phút."
                 });
             }
 
