@@ -41,6 +41,7 @@ public abstract class ApiControllerBase : ControllerBase
         if (value.Equals("User", StringComparison.OrdinalIgnoreCase)) return "Free";
         if (value.Equals("Company", StringComparison.OrdinalIgnoreCase)) return "Business";
         if (value.Equals("Tour Sales", StringComparison.OrdinalIgnoreCase) || value.Equals("TourSales", StringComparison.OrdinalIgnoreCase)) return "Sales";
+        if (value.Equals("Administrator", StringComparison.OrdinalIgnoreCase) || value.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase) || value.Equals("Super Admin", StringComparison.OrdinalIgnoreCase)) return "Admin";
         if (value.Equals("VIP", StringComparison.OrdinalIgnoreCase)) return "VIP";
         if (value.Equals("Premium", StringComparison.OrdinalIgnoreCase)) return "Premium";
         if (value.Equals("Admin", StringComparison.OrdinalIgnoreCase)) return "Admin";
@@ -49,15 +50,42 @@ public abstract class ApiControllerBase : ControllerBase
         return string.IsNullOrWhiteSpace(value) ? "Free" : value;
     }
 
+    protected static string GetAccountRole(Dictionary<string, object?>? authUser)
+    {
+        if (authUser is null) return "Free";
+        if (IsTruthyRoleFlag(authUser.GetValueOrDefault("is_admin"))
+            || IsTruthyRoleFlag(authUser.GetValueOrDefault("isAdmin"))
+            || IsTruthyRoleFlag(authUser.GetValueOrDefault("admin"))) return "Admin";
+
+        foreach (var key in new[] { "role", "accountRole", "account_role", "planRole", "plan_role", "userRole", "user_role", "package", "plan" })
+        {
+            if (authUser.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value?.ToString()))
+            {
+                return NormalizeAccountRole(value);
+            }
+        }
+
+        return "Free";
+    }
+
+    private static bool IsTruthyRoleFlag(object? value)
+    {
+        if (value is bool b) return b;
+        var text = value?.ToString()?.Trim();
+        return string.Equals(text, "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(text, "1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(text, "yes", StringComparison.OrdinalIgnoreCase);
+    }
+
     protected static bool IsFreeAccount(Dictionary<string, object?>? authUser)
-        => string.Equals(NormalizeAccountRole(authUser?.GetValueOrDefault("role")), "Free", StringComparison.OrdinalIgnoreCase);
+        => string.Equals(GetAccountRole(authUser), "Free", StringComparison.OrdinalIgnoreCase);
 
     protected static bool IsVipAccount(Dictionary<string, object?>? authUser)
-        => string.Equals(NormalizeAccountRole(authUser?.GetValueOrDefault("role")), "VIP", StringComparison.OrdinalIgnoreCase);
+        => string.Equals(GetAccountRole(authUser), "VIP", StringComparison.OrdinalIgnoreCase);
 
     protected static bool CanUsePostOffer(Dictionary<string, object?>? authUser)
     {
-        var role = NormalizeAccountRole(authUser?.GetValueOrDefault("role"));
+        var role = GetAccountRole(authUser);
         return !string.Equals(role, "Free", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(role, "VIP", StringComparison.OrdinalIgnoreCase);
     }
@@ -73,7 +101,7 @@ public abstract class ApiControllerBase : ControllerBase
 
     protected static int GetAiChatLimitPerFiveMinutes(Dictionary<string, object?>? authUser)
     {
-        var role = NormalizeAccountRole(authUser?.GetValueOrDefault("role"));
+        var role = GetAccountRole(authUser);
         if (string.Equals(role, "Free", StringComparison.OrdinalIgnoreCase)) return 3;
         if (string.Equals(role, "VIP", StringComparison.OrdinalIgnoreCase)) return 10;
         if (string.Equals(role, "Premium", StringComparison.OrdinalIgnoreCase)) return 0;

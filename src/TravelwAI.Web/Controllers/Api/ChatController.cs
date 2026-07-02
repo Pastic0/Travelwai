@@ -1,11 +1,14 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
+using Npgsql;
 using TravelwAI.Business.Interfaces;
 using TravelwAI.Models.Requests;
 using TravelwAI.Web.Services;
@@ -22,12 +25,15 @@ public sealed class ChatController : ApiControllerBase
     }
 
     private static readonly ConcurrentDictionary<string, AiChatQuotaWindow> AiChatQuota = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, DateTime> OpenRouterModelCooldownUntil = new(StringComparer.OrdinalIgnoreCase);
     private readonly IChatService _chatService;
     private readonly IFriendService _friendService;
     private readonly IFileStorageService _fileStorage;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IConfiguration _configuration;
     private readonly TravelGuideRagService _travelGuideRagService;
+    private readonly IMemoryCache _memoryCache;
+    private readonly NpgsqlDataSource _dataSource;
 
     public ChatController(
         IAuthService authService,
@@ -36,7 +42,9 @@ public sealed class ChatController : ApiControllerBase
         IFileStorageService fileStorage,
         IHttpClientFactory httpClientFactory,
         IConfiguration configuration,
-        TravelGuideRagService travelGuideRagService) : base(authService)
+        TravelGuideRagService travelGuideRagService,
+        IMemoryCache memoryCache,
+        NpgsqlDataSource dataSource) : base(authService)
     {
         _chatService = chatService;
         _friendService = friendService;
@@ -44,6 +52,8 @@ public sealed class ChatController : ApiControllerBase
         _httpClientFactory = httpClientFactory;
         _configuration = configuration;
         _travelGuideRagService = travelGuideRagService;
+        _memoryCache = memoryCache;
+        _dataSource = dataSource;
     }
 
     [HttpPost("ai/chat")]
@@ -68,7 +78,7 @@ public sealed class ChatController : ApiControllerBase
             });
         }
 
-        var quotaError = TryConsumeAiChatQuota(current.userId!, current.authUser);
+        var quotaError = await TryConsumeAiChatQuotaAsync(current.userId!, current.authUser, HttpContext.RequestAborted);
         if (quotaError is not null) return quotaError;
 
         if (assistantMode == "travelwai")
@@ -119,6 +129,12 @@ public sealed class ChatController : ApiControllerBase
 
         messages.Add(new { role = "user", content = request.Message.Trim() });
 
+        var responseCacheKey = BuildAiResponseCacheKey(assistantMode, request.Message, contextBlock, request.History);
+        if (TryGetCachedAiReply(responseCacheKey, out var cachedReply))
+        {
+            return Ok(new { success = true, data = new { reply = cachedReply, cached = true }, message = "AI đã trả lời từ cache" });
+        }
+
         OpenRouterChatResult aiResponse;
         try
         {
@@ -126,7 +142,7 @@ public sealed class ChatController : ApiControllerBase
                 GetOpenRouterModelCandidates(assistantMode, model),
                 messages,
                 assistantMode == "guide-rag" ? 0.45 : 0.35,
-                assistantMode == "guide-rag" ? 520 : 420,
+                assistantMode == "guide-rag" ? 360 : 280,
                 siteUrl,
                 appName,
                 apiKey,
@@ -139,7 +155,8 @@ public sealed class ChatController : ApiControllerBase
 
         var cleaned = CleanSimpleChatbotReply(aiResponse.Content, 150, IsOpenRouterAnswerCutOff(aiResponse.FinishReason));
         if (string.IsNullOrWhiteSpace(cleaned)) cleaned = "Mình chưa nhận được câu trả lời hoàn chỉnh từ AI. Bạn hỏi lại giúp mình nhé.";
-        return Ok(new { success = true, data = new { reply = cleaned }, message = "AI đã trả lời" });
+        CacheAiReply(responseCacheKey, cleaned, assistantMode);
+        return Ok(new { success = true, data = new { reply = cleaned, model = aiResponse.Model }, message = "AI đã trả lời" });
     }
 
     private sealed class OpenRouterChatResult
@@ -173,15 +190,23 @@ public sealed class ChatController : ApiControllerBase
     {
         var errors = new List<string>();
         var models = modelCandidates.Count > 0 ? modelCandidates : new[] { "openrouter/auto" };
+        var timeoutSeconds = Math.Clamp(GetOpenRouterConfigInt("TimeoutSeconds", "OPENROUTER_TIMEOUT_SECONDS", 28), 8, 60);
 
-        foreach (var candidateModel in models.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var candidateModel in models.Where(item => !string.IsNullOrWhiteSpace(item)).Select(item => item.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
         {
+            if (TryGetOpenRouterModelCooldown(candidateModel, out var waitSeconds))
+            {
+                errors.Add($"{candidateModel}: đang tạm nghỉ {waitSeconds}s do lần gọi trước bị quá tải.");
+                continue;
+            }
+
             var payload = new Dictionary<string, object?>
             {
-                ["model"] = candidateModel.Trim(),
+                ["model"] = candidateModel,
                 ["messages"] = messages,
                 ["temperature"] = temperature,
-                ["max_tokens"] = maxTokens
+                ["max_tokens"] = maxTokens,
+                ["provider"] = new { allow_fallbacks = true }
             };
 
             if (ShouldSendOpenRouterReasoningOptions())
@@ -190,23 +215,54 @@ public sealed class ChatController : ApiControllerBase
             }
 
             using var http = _httpClientFactory.CreateClient();
+            http.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BuildOpenRouterChatCompletionsUri());
             httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
             httpRequest.Headers.TryAddWithoutValidation("HTTP-Referer", siteUrl);
             httpRequest.Headers.TryAddWithoutValidation("X-Title", appName);
             httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
-            using var response = await http.SendAsync(httpRequest, cancellationToken);
-            var responseText = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (!response.IsSuccessStatusCode)
+            HttpResponseMessage response;
+            string responseText;
+            try
             {
-                var detail = BuildOpenRouterErrorMessage((int)response.StatusCode, responseText);
-                errors.Add($"{candidateModel}: {detail}");
-                if ((int)response.StatusCode == 401 || (int)response.StatusCode == 402 || (int)response.StatusCode == 403)
-                {
-                    throw new OpenRouterChatException((int)response.StatusCode, detail, responseText);
-                }
+                response = await http.SendAsync(httpRequest, cancellationToken);
+                responseText = await response.Content.ReadAsStringAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                MarkOpenRouterModelCooldown(candidateModel, 90);
+                errors.Add($"{candidateModel}: quá thời gian chờ, đã chuyển model khác.");
                 continue;
+            }
+            catch (HttpRequestException ex)
+            {
+                MarkOpenRouterModelCooldown(candidateModel, 90);
+                errors.Add($"{candidateModel}: lỗi kết nối OpenRouter {ex.Message}.");
+                continue;
+            }
+
+            using (response)
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    var statusCode = (int)response.StatusCode;
+                    var detail = BuildOpenRouterErrorMessage(statusCode, responseText);
+                    errors.Add($"{candidateModel}: {detail}");
+
+                    if (statusCode == 401 || statusCode == 402 || statusCode == 403)
+                    {
+                        throw new OpenRouterChatException(statusCode, detail, responseText);
+                    }
+
+                    if (ShouldCooldownOpenRouterModel(statusCode, responseText))
+                    {
+                        var retryAfter = GetRetryAfterSeconds(response) ?? GetOpenRouterModelCooldownSeconds(statusCode, responseText);
+                        MarkOpenRouterModelCooldown(candidateModel, retryAfter);
+                    }
+
+                    continue;
+                }
             }
 
             JsonNode? json;
@@ -216,6 +272,7 @@ public sealed class ChatController : ApiControllerBase
             }
             catch (JsonException)
             {
+                MarkOpenRouterModelCooldown(candidateModel, 45);
                 errors.Add($"{candidateModel}: AI trả về dữ liệu không hợp lệ.");
                 continue;
             }
@@ -224,6 +281,7 @@ public sealed class ChatController : ApiControllerBase
             var finishReason = json?["choices"]?[0]?["finish_reason"]?.ToString();
             if (string.IsNullOrWhiteSpace(answer))
             {
+                MarkOpenRouterModelCooldown(candidateModel, 45);
                 errors.Add($"{candidateModel}: AI chưa trả về nội dung hợp lệ.");
                 continue;
             }
@@ -232,7 +290,7 @@ public sealed class ChatController : ApiControllerBase
             {
                 Content = answer,
                 FinishReason = finishReason,
-                Model = candidateModel.Trim()
+                Model = candidateModel
             };
         }
 
@@ -259,16 +317,100 @@ public sealed class ChatController : ApiControllerBase
             ? GetOpenRouterConfigValue("RagFallbackModels", "OPENROUTER_RAG_FALLBACK_MODELS", string.Empty)
             : GetOpenRouterConfigValue("FallbackModels", "OPENROUTER_FALLBACK_MODELS", string.Empty));
         AddMany(GetOpenRouterConfigValue("FallbackModels", "OPENROUTER_FALLBACK_MODELS", string.Empty));
+        AddMany(GetDefaultOpenRouterFreeFallbackModels());
         AddMany("openrouter/auto");
 
         return values.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    private IActionResult? TryConsumeAiChatQuota(string userId, Dictionary<string, object?>? authUser)
+    private static string GetDefaultOpenRouterFreeFallbackModels()
+    {
+        return string.Join(',', new[]
+        {
+            "qwen/qwen3-14b:free",
+            "google/gemma-3-27b-it:free",
+            "deepseek/deepseek-chat-v3-0324:free",
+            "deepseek/deepseek-r1-0528:free",
+            "mistralai/mistral-small-3.2-24b-instruct:free",
+            "openai/gpt-oss-120b:free"
+        });
+    }
+
+    private async Task<IActionResult?> TryConsumeAiChatQuotaAsync(string userId, Dictionary<string, object?>? authUser, CancellationToken cancellationToken)
     {
         var limit = GetAiChatLimitPerFiveMinutes(authUser);
         if (limit <= 0) return null;
 
+        try
+        {
+            return await TryConsumeAiChatQuotaFromDatabaseAsync(userId, authUser, limit, cancellationToken);
+        }
+        catch
+        {
+            return TryConsumeAiChatQuotaFromMemory(userId, authUser, limit);
+        }
+    }
+
+    private async Task<IActionResult?> TryConsumeAiChatQuotaFromDatabaseAsync(string userId, Dictionary<string, object?>? authUser, int limit, CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using var tx = await conn.BeginTransactionAsync(cancellationToken);
+
+        DateTime? windowStart = null;
+        var count = 0;
+        await using (var select = conn.CreateCommand())
+        {
+            select.Transaction = tx;
+            select.CommandText = "select window_start_utc, count from ai_chat_quota_windows where user_id = @user_id for update;";
+            select.Parameters.AddWithValue("user_id", userId);
+            await using var reader = await select.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                windowStart = reader.GetDateTime(0);
+                count = reader.GetInt32(1);
+            }
+        }
+
+        if (windowStart is null || (now - windowStart.Value.ToUniversalTime()).TotalMinutes >= 5)
+        {
+            await using var upsert = conn.CreateCommand();
+            upsert.Transaction = tx;
+            upsert.CommandText = """
+                insert into ai_chat_quota_windows(user_id, window_start_utc, count, updated_at)
+                values (@user_id, @window_start_utc, 1, now())
+                on conflict (user_id) do update
+                set window_start_utc = excluded.window_start_utc,
+                    count = 1,
+                    updated_at = now();
+                """;
+            upsert.Parameters.AddWithValue("user_id", userId);
+            upsert.Parameters.AddWithValue("window_start_utc", now);
+            await upsert.ExecuteNonQueryAsync(cancellationToken);
+            await tx.CommitAsync(cancellationToken);
+            return null;
+        }
+
+        if (count >= limit)
+        {
+            await tx.RollbackAsync(cancellationToken);
+            return BuildAiQuotaExceededResponse(authUser, limit, count, windowStart.Value, now);
+        }
+
+        await using (var update = conn.CreateCommand())
+        {
+            update.Transaction = tx;
+            update.CommandText = "update ai_chat_quota_windows set count = count + 1, updated_at = now() where user_id = @user_id;";
+            update.Parameters.AddWithValue("user_id", userId);
+            await update.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await tx.CommitAsync(cancellationToken);
+        return null;
+    }
+
+    private IActionResult? TryConsumeAiChatQuotaFromMemory(string userId, Dictionary<string, object?>? authUser, int limit)
+    {
         var now = DateTime.UtcNow;
         var window = AiChatQuota.GetOrAdd(userId, _ => new AiChatQuotaWindow { WindowStartUtc = now, Count = 0 });
         lock (window)
@@ -281,32 +423,37 @@ public sealed class ChatController : ApiControllerBase
 
             if (window.Count >= limit)
             {
-                var role = NormalizeAccountRole(authUser?.GetValueOrDefault("role"));
-                var isFree = string.Equals(role, "Free", StringComparison.OrdinalIgnoreCase);
-                var resetSeconds = Math.Max(1, (int)Math.Ceiling((window.WindowStartUtc.AddMinutes(5) - now).TotalSeconds));
-                Response.Headers["Retry-After"] = resetSeconds.ToString(CultureInfo.InvariantCulture);
-                return StatusCode(429, new
-                {
-                    success = false,
-                    code = isFree ? "free_ai_quota_exceeded" : "ai_quota_exceeded",
-                    role,
-                    limit,
-                    used = window.Count,
-                    windowSeconds = 300,
-                    retryAfterSeconds = resetSeconds,
-                    detail = isFree
-                        ? "Tài khoản Free đã dùng hết 3 câu hỏi trong 5 phút. Vui lòng nâng cấp gói hoặc thử lại sau."
-                        : $"Tài khoản {role} đã dùng hết {limit} câu hỏi trong 5 phút. Vui lòng thử lại sau.",
-                    message = isFree
-                        ? "Tài khoản Free đã dùng hết 3 câu hỏi trong 5 phút."
-                        : $"Tài khoản {role} đã dùng hết {limit} câu hỏi trong 5 phút."
-                });
+                return BuildAiQuotaExceededResponse(authUser, limit, window.Count, window.WindowStartUtc, now);
             }
 
             window.Count++;
         }
 
         return null;
+    }
+
+    private IActionResult BuildAiQuotaExceededResponse(Dictionary<string, object?>? authUser, int limit, int used, DateTime windowStartUtc, DateTime nowUtc)
+    {
+        var role = GetAccountRole(authUser);
+        var isFree = string.Equals(role, "Free", StringComparison.OrdinalIgnoreCase);
+        var resetSeconds = Math.Max(1, (int)Math.Ceiling((windowStartUtc.ToUniversalTime().AddMinutes(5) - nowUtc).TotalSeconds));
+        Response.Headers["Retry-After"] = resetSeconds.ToString(CultureInfo.InvariantCulture);
+        return StatusCode(429, new
+        {
+            success = false,
+            code = isFree ? "free_ai_quota_exceeded" : "ai_quota_exceeded",
+            role,
+            limit,
+            used,
+            windowSeconds = 300,
+            retryAfterSeconds = resetSeconds,
+            detail = isFree
+                ? "Tài khoản Free đã dùng hết 3 câu hỏi trong 5 phút. Vui lòng nâng cấp gói hoặc thử lại sau."
+                : $"Tài khoản {role} đã dùng hết {limit} câu hỏi trong 5 phút. Vui lòng thử lại sau.",
+            message = isFree
+                ? "Tài khoản Free đã dùng hết 3 câu hỏi trong 5 phút."
+                : $"Tài khoản {role} đã dùng hết {limit} câu hỏi trong 5 phút."
+        });
     }
 
     [HttpPost("ai/schedule-plan")]
@@ -353,47 +500,28 @@ public sealed class ChatController : ApiControllerBase
         }
 
         messages.Add(new { role = "user", content = BuildSchedulePlannerPrompt(request) });
-        var payload = new Dictionary<string, object?>
-        {
-            ["model"] = model,
-            ["messages"] = messages,
-            ["temperature"] = 0.35,
-            ["max_tokens"] = 2600
-        };
-        if (ShouldSendOpenRouterReasoningOptions())
-        {
-            payload["reasoning"] = BuildOpenRouterMinimalReasoningOptions();
-        }
-
-        using var http = _httpClientFactory.CreateClient();
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BuildOpenRouterChatCompletionsUri());
-        httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        httpRequest.Headers.TryAddWithoutValidation("HTTP-Referer", siteUrl);
-        httpRequest.Headers.TryAddWithoutValidation("X-Title", appName);
-        httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
-        using var response = await http.SendAsync(httpRequest);
-        var responseText = await response.Content.ReadAsStringAsync();
-        if (!response.IsSuccessStatusCode)
-        {
-            var friendlyDetail = BuildOpenRouterErrorMessage((int)response.StatusCode, responseText);
-            return StatusCode((int)response.StatusCode, new { success = false, detail = friendlyDetail, raw = responseText });
-        }
-
-        JsonNode? json;
+        string answer;
         try
         {
-            json = JsonNode.Parse(responseText);
+            var scheduleAi = await SendOpenRouterChatAsync(
+                GetOpenRouterModelCandidates("travelwai", model),
+                messages,
+                0.35,
+                1800,
+                siteUrl,
+                appName,
+                apiKey,
+                HttpContext.RequestAborted);
+            answer = scheduleAi.Content;
         }
-        catch (JsonException)
+        catch (OpenRouterChatException ex)
         {
-            return StatusCode(502, new { success = false, detail = "AI trả về dữ liệu lập lịch trình không hợp lệ.", raw = responseText });
+            return StatusCode(ex.StatusCode, new { success = false, detail = ex.Message, raw = ex.Raw });
         }
 
-        var answer = json?["choices"]?[0]?["message"]?["content"]?.ToString();
         if (string.IsNullOrWhiteSpace(answer))
         {
-            return StatusCode(502, new { success = false, detail = "AI chưa trả về nội dung lập lịch trình hợp lệ.", raw = responseText });
+            return StatusCode(502, new { success = false, detail = "AI chưa trả về nội dung lập lịch trình hợp lệ." });
         }
 
         var aiResult = TryParseAiJsonObject(answer);
@@ -438,159 +566,62 @@ public sealed class ChatController : ApiControllerBase
         return DateOnly.FromDateTime(vietnamNow.DateTime);
     }
 
-    private sealed record TravelGuideRagChunk(string Title, string Source, int Reliability, string Content, string Keywords);
-
     private static string NormalizeAiAssistantMode(string? assistant)
     {
-        var value = NormalizeVietnameseForSearch(assistant ?? string.Empty);
-        return value is "guide" or "rag" or "guide rag" or "guide-rag" or "travel-guide" or "travel-guide-rag" or "travel guide" or "travel guide rag" or "huong dan vien" or "travelwinne" ? "guide-rag" : "travelwai";
+        var value = NormalizeVietnameseForSearch(assistant ?? string.Empty).Replace("_", "-").Trim();
+        if (value.Contains("guide") || value.Contains("rag") || value.Contains("huong-dan") || value.Contains("huong dan")) return "guide-rag";
+        return "travelwai";
+    }
+
+    private static string? TryBuildManagerQuickReply(string? message)
+    {
+        var normalized = NormalizeVietnameseForSearch(message ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(normalized)) return null;
+
+        if (Regex.IsMatch(normalized, @"dang\s*xuat|thoat\s*tai\s*khoan|log\s*out")) return "Đang đăng xuất tài khoản.";
+        if (Regex.IsMatch(normalized, @"doi\s*mat\s*khau|change\s*password|doi\s*password")) return "Đang mở Hồ sơ để đổi mật khẩu.";
+        if (Regex.IsMatch(normalized, @"(co\s*)?trang\s*nao|danh\s*sach\s*trang|menu|chuc\s*nang|huong\s*dan\s*(web|website)?"))
+        {
+            return "Các trang TravelwAI gồm Đăng nhập, Đăng ký, Bản đồ Việt Nam, Lịch trình, Kế hoạch, Bảng giá, Giỏ hàng, Thanh toán, Hồ sơ, Nhắn tin, Liên hệ, Thông báo, Bài viết, Tour du lịch, Sales, Business, Admin và Manage. Bạn có thể nhắn: mở trang lịch trình.";
+        }
+
+        var routes = new (string Pattern, string Reply)[]
+        {
+            (@"dang\s*nhap|login", "Đang mở trang Đăng nhập."),
+            (@"dang\s*ky|tao\s*tai\s*khoan|register|sign\s*up|signup", "Đang mở trang Đăng ký."),
+            (@"quen\s*mat\s*khau|khoi\s*phuc\s*mat\s*khau|lay\s*lai\s*mat\s*khau|forgot\s*password|reset\s*password", "Đang mở trang Quên mật khẩu."),
+            (@"bang\s*gia|pricing|gia\s*goi|goi\s*tai\s*khoan|mua\s*goi", "Đang mở Bảng giá."),
+            (@"gio\s*hang|cart", "Đang mở Giỏ hàng."),
+            (@"thanh\s*toan|checkout|xac\s*nhan\s*thanh\s*toan|qr\s*thanh\s*toan", "Đang mở Thanh toán."),
+            (@"manage|quan\s*ly\s*goi|quan\s*ly\s*don\s*goi|don\s*goi", "Đang mở Manage."),
+            (@"business|trang\s*business|doanh\s*nghiep|kinh\s*doanh|cong\s*ty", "Đang mở Business."),
+            (@"trang\s*lien\s*he|contact\s*page|lien\s*he\s*travelwai", "Đang mở Liên hệ."),
+            (@"sales|trang\s*sales|qua\s*sales|ban\s*tour|don\s*ban\s*tour", "Đang mở trang Sales."),
+            (@"admin|quan\s*tri|quan\s*ly\s*he\s*thong", "Đang mở trang Admin."),
+            (@"lap\s*lich\s*trinh|tao\s*lich\s*trinh|lich\s*trinh", "Đang mở trang Lịch trình."),
+            (@"lap\s*ke\s*hoach|tao\s*ke\s*hoach|ke\s*hoach", "Đang mở trang Kế hoạch."),
+            (@"ban\s*do|tinh\s*thanh|34\s*tinh|viet\s*nam", "Đang mở Bản đồ Việt Nam."),
+            (@"bai\s*viet|tin\s*du\s*lich|kham\s*pha\s*bai", "Đang mở trang Bài viết."),
+            (@"tour\s*du\s*lich|dat\s*tour|xem\s*tour|qua\s*tour|trang\s*tour|^tour$|\btour\b", "Đang mở trang Tour du lịch."),
+            (@"tin\s*nhan|nhan\s*tin|messaging|chat", "Đang mở trang Nhắn tin."),
+            (@"ho\s*so|thong\s*tin\s*ca\s*nhan|tai\s*khoan|doi\s*ten", "Đang mở trang Hồ sơ."),
+            (@"thong\s*bao|notification", "Đang mở trang Thông báo."),
+            (@"phan\s*hoi|gop\s*y|ho\s*tro", "Đang mở hội thoại với Admin."),
+            (@"trang\s*chu|home", "Đang mở trang chủ."),
+            (@"landing|gioi\s*thieu|trang\s*gioi\s*thieu", "Đang mở giới thiệu TravelwAI.")
+        };
+
+        foreach (var route in routes)
+        {
+            if (Regex.IsMatch(normalized, route.Pattern)) return route.Reply;
+        }
+
+        return null;
     }
 
     private static string BuildTravelGuideSystemPrompt()
     {
         return "Bạn là Hướng dẫn viên RAG AI của TravelwAI. Trả lời bằng tiếng Việt tự nhiên, đúng vai hướng dẫn viên du lịch. Dựa ưu tiên vào RAG_CONTEXT được cung cấp. Trả lời tối đa khoảng 150 chữ, không markdown, không bảng, không gạch đầu dòng, không emoji, không dùng các ký tự trang trí như |, >, #, *, ---. Khi dùng dữ liệu truy xuất, nêu nguồn ngắn gọn trong câu trả lời nếu có URL hoặc tên nguồn. Không bịa nguồn pháp lý, danh hiệu, quyết định, giá vé, giờ mở cửa. Nếu thiếu dữ liệu chắc chắn, nói chưa đủ nguồn để khẳng định. Với truyền thuyết/lời kể, ghi rõ là truyền thuyết hoặc lời kể dân gian. Nếu câu trả lời bị giới hạn độ dài, phải kết thúc ở một câu hoàn chỉnh.";
-    }
-
-    private static string BuildTravelGuideRagContext(string? message, string? uiContext)
-    {
-        var query = NormalizeVietnameseForSearch((message ?? string.Empty) + " " + (uiContext ?? string.Empty));
-        var ranked = GetTravelGuideRagChunks()
-            .Select(chunk => new { Chunk = chunk, Score = ScoreTravelGuideChunk(query, chunk) })
-            .OrderByDescending(item => item.Score)
-            .ThenByDescending(item => item.Chunk.Reliability)
-            .Take(8)
-            .Select(item => item.Chunk)
-            .ToList();
-
-        var builder = new StringBuilder();
-        builder.AppendLine("RAG_CONTEXT TravelwAI:");
-        builder.AppendLine("Thứ tự ưu tiên nguồn: văn bản pháp luật/quyết định chính thức; Cục Di sản, Bộ VHTTDL, UNESCO; UBND/Sở địa phương; bảo tàng/ban quản lý di tích; sách địa chí/nghiên cứu; báo chí chính thống; tư liệu thực địa; blog/mạng xã hội chỉ tham khảo.");
-
-        var cleanUi = BuildAiContextBlock(uiContext);
-        if (!string.IsNullOrWhiteSpace(cleanUi)) builder.AppendLine(cleanUi);
-
-        foreach (var chunk in ranked)
-        {
-            builder.AppendLine("---");
-            builder.AppendLine("Nguồn: " + chunk.Source);
-            builder.AppendLine("Độ tin cậy: " + chunk.Reliability);
-            builder.AppendLine(chunk.Title + ": " + chunk.Content);
-        }
-
-        var text = builder.ToString().Trim();
-        return text.Length > 10000 ? text[..10000] : text;
-    }
-
-    private static int ScoreTravelGuideChunk(string query, TravelGuideRagChunk chunk)
-    {
-        if (string.IsNullOrWhiteSpace(query)) return chunk.Reliability / 20;
-        var haystack = NormalizeVietnameseForSearch(chunk.Title + " " + chunk.Source + " " + chunk.Content + " " + chunk.Keywords);
-        var tokens = query.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Where(token => token.Length >= 3)
-            .Distinct(StringComparer.Ordinal)
-            .ToList();
-
-        var score = chunk.Reliability / 10;
-        foreach (var token in tokens)
-        {
-            if (haystack.Contains(token, StringComparison.Ordinal)) score += 8;
-        }
-
-        foreach (var phrase in new[] { "di tich", "lang nghe", "nghe nhan", "unesco", "le hoi", "lich trinh", "gia ve", "gio mo cua", "xep hang", "quyet dinh", "truyen thuyet", "tam linh", "kien truc" })
-        {
-            if (query.Contains(phrase, StringComparison.Ordinal) && haystack.Contains(phrase, StringComparison.Ordinal)) score += 22;
-        }
-
-        return score;
-    }
-
-    private static IReadOnlyList<TravelGuideRagChunk> GetTravelGuideRagChunks() => new[]
-    {
-        new TravelGuideRagChunk("Di tích và xếp hạng", "Cục Di sản Văn hoá, Bộ Văn hoá Thể thao và Du lịch, quyết định xếp hạng", 98, "Dùng để xác minh tên di tích, loại hình, niên đại trong hồ sơ, giá trị lịch sử văn hoá, xếp hạng di tích cấp tỉnh, quốc gia, quốc gia đặc biệt. Khi hỏi xếp hạng hoặc quyết định, chỉ khẳng định khi có nguồn chính thức.", "di tich xep hang quoc gia dac biet quyet dinh lich su kien truc gia tri van hoa tam linh"),
-        new TravelGuideRagChunk("Di sản UNESCO", "UNESCO World Heritage, UNESCO Intangible Cultural Heritage", 98, "Dùng để xác minh di sản thế giới, di sản văn hoá phi vật thể được ghi danh, năm ghi danh, phạm vi thực hành và giá trị nổi bật. Không tự nhận một địa danh là UNESCO nếu chưa có nguồn UNESCO.", "unesco di san the gioi phi vat the ghi danh van hoa"),
-        new TravelGuideRagChunk("Văn bản pháp luật", "Văn bản Chính phủ, Cơ sở dữ liệu quốc gia về pháp luật", 96, "Dùng cho Luật Di sản văn hoá, nghị định về làng nghề, danh hiệu Nghệ nhân nhân dân, Nghệ nhân ưu tú, tiêu chí công nhận nghề truyền thống và làng nghề truyền thống.", "luat di san van hoa nghi dinh lang nghe nghe nhan nhan dan uu tu tieu chi cong nhan"),
-        new TravelGuideRagChunk("Nguồn địa phương", "UBND tỉnh/thành, Sở VHTTDL, Sở Du lịch, Sở NN&PTNT, Sở Công Thương", 92, "Dùng để xác minh quyết định công nhận làng nghề, di tích cấp tỉnh, lễ hội địa phương, điểm tham quan, thông báo quản lý và dữ liệu du lịch theo địa phương.", "ubnd so du lich so van hoa so cong thuong so nong nghiep lang nghe le hoi dia phuong"),
-        new TravelGuideRagChunk("Bảo tàng và ban quản lý", "Bảo tàng quốc gia, bảo tàng địa phương, ban quản lý di tích", 88, "Dùng cho thuyết minh chính thức, hiện vật, câu chuyện trưng bày, sơ đồ tham quan, quy định tại điểm, bối cảnh lịch sử và giá trị kiến trúc.", "bao tang ban quan ly di tich hien vat thuyet minh kien truc tham quan"),
-        new TravelGuideRagChunk("Sách và nghiên cứu", "Địa chí, sách lịch sử địa phương, luận văn, bài nghiên cứu, viện nghiên cứu", 82, "Dùng để mở rộng bối cảnh học thuật, so sánh các giai đoạn lịch sử, phân tích kiến trúc, nguồn gốc làng nghề, biến đổi nghề và giá trị văn hoá cộng đồng.", "dia chi nghien cuu hoc thuat lich su dia phuong kien truc lang nghe so sanh"),
-        new TravelGuideRagChunk("Tư liệu thực địa", "Phỏng vấn nghệ nhân, người cao tuổi, ghi âm, video, ảnh hiện trường, bảng thuyết minh", 76, "Dùng cho storytelling, triết lý làm nghề, ký ức cộng đồng, quy trình sản xuất, nguyên liệu, công cụ, giai thoại. Phải phân biệt lời kể với sự kiện đã kiểm chứng.", "phong van nghe nhan cau chuyen ke chuyen quy trinh san xuat nguyen lieu cong cu truyen thuyet"),
-        new TravelGuideRagChunk("Báo chí chính thống", "TTXVN, Nhân Dân, VOV, VTV, báo địa phương và tạp chí văn hoá du lịch", 70, "Dùng để cập nhật sự kiện, lễ hội, hoạt động bảo tồn, phỏng vấn, điểm mới trong du lịch. Không dùng làm căn cứ pháp lý cao nhất nếu có quyết định hoặc hồ sơ chính thức.", "bao chi su kien moi le hoi bao ton phong van du lich"),
-        new TravelGuideRagChunk("Thông tin tham quan", "Cổng du lịch quốc gia, cổng du lịch địa phương, website hoặc Facebook chính thức của bảo tàng/ban quản lý", 68, "Dùng cho giờ mở cửa, giá vé, sự kiện theo mùa, tuyến tham quan, lưu ý khi đi. Đây là dữ liệu dễ thay đổi nên cần nói rõ nếu chưa có cập nhật mới.", "gio mo cua gia ve su kien lich trinh tuyen tham quan gan do"),
-        new TravelGuideRagChunk("Nguồn phụ", "Wikipedia, Wikivoyage, blog, mạng xã hội, đánh giá người dùng", 38, "Chỉ dùng để định hướng ban đầu, tham khảo trải nghiệm và phát hiện chủ đề. Không dùng để khẳng định niên đại, danh hiệu, xếp hạng, quyết định công nhận hoặc sự kiện pháp lý.", "wikipedia wikivoyage blog mang xa hoi tham khao trai nghiem")
-    };
-
-    private static string? TryBuildManagerQuickReply(string message)
-    {
-        var normalized = NormalizeVietnameseForSearch(message);
-        if (string.IsNullOrWhiteSpace(normalized)) return null;
-
-        static bool Match(string value, string pattern) => Regex.IsMatch(value, pattern, RegexOptions.IgnoreCase);
-        static string SyntaxReply() => "Dùng cú pháp: tới trang [tên trang], qua trang [tên trang] hoặc chi tiết trang [tên trang]. Ví dụ: tới trang Tour du lịch.";
-
-        var pages = new (string Name, string Url, string[] Aliases, string Detail)[]
-        {
-            ("Đăng nhập", "/login", new[] { "dang nhap", "login" }, "Đăng nhập vào tài khoản TravelwAI."),
-            ("Đăng ký", "/signup", new[] { "dang ky", "tao tai khoan", "register", "signup", "sign up" }, "Tạo tài khoản mới và nhập mã mời nếu có."),
-            ("Quên mật khẩu", "/forgot-password", new[] { "quen mat khau", "lay lai mat khau", "khoi phuc mat khau", "forgot password" }, "Khôi phục mật khẩu bằng email."),
-            ("Trang chủ", "/home", new[] { "trang chu", "home" }, "Trang chính sau khi đăng nhập."),
-            ("Giới thiệu", "/landing", new[] { "gioi thieu", "landing", "trang gioi thieu" }, "Xem tổng quan TravelwAI."),
-            ("Bản đồ Việt Nam", "/provinces", new[] { "ban do viet nam", "ban do", "tinh thanh", "34 tinh", "viet nam", "provinces" }, "Xem bản đồ 34 tỉnh thành và thông tin nổi bật."),
-            ("Chi tiết tỉnh", "/detail", new[] { "chi tiet tinh", "chi tiet dia phuong", "detail" }, "Xem mô tả, khu vực, điểm đến và gợi ý tham quan."),
-            ("Lịch trình", "/schedule", new[] { "lich trinh", "lap lich trinh", "tao lich trinh", "schedule" }, "Tạo và quản lý lịch trình du lịch."),
-            ("Kế hoạch", "/plans", new[] { "ke hoach", "lap ke hoach", "tao ke hoach", "plans" }, "Tạo nhóm kế hoạch và mời người đi chung."),
-            ("Nhắn tin", "/messaging", new[] { "nhan tin", "tin nhan", "chat", "messaging" }, "Nhắn tin với bạn bè, nhóm kế hoạch và Admin."),
-            ("Phản hồi", "/contact", new[] { "phan hoi", "lien he", "gop y", "ho tro", "contact" }, "Gửi góp ý, yêu cầu hỗ trợ hoặc nhắn với Admin."),
-            ("Thông báo", "/notifications", new[] { "thong bao", "notification", "notifications" }, "Xem lời mời, tin nhắn, kế hoạch và cập nhật hệ thống."),
-            ("Bài viết", "/posts", new[] { "bai viet", "tin du lich", "kham pha bai", "posts" }, "Xem và quản lý bài viết du lịch."),
-            ("Tour du lịch", "/tours", new[] { "tour du lich", "tour", "dat tour", "xem tour", "tours" }, "Xem tour, đặt tour và theo dõi ưu đãi."),
-            ("Sales", "/tour-sales", new[] { "sales", "trang sales", "ban tour", "don ban tour", "tour sales", "tour-sales" }, "Quản lý tour, đơn bán tour, hoa hồng và doanh thu."),
-            ("Business", "/business", new[] { "business", "trang business" }, "Quản lý tour, đơn bán tour, doanh thu và phí dịch vụ."),
-            ("Admin", "/admin", new[] { "admin", "quan tri", "quan ly he thong", "trang admin" }, "Quản lý tài khoản, quyền, tour, bài viết và dữ liệu hệ thống."),
-            ("Hồ sơ", "/profile", new[] { "ho so", "tai khoan", "thong tin ca nhan", "doi ten", "profile" }, "Xem hồ sơ, đổi ảnh, đổi tên và đổi mật khẩu.")
-        };
-
-        string NormalizeLocal(string value) => NormalizeVietnameseForSearch(value);
-        (string Name, string Url, string[] Aliases, string Detail)? FindPage(string value)
-        {
-            var key = NormalizeLocal(value);
-            if (string.IsNullOrWhiteSpace(key)) return null;
-            foreach (var page in pages)
-            {
-                if (NormalizeLocal(page.Name) == key || page.Aliases.Any(alias => NormalizeLocal(alias) == key)) return page;
-            }
-            foreach (var page in pages)
-            {
-                var pageName = NormalizeLocal(page.Name);
-                if (key.Contains(pageName) || pageName.Contains(key)) return page;
-                if (page.Aliases.Any(alias => key.Contains(NormalizeLocal(alias)) || NormalizeLocal(alias).Contains(key))) return page;
-            }
-            return null;
-        }
-
-        string PageListText() => string.Join(", ", pages.Select(page => page.Name));
-        string DetailReply((string Name, string Url, string[] Aliases, string Detail) page) => page.Detail + " Muốn mở trang này, nhắn: tới trang " + page.Name + ".";
-
-        if (Match(normalized, @"\b(dang\s*xuat|thoat\s*tai\s*khoan|log\s*out)\b")) return "Đang đăng xuất tài khoản.";
-        if (Match(normalized, @"\b(doi\s*mat\s*khau|doi\s*password|change\s*password)\b")) return "Đang mở Hồ sơ để đổi mật khẩu.";
-        if (Match(normalized, @"(co\s*)?trang\s*nao|danh\s*sach\s*trang|menu|cac\s*trang|nhung\s*trang|xem\s*trang")) return "Các trang TravelwAI: " + PageListText() + ". " + SyntaxReply();
-
-        var navigateMatch = Regex.Match(normalized, @"^(?:toi|toi\s*toi|qua|di\s*toi|chuyen\s*toi)\s+trang\s+(.+)$", RegexOptions.IgnoreCase);
-        if (navigateMatch.Success)
-        {
-            var page = FindPage(navigateMatch.Groups[1].Value);
-            return page.HasValue ? "Đang mở trang " + page.Value.Name + "." : "Chưa tìm thấy trang đó. " + SyntaxReply();
-        }
-
-        var detailMatch = Regex.Match(normalized, @"^chi\s*tiet\s+trang\s+(.+)$", RegexOptions.IgnoreCase);
-        if (detailMatch.Success)
-        {
-            var page = FindPage(detailMatch.Groups[1].Value);
-            return page.HasValue ? DetailReply(page.Value) : "Chưa tìm thấy trang đó. " + SyntaxReply();
-        }
-
-        var directPage = FindPage(normalized);
-        if (directPage.HasValue && (NormalizeLocal(directPage.Value.Name) == normalized || directPage.Value.Aliases.Any(alias => NormalizeLocal(alias) == normalized))) return DetailReply(directPage.Value);
-        if (normalized.Contains("trang") || pages.Any(page => normalized.Contains(NormalizeLocal(page.Name)) || page.Aliases.Any(alias => normalized.Contains(NormalizeLocal(alias))))) return SyntaxReply();
-        return null;
     }
 
     private static string NormalizeVietnameseForSearch(string text)
@@ -690,6 +721,103 @@ public sealed class ChatController : ApiControllerBase
         var value = _configuration[$"OpenRouter:{key}"];
         if (string.IsNullOrWhiteSpace(value)) value = _configuration[envName];
         return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+    }
+
+
+    private int GetOpenRouterConfigInt(string key, string envName, int fallback)
+    {
+        var value = GetOpenRouterConfigValue(key, envName, fallback.ToString(CultureInfo.InvariantCulture));
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : fallback;
+    }
+
+    private static bool ShouldCooldownOpenRouterModel(int statusCode, string responseText)
+    {
+        if (statusCode is 408 or 409 or 425 or 429 or 500 or 502 or 503 or 504) return true;
+        var text = responseText ?? string.Empty;
+        return text.Contains("overloaded", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("capacity", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("rate limit", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("provider returned error", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("temporarily unavailable", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("no endpoints found", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private int GetOpenRouterModelCooldownSeconds(int statusCode, string responseText)
+    {
+        if (statusCode == 429) return Math.Clamp(GetOpenRouterConfigInt("RateLimitCooldownSeconds", "OPENROUTER_RATE_LIMIT_COOLDOWN_SECONDS", 240), 30, 900);
+        if (statusCode == 404 || (responseText ?? string.Empty).Contains("no endpoints found", StringComparison.OrdinalIgnoreCase)) return 1800;
+        if (statusCode is 500 or 502 or 503 or 504) return Math.Clamp(GetOpenRouterConfigInt("OverloadCooldownSeconds", "OPENROUTER_OVERLOAD_COOLDOWN_SECONDS", 180), 30, 900);
+        return 120;
+    }
+
+    private static int? GetRetryAfterSeconds(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter?.Delta is not null) return Math.Max(1, (int)Math.Ceiling(retryAfter.Delta.Value.TotalSeconds));
+        if (retryAfter?.Date is not null)
+        {
+            var seconds = (retryAfter.Date.Value - DateTimeOffset.UtcNow).TotalSeconds;
+            return Math.Max(1, (int)Math.Ceiling(seconds));
+        }
+        return null;
+    }
+
+    private static void MarkOpenRouterModelCooldown(string model, int seconds)
+    {
+        if (string.IsNullOrWhiteSpace(model)) return;
+        var until = DateTime.UtcNow.AddSeconds(Math.Clamp(seconds, 15, 1800));
+        OpenRouterModelCooldownUntil.AddOrUpdate(model.Trim(), until, (_, oldUntil) => oldUntil > until ? oldUntil : until);
+    }
+
+    private static bool TryGetOpenRouterModelCooldown(string model, out int waitSeconds)
+    {
+        waitSeconds = 0;
+        if (string.IsNullOrWhiteSpace(model)) return false;
+        if (!OpenRouterModelCooldownUntil.TryGetValue(model.Trim(), out var until)) return false;
+        var now = DateTime.UtcNow;
+        if (until <= now)
+        {
+            OpenRouterModelCooldownUntil.TryRemove(model.Trim(), out _);
+            return false;
+        }
+        waitSeconds = Math.Max(1, (int)Math.Ceiling((until - now).TotalSeconds));
+        return true;
+    }
+
+    private static string BuildAiResponseCacheKey(string assistantMode, string message, string? context, List<AiHistoryMessage>? history)
+    {
+        var historyText = string.Empty;
+        if (history is not null)
+        {
+            historyText = string.Join("\n", history.TakeLast(4).Where(item => !string.IsNullOrWhiteSpace(item.Content)).Select(item => (item.Role ?? "user") + ":" + item.Content!.Trim()));
+        }
+        var raw = assistantMode + "\n" + NormalizeVietnameseForSearch(message) + "\n" + (context ?? string.Empty).Trim() + "\n" + historyText;
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw))).ToLowerInvariant();
+        return "ai-chat:" + hash;
+    }
+
+    private bool TryGetCachedAiReply(string cacheKey, out string reply)
+    {
+        if (_memoryCache.TryGetValue(cacheKey, out string? cached) && !string.IsNullOrWhiteSpace(cached))
+        {
+            reply = cached;
+            return true;
+        }
+        reply = string.Empty;
+        return false;
+    }
+
+    private void CacheAiReply(string cacheKey, string reply, string assistantMode)
+    {
+        if (string.IsNullOrWhiteSpace(cacheKey) || string.IsNullOrWhiteSpace(reply)) return;
+        var minutes = assistantMode == "guide-rag"
+            ? Math.Clamp(GetOpenRouterConfigInt("RagCacheMinutes", "OPENROUTER_RAG_CACHE_MINUTES", 20), 1, 120)
+            : Math.Clamp(GetOpenRouterConfigInt("ChatCacheMinutes", "OPENROUTER_CHAT_CACHE_MINUTES", 10), 1, 120);
+        _memoryCache.Set(cacheKey, reply.Trim(), new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(minutes),
+            Size = 1
+        });
     }
 
     private bool ShouldSendOpenRouterReasoningOptions()

@@ -89,11 +89,27 @@ public sealed class TravelGuideRagAdminController : ApiControllerBase
         return Ok(new { success = true, data });
     }
 
+    [HttpPost("embeddings/rebuild")]
+    public async Task<IActionResult> RebuildEmbeddings([FromQuery] bool force = false, [FromQuery] int limit = 500, CancellationToken cancellationToken = default)
+    {
+        var access = await RequireAdminAsync();
+        if (!access.ok) return access.error!;
+        try
+        {
+            var data = await _ragService.RebuildEmbeddingsAsync(force, limit, cancellationToken);
+            return Ok(new { success = true, data, message = "Đã cập nhật embedding cho RAG." });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
     private async Task<(bool ok, string? userId, IActionResult? error)> RequireAdminAsync()
     {
         var current = await CurrentUserAsync();
         if (!current.ok) return (false, null, current.error);
-        if (!string.Equals(NormalizeAccountRole(current.authUser?.GetValueOrDefault("role")), "Admin", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(GetAccountRole(current.authUser), "Admin", StringComparison.OrdinalIgnoreCase))
         {
             return (false, null, StatusCode(403, new { success = false, message = "Chỉ Admin mới được truy cập." }));
         }

@@ -18,7 +18,7 @@ let aiMessageSending = false;
 let outgoingFriendRequestKeys = new Set();
 let pendingAiContextByAssistant = {};
 const API_BASE_URL = "/api";
-const CLIENT_CACHE_VERSION = "2026-07-01-clean-v1";
+const CLIENT_CACHE_VERSION = "2026-07-02-final-optimize-v1";
 const USERS_CACHE_TTL_MS = 5 * 60 * 1000;
 const FRIEND_CACHE_TTL_MS = 30 * 1000;
 const CONVERSATION_CACHE_TTL_MS = 15 * 1000;
@@ -32,6 +32,24 @@ const AI_PENDING_PROMPT_KEY = "travelwai-ai-pending-prompt";
 const AI_AVATAR_VERSION_KEY = "travelwaiAiAvatarVersion";
 const SUPPORT_ADMIN_EMAIL = "2324802010387@student.tdmu.edu.vn";
 const ADMIN_PENDING_MESSAGE_KEY = "travelwai-admin-pending-message";
+
+
+function createAiRequestError(response, result, fallbackMessage) {
+  const message = String(result?.detail || result?.message || fallbackMessage || "Không thể gọi AI.");
+  const error = new Error(message);
+  error.status = response?.status || 0;
+  error.code = String(result?.code || "");
+  error.role = String(result?.role || "");
+  error.retryAfterSeconds = Number(result?.retryAfterSeconds || 0);
+  return error;
+}
+
+function shouldOpenAiPricingPopup(error) {
+  const code = String(error?.code || "").toLowerCase();
+  const message = String(error?.message || "");
+  if (code === "free_ai_quota_exceeded" || code === "upgrade_required") return true;
+  return /tài khoản\s+free\s+đã\s+dùng\s+hết|tai khoan\s+free\s+da\s+dung\s+het/i.test(message);
+}
 
 function getAiAvatarVersion() {
   try {
@@ -1449,6 +1467,11 @@ async function saveConversationDisplayName(displayName) {
     showConversationInterface();
     renderConversations(activeConversationSearchQuery);
     updateConversationSelection();
+
+    if (aiKey === "travelwai") {
+      const managerTarget = confirmedManagerTargetBeforeSend || getManagerNavigationTarget(typedContent) || getNavigationTargetFromText(replyText);
+      if (managerTarget) runTravelwaiManagerAction(managerTarget);
+    }
   } catch (error) {
     console.error("Lỗi đổi tên cuộc trò chuyện:", error);
     showError(error.message || "Không thể lưu tên cuộc trò chuyện. Vui lòng thử lại.");
@@ -1929,10 +1952,6 @@ function appendLocalAiAssistantReply(text, configValue = currentConversation || 
 }
 
 
-function getTravelwaiManagerFallbackReply() {
-  return "Chưa nhận diện được lệnh. Bạn có thể nhắn: đăng nhập, đăng ký, bản đồ, lịch trình, kế hoạch, bảng giá, giỏ hàng, thanh toán, tour du lịch, bài viết, nhắn tin, đổi mật khẩu hoặc đăng xuất.";
-}
-
 function getLastTravelwaiManagerReplyText() {
   const messages = loadStoredAiMessages("travelwai");
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -2028,6 +2047,35 @@ function getManagerNavigationTarget(text) {
   }
 
   return getNavigationTargetFromText(text);
+}
+
+function runTravelwaiManagerAction(target) {
+  if (!target || target.type === "info") return false;
+
+  if (target.type === "logout") {
+    setTimeout(() => {
+      if (typeof logout === "function") logout();
+      else {
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = "/";
+      }
+    }, 550);
+    return true;
+  }
+
+  if (target.password) {
+    sessionStorage.setItem("travelwaiOpenProfilePassword", "1");
+  }
+
+  if (target.url) {
+    setTimeout(() => {
+      window.location.href = target.url;
+    }, 650);
+    return true;
+  }
+
+  return false;
 }
 
 function extractDirectChatTarget(text) {
@@ -2200,60 +2248,11 @@ async function handleManagerFriendRequestCommand(text) {
   }
 }
 
-async function tryHandleTravelwaiManagerCommand(text) {
+async function tryHandleTravelwaiManagerLocalAction(text) {
   if (getAiConfig(currentConversation).key !== "travelwai") return false;
-
-  if (isManagerConfirmText(text)) {
-    const confirmedTarget = getConfirmedNavigationTargetFromLastManagerReply();
-    if (confirmedTarget) {
-      appendLocalAiAssistantReply(confirmedTarget.reply, "travelwai");
-      if (confirmedTarget.password) {
-        sessionStorage.setItem("travelwaiOpenProfilePassword", "1");
-      }
-      if (confirmedTarget.url) {
-        setTimeout(() => { window.location.href = confirmedTarget.url; }, 650);
-      }
-      return true;
-    }
-    appendLocalAiAssistantReply("Dùng cú pháp: tới trang [tên trang], qua trang [tên trang] hoặc chi tiết trang [tên trang].", "travelwai");
-    return true;
-  }
-
-  if (await handleManagerFriendRequestCommand(text)) {
-    return true;
-  }
-
-  if (await handleManagerDirectChatCommand(text)) {
-    return true;
-  }
-
-  const target = getManagerNavigationTarget(text);
-  if (!target) return false;
-
-  appendLocalAiAssistantReply(target.reply, "travelwai");
-
-  if (target.type === "logout") {
-    setTimeout(() => {
-      if (typeof logout === "function") logout();
-      else {
-        localStorage.clear();
-        sessionStorage.clear();
-        window.location.href = "/";
-      }
-    }, 550);
-    return true;
-  }
-
-  if (target.password) {
-    sessionStorage.setItem("travelwaiOpenProfilePassword", "1");
-  }
-
-  if (target.url) {
-    setTimeout(() => {
-      window.location.href = target.url;
-    }, 650);
-  }
-  return true;
+  if (await handleManagerFriendRequestCommand(text)) return true;
+  if (await handleManagerDirectChatCommand(text)) return true;
+  return false;
 }
 
 async function sendAiMessage(options = {}) {
@@ -2304,12 +2303,11 @@ async function sendAiMessage(options = {}) {
   updateConversationSelection();
   messageInput.value = "";
 
-  if (await tryHandleTravelwaiManagerCommand(typedContent)) {
-    return;
-  }
+  const confirmedManagerTargetBeforeSend = aiKey === "travelwai" && isManagerConfirmText(typedContent)
+    ? getConfirmedNavigationTargetFromLastManagerReply()
+    : null;
 
-  if (aiKey === "travelwai") {
-    appendLocalAiAssistantReply(getTravelwaiManagerFallbackReply(), "travelwai");
+  if (await tryHandleTravelwaiManagerLocalAction(typedContent)) {
     return;
   }
 
@@ -2332,7 +2330,7 @@ async function sendAiMessage(options = {}) {
 
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result.success === false) {
-      throw new Error(result.detail || result.message || "Không thể gọi AI.");
+      throw createAiRequestError(response, result, "Không thể gọi AI.");
     }
 
     const replyText = String(result.data?.reply || "").trim();
@@ -2361,21 +2359,22 @@ async function sendAiMessage(options = {}) {
 
     renderConversations(activeConversationSearchQuery);
     updateConversationSelection();
+
+    if (aiKey === "travelwai") {
+      const managerTarget = confirmedManagerTargetBeforeSend || getManagerNavigationTarget(typedContent) || getNavigationTargetFromText(replyText);
+      if (managerTarget) runTravelwaiManagerAction(managerTarget);
+    }
   } catch (error) {
     console.error("Lỗi hỏi AI:", error);
     const errorMessage = String(error.message || "Không thể gọi AI. Vui lòng thử lại.");
     const friendlyMessage = /429|quá tải|qua tai|giới hạn|gioi han|rate|limit/i.test(errorMessage)
       ? "OpenRouter đang giới hạn lượt gọi hoặc model free quá tải. Kiểm tra OPENROUTER_API_KEY, OPENROUTER_RAG_MODEL hoặc fallback model."
       : errorMessage;
-    if (/free|nâng cấp|nang cap|upgrade_required|free_ai_quota_exceeded/i.test(errorMessage) && window.TravelwAIPricingPopup?.showFreeAiPopup) {
+    if (shouldOpenAiPricingPopup(error) && window.TravelwAIPricingPopup?.showFreeAiPopup) {
       window.TravelwAIPricingPopup.showFreeAiPopup(errorMessage);
       return;
     }
-    if (aiKey === "travelwai") {
-      appendLocalAiAssistantReply(getTravelwaiManagerFallbackReply(), "travelwai");
-      renderConversations(activeConversationSearchQuery);
-      updateConversationSelection();
-    } else if (options.background) {
+    if (options.background) {
       showMessagingToast(friendlyMessage, "error");
     } else {
       showError(friendlyMessage);

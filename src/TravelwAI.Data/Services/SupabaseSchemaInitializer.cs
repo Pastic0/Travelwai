@@ -97,6 +97,9 @@ public sealed class SupabaseSchemaInitializer
                 search_text text not null,
                 url text,
                 chunk_index integer not null default 0,
+                embedding jsonb,
+                embedding_model text,
+                embedding_updated_at timestamptz,
                 status text not null default 'active',
                 created_at timestamptz not null default now(),
                 updated_at timestamptz not null default now()
@@ -111,8 +114,30 @@ public sealed class SupabaseSchemaInitializer
             create index if not exists ix_travel_guide_chunks_status
                 on travel_guide_chunks(status);
 
+            alter table travel_guide_chunks
+                add column if not exists embedding jsonb;
+
+            alter table travel_guide_chunks
+                add column if not exists embedding_model text;
+
+            alter table travel_guide_chunks
+                add column if not exists embedding_updated_at timestamptz;
+
+            create index if not exists ix_travel_guide_chunks_embedding_model
+                on travel_guide_chunks(embedding_model);
+
             create index if not exists ix_travel_guide_chunks_updated
                 on travel_guide_chunks(updated_at desc);
+
+            create index if not exists ix_travel_guide_chunks_status_reliability
+                on travel_guide_chunks(status, updated_at desc);
+
+            create index if not exists ix_travel_guide_chunks_search_vector
+                on travel_guide_chunks using gin(to_tsvector('simple', search_text));
+
+            create index if not exists ix_travel_guide_documents_status_updated
+                on travel_guide_documents(status, updated_at desc);
+
 
             insert into travel_guide_sources(id, parent_source_id, name, source_type, url, publisher, reliability, access_level, license, status)
             values
@@ -234,6 +259,20 @@ public sealed class SupabaseSchemaInitializer
                 license = excluded.license,
                 status = excluded.status,
                 updated_at = now();
+
+
+            create table if not exists ai_chat_quota_windows (
+                user_id text primary key,
+                window_start_utc timestamptz not null,
+                count integer not null default 0,
+                updated_at timestamptz not null default now()
+            );
+
+            create index if not exists ix_ai_chat_quota_windows_updated
+                on ai_chat_quota_windows(updated_at desc);
+
+            delete from ai_chat_quota_windows
+            where updated_at < now() - interval '1 day';
 
             create table if not exists app_users_auth (
                 id text primary key,

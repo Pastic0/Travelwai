@@ -2,21 +2,29 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Npgsql;
+using Microsoft.Extensions.Configuration;
 
 namespace TravelwAI.Web.Services;
 
 public sealed class TravelGuideRagService
 {
     private const int MaxDocumentChars = 180_000;
+    private const int MaxCrawlBytes = 2_500_000;
+    private const string LocalEmbeddingModel = "travelwai-local-hash-v1";
     private readonly NpgsqlDataSource _dataSource;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly int _embeddingDimensions;
+    private readonly int _vectorCandidateLimit;
 
-    public TravelGuideRagService(NpgsqlDataSource dataSource, IHttpClientFactory httpClientFactory)
+    public TravelGuideRagService(NpgsqlDataSource dataSource, IHttpClientFactory httpClientFactory, IConfiguration configuration)
     {
         _dataSource = dataSource;
         _httpClientFactory = httpClientFactory;
+        _embeddingDimensions = Math.Clamp(ReadInt(configuration, "Rag:EmbeddingDimensions", "RAG_EMBEDDING_DIMENSIONS", 384), 128, 768);
+        _vectorCandidateLimit = Math.Clamp(ReadInt(configuration, "Rag:VectorCandidateLimit", "RAG_VECTOR_CANDIDATE_LIMIT", 900), 120, 2500);
     }
 
     public async Task<string> BuildRagContextAsync(string? message, string? uiContext, CancellationToken cancellationToken = default)
@@ -79,41 +87,67 @@ public sealed class TravelGuideRagService
             .Take(12)
             .ToList();
 
+        var queryEmbedding = CreateLocalEmbedding(normalizedQuery, _embeddingDimensions);
         var rows = new List<TravelGuideRagSearchResult>();
         await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var cmd = conn.CreateCommand();
 
+        var candidateLimit = Math.Clamp(Math.Max(limit * 80, _vectorCandidateLimit), 120, 2500);
         if (tokens.Count == 0)
         {
             cmd.CommandText = """
                 select c.id, c.title, c.content, c.keywords, c.search_text, c.updated_at,
-                       s.name, s.source_type, s.reliability, coalesce(c.url, d.url, s.url, '') as url
+                       s.name, s.source_type, s.reliability, coalesce(c.url, d.url, s.url, '') as url,
+                       c.embedding::text as embedding, c.embedding_model
                 from travel_guide_chunks c
                 join travel_guide_sources s on s.id = c.source_id
                 left join travel_guide_documents d on d.id = c.document_id
                 where c.status = 'active' and s.status = 'active'
-                order by c.updated_at desc
-                limit @take;
+                order by s.reliability desc, c.updated_at desc
+                limit @candidate_limit;
                 """;
         }
         else
         {
             var clauses = tokens.Select((_, index) => $"c.search_text like @t{index}").ToList();
+            clauses.Add("to_tsvector('simple', c.search_text) @@ websearch_to_tsquery('simple', @fts_query)");
             cmd.CommandText = $"""
-                select c.id, c.title, c.content, c.keywords, c.search_text, c.updated_at,
-                       s.name, s.source_type, s.reliability, coalesce(c.url, d.url, s.url, '') as url
-                from travel_guide_chunks c
-                join travel_guide_sources s on s.id = c.source_id
-                left join travel_guide_documents d on d.id = c.document_id
-                where c.status = 'active' and s.status = 'active'
-                  and ({string.Join(" or ", clauses)})
-                order by c.updated_at desc
-                limit @take;
+                with keyword_hits as (
+                    select c.id, c.title, c.content, c.keywords, c.search_text, c.updated_at,
+                           s.name, s.source_type, s.reliability, coalesce(c.url, d.url, s.url, '') as url,
+                           c.embedding::text as embedding, c.embedding_model
+                    from travel_guide_chunks c
+                    join travel_guide_sources s on s.id = c.source_id
+                    left join travel_guide_documents d on d.id = c.document_id
+                    where c.status = 'active' and s.status = 'active'
+                      and ({string.Join(" or ", clauses)})
+                    order by s.reliability desc, c.updated_at desc
+                    limit @keyword_limit
+                ), broad_candidates as (
+                    select c.id, c.title, c.content, c.keywords, c.search_text, c.updated_at,
+                           s.name, s.source_type, s.reliability, coalesce(c.url, d.url, s.url, '') as url,
+                           c.embedding::text as embedding, c.embedding_model
+                    from travel_guide_chunks c
+                    join travel_guide_sources s on s.id = c.source_id
+                    left join travel_guide_documents d on d.id = c.document_id
+                    where c.status = 'active' and s.status = 'active'
+                    order by s.reliability desc, c.updated_at desc
+                    limit @candidate_limit
+                )
+                select distinct on (id) id, title, content, keywords, search_text, updated_at,
+                       name, source_type, reliability, url, embedding, embedding_model
+                from (
+                    select * from keyword_hits
+                    union all
+                    select * from broad_candidates
+                ) q;
                 """;
             for (var i = 0; i < tokens.Count; i++) cmd.Parameters.AddWithValue($"t{i}", "%" + tokens[i] + "%");
+            cmd.Parameters.AddWithValue("fts_query", string.Join(' ', tokens));
+            cmd.Parameters.AddWithValue("keyword_limit", Math.Clamp(limit * 30, 80, 600));
         }
 
-        cmd.Parameters.AddWithValue("take", Math.Clamp(limit * 8, 24, 160));
+        cmd.Parameters.AddWithValue("candidate_limit", candidateLimit);
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -128,13 +162,20 @@ public sealed class TravelGuideRagService
                 SourceName = reader.GetString(6),
                 SourceType = reader.GetString(7),
                 Reliability = reader.GetInt32(8),
-                Url = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
+                Url = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
+                EmbeddingModel = reader.IsDBNull(11) ? string.Empty : reader.GetString(11)
             };
-            item.Score = ScoreDbChunk(normalizedQuery, tokens, item);
+            item.Embedding = reader.IsDBNull(10) ? null : ParseEmbedding(reader.GetString(10));
+            item.VectorScore = item.Embedding is { Length: > 0 }
+                ? CosineSimilarity(queryEmbedding, item.Embedding)
+                : CosineSimilarity(queryEmbedding, CreateLocalEmbedding(item.SearchText, _embeddingDimensions));
+            item.KeywordScore = ScoreDbChunk(normalizedQuery, tokens, item);
+            item.Score = item.KeywordScore + (item.VectorScore * 120.0) + FreshnessBoost(item.UpdatedAt);
             rows.Add(item);
         }
 
         return rows
+            .Where(item => tokens.Count == 0 || item.KeywordScore > item.Reliability || item.VectorScore >= 0.12)
             .OrderByDescending(item => item.Score)
             .ThenByDescending(item => item.Reliability)
             .ThenByDescending(item => item.UpdatedAt)
@@ -200,7 +241,7 @@ public sealed class TravelGuideRagService
                 DocumentType = reader.GetString(5),
                 Status = reader.GetString(6),
                 UpdatedAt = reader.GetDateTime(7),
-                ChunkCount = reader.GetInt32(8)
+                ChunkCount = Convert.ToInt32(reader.GetInt64(8))
             });
         }
         return rows;
@@ -213,7 +254,7 @@ public sealed class TravelGuideRagService
         if (string.IsNullOrWhiteSpace(name)) throw new InvalidOperationException("Thiếu tên nguồn.");
         var id = Slug(input.Id ?? name);
         var reliability = Math.Clamp(input.Reliability <= 0 ? DefaultReliability(input.SourceType) : input.Reliability, 1, 100);
-        var parentSourceId = Slug(input.ParentSourceId);
+        var parentSourceId = string.IsNullOrWhiteSpace(input.ParentSourceId) ? string.Empty : Slug(input.ParentSourceId);
         var sourceType = CleanSingleLine(input.SourceType, "custom");
         var url = CleanSingleLine(input.Url);
         var publisher = CleanSingleLine(input.Publisher);
@@ -256,7 +297,7 @@ public sealed class TravelGuideRagService
     public async Task<TravelGuideIngestResult> IngestDocumentAsync(TravelGuideDocumentInput input, string? userId, CancellationToken cancellationToken = default)
     {
         if (input is null) throw new InvalidOperationException("Thiếu dữ liệu tài liệu.");
-        var sourceId = Slug(input.SourceId);
+        var sourceId = string.IsNullOrWhiteSpace(input.SourceId) ? string.Empty : Slug(input.SourceId);
         if (string.IsNullOrWhiteSpace(sourceId)) throw new InvalidOperationException("Thiếu mã nguồn.");
         var title = CleanSingleLine(input.Title);
         var rawText = CleanText(input.Content);
@@ -325,8 +366,8 @@ public sealed class TravelGuideRagService
             await using var cmd = conn.CreateCommand();
             cmd.Transaction = tx;
             cmd.CommandText = """
-                insert into travel_guide_chunks(id, document_id, source_id, title, content, keywords, search_text, url, chunk_index, status, updated_at)
-                values (@id, @document_id, @source_id, @title, @content, @keywords, @search_text, @url, @chunk_index, 'active', now());
+                insert into travel_guide_chunks(id, document_id, source_id, title, content, keywords, search_text, url, chunk_index, embedding, embedding_model, embedding_updated_at, status, updated_at)
+                values (@id, @document_id, @source_id, @title, @content, @keywords, @search_text, @url, @chunk_index, @embedding::jsonb, @embedding_model, now(), 'active', now());
                 """;
             cmd.Parameters.AddWithValue("id", documentId + "-chunk-" + (i + 1).ToString("000"));
             cmd.Parameters.AddWithValue("document_id", documentId);
@@ -337,11 +378,72 @@ public sealed class TravelGuideRagService
             cmd.Parameters.AddWithValue("search_text", chunk.SearchText);
             cmd.Parameters.AddWithValue("url", string.IsNullOrWhiteSpace(url) ? (object)DBNull.Value : url);
             cmd.Parameters.AddWithValue("chunk_index", i);
+            cmd.Parameters.AddWithValue("embedding", JsonSerializer.Serialize(CreateLocalEmbedding(chunk.SearchText, _embeddingDimensions)));
+            cmd.Parameters.AddWithValue("embedding_model", LocalEmbeddingModel + ":" + _embeddingDimensions);
             await cmd.ExecuteNonQueryAsync(cancellationToken);
         }
 
         await tx.CommitAsync(cancellationToken);
         return new TravelGuideIngestResult { Id = documentId, Chunks = chunks.Count };
+    }
+
+    public async Task<TravelGuideEmbeddingRebuildResult> RebuildEmbeddingsAsync(bool force = false, int limit = 500, CancellationToken cancellationToken = default)
+    {
+        var take = Math.Clamp(limit, 1, 5000);
+        var rows = new List<(string Id, string Text)>();
+        await using var conn = await _dataSource.OpenConnectionAsync(cancellationToken);
+        await using (var select = conn.CreateCommand())
+        {
+            select.CommandText = force
+                ? """
+                    select id, search_text
+                    from travel_guide_chunks
+                    where status = 'active'
+                    order by updated_at desc
+                    limit @take;
+                    """
+                : """
+                    select id, search_text
+                    from travel_guide_chunks
+                    where status = 'active'
+                      and (embedding is null or embedding_model is null or embedding_model <> @model)
+                    order by updated_at desc
+                    limit @take;
+                    """;
+            select.Parameters.AddWithValue("take", take);
+            if (!force) select.Parameters.AddWithValue("model", LocalEmbeddingModel + ":" + _embeddingDimensions);
+            await using var reader = await select.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add((reader.GetString(0), reader.IsDBNull(1) ? string.Empty : reader.GetString(1)));
+            }
+        }
+
+        var updated = 0;
+        foreach (var row in rows)
+        {
+            var embedding = CreateLocalEmbedding(row.Text, _embeddingDimensions);
+            await using var update = conn.CreateCommand();
+            update.CommandText = """
+                update travel_guide_chunks
+                set embedding = @embedding::jsonb,
+                    embedding_model = @embedding_model,
+                    embedding_updated_at = now(),
+                    updated_at = now()
+                where id = @id;
+                """;
+            update.Parameters.AddWithValue("id", row.Id);
+            update.Parameters.AddWithValue("embedding", JsonSerializer.Serialize(embedding));
+            update.Parameters.AddWithValue("embedding_model", LocalEmbeddingModel + ":" + _embeddingDimensions);
+            updated += await update.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        return new TravelGuideEmbeddingRebuildResult
+        {
+            Scanned = rows.Count,
+            Updated = updated,
+            EmbeddingModel = LocalEmbeddingModel + ":" + _embeddingDimensions
+        };
     }
 
     public async Task<TravelGuideIngestResult> CrawlUrlAsync(TravelGuideCrawlInput input, string? userId, CancellationToken cancellationToken = default)
@@ -352,11 +454,40 @@ public sealed class TravelGuideRagService
         using var http = _httpClientFactory.CreateClient();
         http.Timeout = TimeSpan.FromSeconds(20);
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        request.Headers.TryAddWithoutValidation("User-Agent", "TravelwAI-RAG/1.0");
-        using var response = await http.SendAsync(request, cancellationToken);
+        request.Headers.TryAddWithoutValidation("User-Agent", "TravelwAI-RAG/1.0 (+https://travelwai.onrender.com)");
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         response.EnsureSuccessStatusCode();
-        var html = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        var contentType = response.Content.Headers.ContentType?.MediaType ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(contentType)
+            && !contentType.Contains("html", StringComparison.OrdinalIgnoreCase)
+            && !contentType.Contains("text", StringComparison.OrdinalIgnoreCase)
+            && !contentType.Contains("json", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("URL crawl phải là trang HTML/text công khai.");
+        }
+
+        if (response.Content.Headers.ContentLength is > MaxCrawlBytes)
+        {
+            throw new InvalidOperationException("Nội dung crawl quá lớn. Hãy nạp tài liệu thủ công hoặc chia nhỏ nguồn.");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var limited = new MemoryStream();
+        var buffer = new byte[32 * 1024];
+        var total = 0;
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
+            if (read <= 0) break;
+            total += read;
+            if (total > MaxCrawlBytes) throw new InvalidOperationException("Nội dung crawl quá lớn. Hãy nạp tài liệu thủ công hoặc chia nhỏ nguồn.");
+            limited.Write(buffer, 0, read);
+        }
+
+        var html = Encoding.UTF8.GetString(limited.ToArray());
         var text = ExtractReadableText(html);
+        if (string.IsNullOrWhiteSpace(text) || text.Length < 80) throw new InvalidOperationException("Không trích xuất được nội dung đủ dài từ URL này.");
         var title = string.IsNullOrWhiteSpace(input.Title) ? ExtractHtmlTitle(html) : input.Title;
         if (string.IsNullOrWhiteSpace(title)) title = uri.Host + uri.AbsolutePath;
         return await IngestDocumentAsync(new TravelGuideDocumentInput
@@ -371,11 +502,11 @@ public sealed class TravelGuideRagService
         }, userId, cancellationToken);
     }
 
-    private static int ScoreDbChunk(string normalizedQuery, List<string> tokens, TravelGuideRagSearchResult item)
+    private static double ScoreDbChunk(string normalizedQuery, List<string> tokens, TravelGuideRagSearchResult item)
     {
         if (string.IsNullOrWhiteSpace(normalizedQuery)) return item.Reliability;
         var haystack = item.SearchText;
-        var score = item.Reliability;
+        var score = (double)item.Reliability;
         foreach (var token in tokens)
         {
             if (haystack.Contains(token, StringComparison.Ordinal)) score += 16;
@@ -483,6 +614,98 @@ public sealed class TravelGuideRagService
         return score;
     }
 
+    private static float[] CreateLocalEmbedding(string? text, int dimensions)
+    {
+        var vector = new float[dimensions];
+        var normalized = NormalizeForSearch(text ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(normalized)) return vector;
+
+        var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(token => token.Length >= 2)
+            .ToList();
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            AddTokenToVector(vector, tokens[i], 1.0f);
+            if (i + 1 < tokens.Count) AddTokenToVector(vector, tokens[i] + " " + tokens[i + 1], 0.65f);
+            if (i + 2 < tokens.Count) AddTokenToVector(vector, tokens[i] + " " + tokens[i + 1] + " " + tokens[i + 2], 0.35f);
+        }
+
+        NormalizeVector(vector);
+        return vector;
+    }
+
+    private static void AddTokenToVector(float[] vector, string token, float weight)
+    {
+        if (vector.Length == 0 || string.IsNullOrWhiteSpace(token)) return;
+        var hash = StableHash(token);
+        var index = (int)(hash % (uint)vector.Length);
+        var sign = (hash & 0x80000000) == 0 ? 1f : -1f;
+        vector[index] += sign * weight;
+    }
+
+    private static uint StableHash(string value)
+    {
+        unchecked
+        {
+            const uint fnvOffset = 2166136261;
+            const uint fnvPrime = 16777619;
+            var hash = fnvOffset;
+            foreach (var ch in value)
+            {
+                hash ^= (uint)ch;
+                hash *= fnvPrime;
+            }
+            return hash;
+        }
+    }
+
+    private static void NormalizeVector(float[] vector)
+    {
+        double sum = 0;
+        foreach (var value in vector) sum += value * value;
+        if (sum <= 0) return;
+        var norm = Math.Sqrt(sum);
+        for (var i = 0; i < vector.Length; i++) vector[i] = (float)(vector[i] / norm);
+    }
+
+    private static float[]? ParseEmbedding(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<float[]>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static double CosineSimilarity(float[]? left, float[]? right)
+    {
+        if (left is null || right is null || left.Length == 0 || right.Length == 0) return 0;
+        var length = Math.Min(left.Length, right.Length);
+        double dot = 0;
+        for (var i = 0; i < length; i++) dot += left[i] * right[i];
+        return Math.Clamp(dot, -1.0, 1.0);
+    }
+
+    private static double FreshnessBoost(DateTime updatedAt)
+    {
+        var days = Math.Max(0, (DateTime.UtcNow - updatedAt.ToUniversalTime()).TotalDays);
+        if (days <= 7) return 8;
+        if (days <= 30) return 5;
+        if (days <= 180) return 2;
+        return 0;
+    }
+
+    private static int ReadInt(IConfiguration configuration, string key, string envKey, int fallback)
+    {
+        var value = Environment.GetEnvironmentVariable(envKey);
+        if (string.IsNullOrWhiteSpace(value)) value = configuration[key];
+        return int.TryParse(value, out var parsed) ? parsed : fallback;
+    }
+
     private static string CleanText(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return string.Empty;
@@ -557,7 +780,12 @@ public sealed class TravelGuideRagSearchResult
     public string SourceType { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public int Reliability { get; set; }
-    public int Score { get; set; }
+    public double Score { get; set; }
+    public double KeywordScore { get; set; }
+    public double VectorScore { get; set; }
+    public string EmbeddingModel { get; set; } = string.Empty;
+    [JsonIgnore]
+    public float[]? Embedding { get; set; }
     public DateTime UpdatedAt { get; set; }
 }
 
@@ -628,4 +856,11 @@ public sealed class TravelGuideIngestResult
 {
     public string Id { get; set; } = string.Empty;
     public int Chunks { get; set; }
+}
+
+public sealed class TravelGuideEmbeddingRebuildResult
+{
+    public int Scanned { get; set; }
+    public int Updated { get; set; }
+    public string EmbeddingModel { get; set; } = string.Empty;
 }

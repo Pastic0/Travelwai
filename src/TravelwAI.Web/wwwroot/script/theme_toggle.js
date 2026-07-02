@@ -32,6 +32,24 @@
   let activeMiniChatKey = "travelwai";
 
 
+
+  function createMiniChatApiError(response, result, fallbackMessage) {
+    const message = String(result?.detail || result?.message || fallbackMessage || "Trợ lý chưa trả lời được.");
+    const error = new Error(message);
+    error.status = response?.status || 0;
+    error.code = String(result?.code || "");
+    error.role = String(result?.role || "");
+    error.retryAfterSeconds = Number(result?.retryAfterSeconds || 0);
+    return error;
+  }
+
+  function shouldOpenMiniChatPricingPopup(error) {
+    const code = String(error?.code || "").toLowerCase();
+    const message = String(error?.message || "");
+    if (code === "free_ai_quota_exceeded" || code === "upgrade_required") return true;
+    return /tài khoản\s+free\s+đã\s+dùng\s+hết|tai khoan\s+free\s+da\s+dung\s+het/i.test(message);
+  }
+
   function readTheme() {
     try {
       const saved = localStorage.getItem(storageKey);
@@ -608,34 +626,8 @@
     return target.type === "info";
   }
 
-  function tryHandleMiniChatManagerCommand(text) {
-    if (activeMiniChatKey !== "travelwai") return false;
-
-    if (isMiniChatManagerConfirmText(text)) {
-      const lastReply = getLastMiniChatManagerReplyText();
-      const confirmedTarget = getMiniChatNavigationTargetFromText(lastReply);
-      if (confirmedTarget) {
-        pushMiniChat("assistant", confirmedTarget.reply);
-        runMiniChatManagerAction(confirmedTarget);
-        return true;
-      }
-
-      pushMiniChat("assistant", "Dùng cú pháp: tới trang [tên trang], qua trang [tên trang] hoặc chi tiết trang [tên trang].");
-      return true;
-    }
-
-    const target = getMiniChatManagerTarget(text);
-    if (!target) return false;
-
-    pushMiniChat("assistant", target.reply);
-    runMiniChatManagerAction(target);
-    return true;
-  }
 
 
-  function getMiniChatManagerFallbackReply() {
-    return "Chưa nhận diện được lệnh. Bạn có thể nhắn: đăng nhập, đăng ký, bản đồ, lịch trình, kế hoạch, bảng giá, giỏ hàng, thanh toán, tour du lịch, bài viết, nhắn tin, đổi mật khẩu hoặc đăng xuất.";
-  }
   function pushMiniChat(role, content) {
     if (!miniChatHistories[activeMiniChatKey]) miniChatHistories[activeMiniChatKey] = [];
     miniChatHistories[activeMiniChatKey].push({ role: role === "user" ? "user" : "assistant", content: content || "" });
@@ -664,19 +656,8 @@
     if (input) input.value = "";
     renderMiniChatMessages();
 
-    if (tryHandleMiniChatManagerCommand(text)) {
-      renderMiniChatMessages();
-      return;
-    }
-
-    if (activeMiniChatKey === "travelwai") {
-      pushMiniChat("assistant", getMiniChatManagerFallbackReply());
-      renderMiniChatMessages();
-      return;
-    }
-
-    if (!token && activeMiniChatKey === "travelwai") {
-      pushMiniChat("assistant", "Bạn vui lòng đăng ký hoặc đăng nhập để Quản lý TravelwAI hỗ trợ đầy đủ các chức năng tài khoản, lịch trình, tour và tin nhắn.");
+    if (!token) {
+      pushMiniChat("assistant", "Bạn cần đăng nhập để dùng Chatbot AI.");
       renderMiniChatMessages();
       return;
     }
@@ -698,7 +679,7 @@
       })
     }).then(function (response) {
       return response.json().catch(function () { return {}; }).then(function (result) {
-        if (!response.ok || result.success === false) throw new Error(result.detail || result.message || "Trợ lý chưa trả lời được.");
+        if (!response.ok || result.success === false) throw createMiniChatApiError(response, result, "Trợ lý chưa trả lời được.");
         return result;
       });
     }).then(function (result) {
@@ -712,12 +693,8 @@
         if (target && target.type !== "info") runMiniChatManagerAction(target);
       }
     }).catch(async function (error) {
-      if (/free|nâng cấp|nang cap|upgrade_required|free_ai_quota_exceeded/i.test(error.message || "") && window.TravelwAIPricingPopup?.showFreeAiPopup) {
+      if (shouldOpenMiniChatPricingPopup(error) && window.TravelwAIPricingPopup?.showFreeAiPopup) {
         window.TravelwAIPricingPopup.showFreeAiPopup(error.message);
-        return;
-      }
-      if (activeMiniChatKey === "travelwai") {
-        pushMiniChat("assistant", getMiniChatManagerFallbackReply());
         return;
       }
       const message = String(error.message || "Không gửi được tin nhắn. Vui lòng thử lại.");

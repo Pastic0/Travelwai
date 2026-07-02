@@ -497,7 +497,7 @@ static void ClearAuthCookiesAndRedirectToLogin(HttpContext context)
 static bool HasPageRoleAccess(string path, Dictionary<string, object?> authResult)
 {
     var user = authResult.GetValueOrDefault("user") as Dictionary<string, object?>;
-    var role = user?.GetValueOrDefault("role")?.ToString() ?? "Free";
+    var role = GetPageAccountRole(user);
 
     if (string.Equals(path, "/admin", StringComparison.OrdinalIgnoreCase) || string.Equals(path, "/manage", StringComparison.OrdinalIgnoreCase))
     {
@@ -519,6 +519,49 @@ static bool HasPageRoleAccess(string path, Dictionary<string, object?> authResul
     }
 
     return true;
+}
+
+
+static string GetPageAccountRole(Dictionary<string, object?>? user)
+{
+    if (user is null) return "Free";
+    if (IsTruthyPageRoleFlag(user.GetValueOrDefault("is_admin"))
+        || IsTruthyPageRoleFlag(user.GetValueOrDefault("isAdmin"))
+        || IsTruthyPageRoleFlag(user.GetValueOrDefault("admin"))) return "Admin";
+
+    foreach (var key in new[] { "role", "accountRole", "account_role", "planRole", "plan_role", "userRole", "user_role", "package", "plan" })
+    {
+        if (user.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value?.ToString()))
+        {
+            return NormalizePageAccountRole(value);
+        }
+    }
+
+    return "Free";
+}
+
+static string NormalizePageAccountRole(object? role)
+{
+    var value = role?.ToString()?.Trim() ?? string.Empty;
+    if (value.Equals("User", StringComparison.OrdinalIgnoreCase)) return "Free";
+    if (value.Equals("Company", StringComparison.OrdinalIgnoreCase)) return "Business";
+    if (value.Equals("Tour Sales", StringComparison.OrdinalIgnoreCase) || value.Equals("TourSales", StringComparison.OrdinalIgnoreCase)) return "Sales";
+    if (value.Equals("Administrator", StringComparison.OrdinalIgnoreCase) || value.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase) || value.Equals("Super Admin", StringComparison.OrdinalIgnoreCase)) return "Admin";
+    if (value.Equals("VIP", StringComparison.OrdinalIgnoreCase)) return "VIP";
+    if (value.Equals("Premium", StringComparison.OrdinalIgnoreCase)) return "Premium";
+    if (value.Equals("Admin", StringComparison.OrdinalIgnoreCase)) return "Admin";
+    if (value.Equals("Sales", StringComparison.OrdinalIgnoreCase)) return "Sales";
+    if (value.Equals("Business", StringComparison.OrdinalIgnoreCase)) return "Business";
+    return string.IsNullOrWhiteSpace(value) ? "Free" : value;
+}
+
+static bool IsTruthyPageRoleFlag(object? value)
+{
+    if (value is bool b) return b;
+    var text = value?.ToString()?.Trim();
+    return string.Equals(text, "true", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(text, "1", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(text, "yes", StringComparison.OrdinalIgnoreCase);
 }
 
 static async Task WriteForbiddenAsync(HttpContext context, string path)
