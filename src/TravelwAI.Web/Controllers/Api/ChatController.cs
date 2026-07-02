@@ -88,8 +88,8 @@ public sealed class ChatController : ApiControllerBase
         }
 
         var model = assistantMode == "guide-rag"
-            ? GetOpenRouterConfigValue("RagModel", "OPENROUTER_RAG_MODEL", GetOpenRouterConfigValue("Model", "OPENROUTER_MODEL", "openrouter/free"))
-            : GetOpenRouterConfigValue("Model", "OPENROUTER_MODEL", "openrouter/free");
+            ? GetOpenRouterConfigValue("RagModel", "OPENROUTER_RAG_MODEL", GetOpenRouterConfigValue("Model", "OPENROUTER_MODEL", "openrouter/auto"))
+            : GetOpenRouterConfigValue("Model", "OPENROUTER_MODEL", "openrouter/auto");
         var siteUrl = GetOpenRouterConfigValue("SiteUrl", "OPENROUTER_SITE_URL", "https://travelwai.onrender.com");
         var appName = GetOpenRouterConfigValue("AppName", "OPENROUTER_APP_NAME", "TravelwAI");
         var messages = new List<object>
@@ -120,50 +120,149 @@ public sealed class ChatController : ApiControllerBase
 
         messages.Add(new { role = "user", content = request.Message.Trim() });
 
-        var payload = new
-        {
-            model,
-            messages,
-            temperature = assistantMode == "guide-rag" ? 0.45 : 0.35,
-            max_tokens = assistantMode == "guide-rag" ? 520 : 420,
-            reasoning = BuildOpenRouterMinimalReasoningOptions()
-        };
-
-        using var http = _httpClientFactory.CreateClient();
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BuildOpenRouterChatCompletionsUri());
-        httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        httpRequest.Headers.TryAddWithoutValidation("HTTP-Referer", siteUrl);
-        httpRequest.Headers.TryAddWithoutValidation("X-Title", appName);
-        httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
-        using var response = await http.SendAsync(httpRequest);
-        var responseText = await response.Content.ReadAsStringAsync();
-        if (!response.IsSuccessStatusCode)
-        {
-            var friendlyDetail = BuildOpenRouterErrorMessage((int)response.StatusCode, responseText);
-            return StatusCode((int)response.StatusCode, new { success = false, detail = friendlyDetail, raw = responseText });
-        }
-
-        JsonNode? json;
+        OpenRouterChatResult aiResponse;
         try
         {
-            json = JsonNode.Parse(responseText);
+            aiResponse = await SendOpenRouterChatAsync(
+                GetOpenRouterModelCandidates(assistantMode, model),
+                messages,
+                assistantMode == "guide-rag" ? 0.45 : 0.35,
+                assistantMode == "guide-rag" ? 520 : 420,
+                siteUrl,
+                appName,
+                apiKey,
+                HttpContext.RequestAborted);
         }
-        catch (JsonException)
+        catch (OpenRouterChatException ex)
         {
-            return StatusCode(502, new { success = false, detail = "AI trả về dữ liệu không hợp lệ.", raw = responseText });
+            return StatusCode(ex.StatusCode, new { success = false, detail = ex.Message, raw = ex.Raw });
         }
 
-        var answer = json?["choices"]?[0]?["message"]?["content"]?.ToString();
-        var finishReason = json?["choices"]?[0]?["finish_reason"]?.ToString();
-        if (string.IsNullOrWhiteSpace(answer))
-        {
-            return StatusCode(502, new { success = false, detail = "AI chưa trả về nội dung hợp lệ.", raw = responseText });
-        }
-
-        var cleaned = CleanSimpleChatbotReply(answer, 150, IsOpenRouterAnswerCutOff(finishReason));
+        var cleaned = CleanSimpleChatbotReply(aiResponse.Content, 150, IsOpenRouterAnswerCutOff(aiResponse.FinishReason));
         if (string.IsNullOrWhiteSpace(cleaned)) cleaned = "Mình chưa nhận được câu trả lời hoàn chỉnh từ AI. Bạn hỏi lại giúp mình nhé.";
         return Ok(new { success = true, data = new { reply = cleaned }, message = "AI đã trả lời" });
+    }
+
+    private sealed class OpenRouterChatResult
+    {
+        public string Content { get; init; } = string.Empty;
+        public string? FinishReason { get; init; }
+        public string Model { get; init; } = string.Empty;
+    }
+
+    private sealed class OpenRouterChatException : Exception
+    {
+        public int StatusCode { get; }
+        public string Raw { get; }
+
+        public OpenRouterChatException(int statusCode, string message, string raw = "") : base(message)
+        {
+            StatusCode = statusCode;
+            Raw = raw;
+        }
+    }
+
+    private async Task<OpenRouterChatResult> SendOpenRouterChatAsync(
+        IReadOnlyList<string> modelCandidates,
+        List<object> messages,
+        double temperature,
+        int maxTokens,
+        string siteUrl,
+        string appName,
+        string apiKey,
+        CancellationToken cancellationToken)
+    {
+        var errors = new List<string>();
+        var models = modelCandidates.Count > 0 ? modelCandidates : new[] { "openrouter/auto" };
+
+        foreach (var candidateModel in models.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var payload = new Dictionary<string, object?>
+            {
+                ["model"] = candidateModel.Trim(),
+                ["messages"] = messages,
+                ["temperature"] = temperature,
+                ["max_tokens"] = maxTokens
+            };
+
+            if (ShouldSendOpenRouterReasoningOptions())
+            {
+                payload["reasoning"] = BuildOpenRouterMinimalReasoningOptions();
+            }
+
+            using var http = _httpClientFactory.CreateClient();
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BuildOpenRouterChatCompletionsUri());
+            httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            httpRequest.Headers.TryAddWithoutValidation("HTTP-Referer", siteUrl);
+            httpRequest.Headers.TryAddWithoutValidation("X-Title", appName);
+            httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            using var response = await http.SendAsync(httpRequest, cancellationToken);
+            var responseText = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = BuildOpenRouterErrorMessage((int)response.StatusCode, responseText);
+                errors.Add($"{candidateModel}: {detail}");
+                if ((int)response.StatusCode == 401 || (int)response.StatusCode == 402 || (int)response.StatusCode == 403)
+                {
+                    throw new OpenRouterChatException((int)response.StatusCode, detail, responseText);
+                }
+                continue;
+            }
+
+            JsonNode? json;
+            try
+            {
+                json = JsonNode.Parse(responseText);
+            }
+            catch (JsonException)
+            {
+                errors.Add($"{candidateModel}: AI trả về dữ liệu không hợp lệ.");
+                continue;
+            }
+
+            var answer = json?["choices"]?[0]?["message"]?["content"]?.ToString();
+            var finishReason = json?["choices"]?[0]?["finish_reason"]?.ToString();
+            if (string.IsNullOrWhiteSpace(answer))
+            {
+                errors.Add($"{candidateModel}: AI chưa trả về nội dung hợp lệ.");
+                continue;
+            }
+
+            return new OpenRouterChatResult
+            {
+                Content = answer,
+                FinishReason = finishReason,
+                Model = candidateModel.Trim()
+            };
+        }
+
+        var joined = string.Join("; ", errors.Where(item => !string.IsNullOrWhiteSpace(item)).Take(4));
+        if (string.IsNullOrWhiteSpace(joined)) joined = "Không có model khả dụng.";
+        throw new OpenRouterChatException(502, "OpenRouter chưa trả lời được: " + joined);
+    }
+
+    private IReadOnlyList<string> GetOpenRouterModelCandidates(string assistantMode, string primaryModel)
+    {
+        var values = new List<string>();
+        void AddMany(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return;
+            foreach (var item in raw.Split(new[] { ',', ';', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var clean = item.Trim();
+                if (!string.IsNullOrWhiteSpace(clean)) values.Add(clean);
+            }
+        }
+
+        AddMany(primaryModel);
+        AddMany(assistantMode == "guide-rag"
+            ? GetOpenRouterConfigValue("RagFallbackModels", "OPENROUTER_RAG_FALLBACK_MODELS", string.Empty)
+            : GetOpenRouterConfigValue("FallbackModels", "OPENROUTER_FALLBACK_MODELS", string.Empty));
+        AddMany(GetOpenRouterConfigValue("FallbackModels", "OPENROUTER_FALLBACK_MODELS", string.Empty));
+        AddMany("openrouter/auto");
+
+        return values.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     private IActionResult? TryConsumeAiChatQuota(string userId, Dictionary<string, object?>? authUser)
@@ -226,7 +325,7 @@ public sealed class ChatController : ApiControllerBase
             return StatusCode(500, new { success = false, detail = "Chưa cấu hình API key AI. Vui lòng kiểm tra cấu hình trên Render." });
         }
 
-        var model = GetOpenRouterConfigValue("Model", "OPENROUTER_MODEL", "openrouter/free");
+        var model = GetOpenRouterConfigValue("Model", "OPENROUTER_MODEL", "openrouter/auto");
         var siteUrl = GetOpenRouterConfigValue("SiteUrl", "OPENROUTER_SITE_URL", "https://travelwai.onrender.com");
         var appName = GetOpenRouterConfigValue("AppName", "OPENROUTER_APP_NAME", "TravelwAI");
         var messages = new List<object>
@@ -248,14 +347,17 @@ public sealed class ChatController : ApiControllerBase
         }
 
         messages.Add(new { role = "user", content = BuildSchedulePlannerPrompt(request) });
-        var payload = new
+        var payload = new Dictionary<string, object?>
         {
-            model,
-            messages,
-            temperature = 0.35,
-            max_tokens = 2600,
-            reasoning = BuildOpenRouterMinimalReasoningOptions()
+            ["model"] = model,
+            ["messages"] = messages,
+            ["temperature"] = 0.35,
+            ["max_tokens"] = 2600
         };
+        if (ShouldSendOpenRouterReasoningOptions())
+        {
+            payload["reasoning"] = BuildOpenRouterMinimalReasoningOptions();
+        }
 
         using var http = _httpClientFactory.CreateClient();
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BuildOpenRouterChatCompletionsUri());
@@ -584,6 +686,12 @@ public sealed class ChatController : ApiControllerBase
         return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
     }
 
+    private bool ShouldSendOpenRouterReasoningOptions()
+    {
+        var value = GetOpenRouterConfigValue("UseReasoning", "OPENROUTER_USE_REASONING", "false");
+        return bool.TryParse(value, out var enabled) && enabled;
+    }
+
     private Uri BuildOpenRouterChatCompletionsUri()
     {
         var baseUrl = GetOpenRouterConfigValue("BaseUrl", "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1");
@@ -607,10 +715,17 @@ public sealed class ChatController : ApiControllerBase
     {
         var message = responseText;
         try { message = JsonNode.Parse(responseText)?["error"]?["message"]?.ToString() ?? responseText; } catch { }
-        if (statusCode == 401) return "AI chưa được cấu hình đúng. Vui lòng kiểm tra cấu hình API key.";
-        if (statusCode == 429 || message.Contains("rate", StringComparison.OrdinalIgnoreCase) || message.Contains("limit", StringComparison.OrdinalIgnoreCase)) return "Hiện chưa trả lời được. Bạn thử lại sau.";
-        if (statusCode == 404 || message.Contains("unavailable", StringComparison.OrdinalIgnoreCase) || message.Contains("not found", StringComparison.OrdinalIgnoreCase)) return "Model AI hiện không khả dụng. Vui lòng kiểm tra lại cấu hình model.";
-        return "Hiện chưa trả lời được. Bạn thử lại sau.";
+        message = Regex.Replace(message ?? string.Empty, @"\s+", " ").Trim();
+        if (message.Length > 260) message = message[..260].Trim();
+
+        if (statusCode == 400) return "OpenRouter từ chối request. Kiểm tra model, payload hoặc tham số reasoning. Chi tiết: " + message;
+        if (statusCode == 401) return "OpenRouter API key chưa đúng hoặc chưa được cấu hình trong OPENROUTER_API_KEY.";
+        if (statusCode == 402) return "Tài khoản OpenRouter hết credits hoặc model yêu cầu credits. Đổi model free hoặc nạp credits.";
+        if (statusCode == 403) return "OpenRouter không cho phép dùng model/API key hiện tại. Kiểm tra quyền truy cập model.";
+        if (statusCode == 404 || message.Contains("unavailable", StringComparison.OrdinalIgnoreCase) || message.Contains("not found", StringComparison.OrdinalIgnoreCase)) return "Model OpenRouter không khả dụng hoặc sai tên model. Hãy đổi OPENROUTER_RAG_MODEL/OPENROUTER_MODEL.";
+        if (statusCode == 429 || message.Contains("rate", StringComparison.OrdinalIgnoreCase) || message.Contains("limit", StringComparison.OrdinalIgnoreCase)) return "OpenRouter đang giới hạn lượt gọi hoặc model free quá tải. Đổi model/fallback model hoặc thử lại sau.";
+        if (string.IsNullOrWhiteSpace(message)) return "OpenRouter lỗi HTTP " + statusCode + ".";
+        return "OpenRouter lỗi HTTP " + statusCode + ": " + message;
     }
 
     [HttpGet("conversations")]

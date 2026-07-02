@@ -2336,7 +2336,7 @@ async function sendAiMessage(options = {}) {
     }
 
     const replyText = String(result.data?.reply || "").trim();
-    if (!replyText || /openrouter|kh[oô]ng\s*tr[aả]\s*v[eề]\s*n[oộ]i\s*dung|kh[oô]ng\s*c[oó]\s*ph[aả]n\s*h[oồ]i|qu[aá]\s*t[aả]i|gi[oớ]i\s*h[aạ]n\s*l[uư][oợ]t\s*g[oọ]i|đ[oổ]i\s*model/i.test(replyText)) {
+    if (!replyText || /kh[oô]ng\s*tr[aả]\s*v[eề]\s*n[oộ]i\s*dung|kh[oô]ng\s*c[oó]\s*ph[aả]n\s*h[oồ]i/i.test(replyText)) {
       throw new Error("AI không có phản hồi rõ ràng.");
     }
 
@@ -2364,8 +2364,8 @@ async function sendAiMessage(options = {}) {
   } catch (error) {
     console.error("Lỗi hỏi AI:", error);
     const errorMessage = String(error.message || "Không thể gọi AI. Vui lòng thử lại.");
-    const friendlyMessage = /429|quá tải|qua tai|giới hạn|gioi han|rate|limit|openrouter|model/i.test(errorMessage)
-      ? "Hiện chưa trả lời được. Bạn thử lại sau."
+    const friendlyMessage = /429|quá tải|qua tai|giới hạn|gioi han|rate|limit/i.test(errorMessage)
+      ? "OpenRouter đang giới hạn lượt gọi hoặc model free quá tải. Kiểm tra OPENROUTER_API_KEY, OPENROUTER_RAG_MODEL hoặc fallback model."
       : errorMessage;
     if (/free|nâng cấp|nang cap|upgrade_required|free_ai_quota_exceeded/i.test(errorMessage) && window.TravelwAIPricingPopup?.showFreeAiPopup) {
       window.TravelwAIPricingPopup.showFreeAiPopup(errorMessage);

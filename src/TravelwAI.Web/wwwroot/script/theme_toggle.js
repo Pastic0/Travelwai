@@ -703,7 +703,7 @@
       });
     }).then(function (result) {
       const reply = String(result?.data?.reply || result?.reply || "").trim();
-      if (!reply || /openrouter|kh[oô]ng\s*tr[aả]\s*v[eề]\s*n[oộ]i\s*dung|kh[oô]ng\s*c[oó]\s*ph[aả]n\s*h[oồ]i|qu[aá]\s*t[aả]i|gi[oớ]i\s*h[aạ]n\s*l[uư][oợ]t\s*g[oọ]i|đ[oổ]i\s*model/i.test(reply)) {
+      if (!reply || /kh[oô]ng\s*tr[aả]\s*v[eề]\s*n[oộ]i\s*dung|kh[oô]ng\s*c[oó]\s*ph[aả]n\s*h[oồ]i/i.test(reply)) {
         throw new Error("AI không có phản hồi rõ ràng.");
       }
       pushMiniChat("assistant", reply);
@@ -720,7 +720,10 @@
         pushMiniChat("assistant", getMiniChatManagerFallbackReply());
         return;
       }
-      pushMiniChat("assistant", "Không gửi được tin nhắn. Vui lòng thử lại.");
+      const message = String(error.message || "Không gửi được tin nhắn. Vui lòng thử lại.");
+      pushMiniChat("assistant", /429|quá tải|qua tai|giới hạn|gioi han|rate|limit/i.test(message)
+        ? "OpenRouter đang giới hạn lượt gọi hoặc model free quá tải. Kiểm tra OPENROUTER_API_KEY, OPENROUTER_RAG_MODEL hoặc fallback model."
+        : message);
     }).finally(function () {
       if (form) form.classList.remove("loading");
       renderMiniChatMessages();
