@@ -505,6 +505,49 @@ public sealed class HeritageKnowledgeService
         slug = Regex.Replace(slug, @"[^a-z0-9\-]", string.Empty).Trim('-');
         return string.IsNullOrWhiteSpace(slug) ? null : slug[..Math.Min(slug.Length, 90)];
     }
+
+    private static string ExtractTextFromHtml(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return string.Empty;
+        var text = Regex.Replace(html, @"<script[\s\S]*?</script>", " ", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"<style[\s\S]*?</style>", " ", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"<!--([\s\S]*?)-->", " ");
+        text = Regex.Replace(text, @"</(p|div|section|article|li|h1|h2|h3|h4|h5|h6|br|tr)>", "\n", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, @"<[^>]+>", " ");
+        text = WebUtility.HtmlDecode(text);
+        text = Regex.Replace(text, @"[ \t\r\f\v]+", " ");
+        text = Regex.Replace(text, @"\n\s*\n+", "\n");
+        return CleanText(text) ?? string.Empty;
+    }
+
+    private static string? TryExtractHtmlTitle(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return null;
+        var match = Regex.Match(html, @"<title[^>]*>([\s\S]*?)</title>", RegexOptions.IgnoreCase);
+        if (!match.Success) return null;
+        return CleanText(WebUtility.HtmlDecode(match.Groups[1].Value));
+    }
+
+}
+
+
+public sealed class HeritageUrlIngestRequest
+{
+    public string? SourceId { get; set; }
+    public string? Url { get; set; }
+    public string? Title { get; set; }
+    public string? SourceType { get; set; }
+    public string? SourceName { get; set; }
+    public string? Publisher { get; set; }
+    public string? License { get; set; }
+    public string? AccessLevel { get; set; }
+    public int? ReliabilityScore { get; set; }
+    public string? ApprovalStatus { get; set; }
+    public string? Province { get; set; }
+    public string? ObjectName { get; set; }
+    public string? ObjectType { get; set; }
+    public List<string>? Topics { get; set; }
+    public string? PublishedDate { get; set; }
 }
 
 public sealed class HeritageSourceIngestRequest
