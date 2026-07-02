@@ -97,7 +97,7 @@ public sealed class ChatController : ApiControllerBase
             new
             {
                 role = "system",
-                content = assistantMode == "guide-rag" ? BuildTravelGuideSystemPrompt() : "Bạn là Quản lý TravelwAI, trợ lý hỗ trợ người dùng sử dụng website TravelwAI. Không dùng markdown, không gạch đầu dòng, không emoji. Trả lời ngắn gọn bằng tiếng Việt. Hỗ trợ điều hướng trang, lịch trình, kế hoạch, nhắn tin, tour du lịch, hồ sơ, thông báo, phản hồi và tài khoản. Khi người dùng muốn mở trang, hướng dẫn dùng cú pháp: tới trang [tên trang]. Khi không chắc, hỏi lại một câu ngắn."
+                content = assistantMode == "guide-rag" ? BuildTravelGuideSystemPrompt() : "Bạn là Quản lý TravelwAI, trợ lý hỗ trợ người dùng sử dụng website TravelwAI. Không dùng markdown, không bảng, không gạch đầu dòng, không emoji, không dùng các ký tự trang trí như |, >, #, *, ---. Trả lời tối đa khoảng 150 chữ bằng tiếng Việt. Hỗ trợ điều hướng trang, lịch trình, kế hoạch, nhắn tin, tour du lịch, hồ sơ, thông báo, phản hồi và tài khoản. Khi người dùng muốn mở trang, hướng dẫn dùng cú pháp: tới trang [tên trang]. Khi không chắc, hỏi lại một câu ngắn."
             }
         };
 
@@ -125,7 +125,7 @@ public sealed class ChatController : ApiControllerBase
             model,
             messages,
             temperature = assistantMode == "guide-rag" ? 0.45 : 0.35,
-            max_tokens = assistantMode == "guide-rag" ? 2200 : 1200,
+            max_tokens = assistantMode == "guide-rag" ? 520 : 420,
             reasoning = BuildOpenRouterMinimalReasoningOptions()
         };
 
@@ -161,7 +161,7 @@ public sealed class ChatController : ApiControllerBase
             return StatusCode(502, new { success = false, detail = "AI chưa trả về nội dung hợp lệ.", raw = responseText });
         }
 
-        var cleaned = CleanSimpleChatbotReply(answer, assistantMode == "guide-rag" ? 420 : 100, IsOpenRouterAnswerCutOff(finishReason));
+        var cleaned = CleanSimpleChatbotReply(answer, 150, IsOpenRouterAnswerCutOff(finishReason));
         if (string.IsNullOrWhiteSpace(cleaned)) cleaned = "Mình chưa nhận được câu trả lời hoàn chỉnh từ AI. Bạn hỏi lại giúp mình nhé.";
         return Ok(new { success = true, data = new { reply = cleaned }, message = "AI đã trả lời" });
     }
@@ -340,7 +340,7 @@ public sealed class ChatController : ApiControllerBase
 
     private static string BuildTravelGuideSystemPrompt()
     {
-        return "Bạn là Hướng dẫn viên RAG AI của TravelwAI. Trả lời bằng tiếng Việt tự nhiên, đúng vai hướng dẫn viên du lịch. Dựa ưu tiên vào RAG_CONTEXT được cung cấp. Khi dùng dữ liệu truy xuất, nêu nguồn ngắn gọn trong câu trả lời nếu có URL hoặc tên nguồn. Không bịa nguồn pháp lý, danh hiệu, quyết định, giá vé, giờ mở cửa. Nếu thiếu dữ liệu chắc chắn, nói chưa đủ nguồn để khẳng định. Với truyền thuyết/lời kể, ghi rõ là truyền thuyết hoặc lời kể dân gian. Với câu hỏi phổ thông, trả lời gọn. Với yêu cầu chi tiết, trả lời sâu hơn. Có thể gợi ý lộ trình bằng văn bản khi người dùng hỏi lịch trình.";
+        return "Bạn là Hướng dẫn viên RAG AI của TravelwAI. Trả lời bằng tiếng Việt tự nhiên, đúng vai hướng dẫn viên du lịch. Dựa ưu tiên vào RAG_CONTEXT được cung cấp. Trả lời tối đa khoảng 150 chữ, không markdown, không bảng, không gạch đầu dòng, không emoji, không dùng các ký tự trang trí như |, >, #, *, ---. Khi dùng dữ liệu truy xuất, nêu nguồn ngắn gọn trong câu trả lời nếu có URL hoặc tên nguồn. Không bịa nguồn pháp lý, danh hiệu, quyết định, giá vé, giờ mở cửa. Nếu thiếu dữ liệu chắc chắn, nói chưa đủ nguồn để khẳng định. Với truyền thuyết/lời kể, ghi rõ là truyền thuyết hoặc lời kể dân gian. Nếu câu trả lời bị giới hạn độ dài, phải kết thúc ở một câu hoàn chỉnh.";
     }
 
     private static string BuildTravelGuideRagContext(string? message, string? uiContext)
@@ -510,20 +510,52 @@ public sealed class ChatController : ApiControllerBase
     private static string CleanSimpleChatbotReply(string text, int maxWords, bool dropUnfinishedTail = false)
     {
         if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-        var clean = Regex.Replace(text.Trim(), @"\s+", " ");
-        clean = clean.Replace("```", string.Empty).Trim();
+
+        var clean = text.Trim();
+        clean = Regex.Replace(clean, @"```(?:[a-zA-Z0-9_-]+)?", string.Empty);
+        clean = clean.Replace("```", string.Empty);
+        clean = Regex.Replace(clean, @"(?m)^\s*(?:[-*_]{3,}|[|]+)\s*$", " ");
+        clean = Regex.Replace(clean, @"(?m)^\s*>+\s?", string.Empty);
+        clean = Regex.Replace(clean, @"(?m)^\s{0,3}#{1,6}\s*", string.Empty);
+        clean = Regex.Replace(clean, @"\*{1,3}([^*]+)\*{1,3}", "$1");
+        clean = Regex.Replace(clean, @"[_`~]+", string.Empty);
+        clean = clean.Replace("|", " ").Replace(">", " ").Replace("#", string.Empty).Replace("*", string.Empty);
+        clean = Regex.Replace(clean, @"-{3,}", " ");
+        clean = Regex.Replace(clean, @"\s+", " ").Trim();
+
         var words = clean.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (words.Length > maxWords)
         {
             clean = string.Join(' ', words.Take(maxWords));
             dropUnfinishedTail = true;
         }
+
         if (dropUnfinishedTail)
         {
-            var end = Math.Max(clean.LastIndexOf('.'), Math.Max(clean.LastIndexOf('!'), clean.LastIndexOf('?')));
-            if (end > 40) clean = clean[..(end + 1)].Trim();
+            clean = DropUnfinishedLastSentence(clean);
         }
-        return clean;
+
+        return clean.Trim();
+    }
+
+    private static string DropUnfinishedLastSentence(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var clean = text.Trim();
+        var end = LastSentenceEndIndex(clean);
+        if (end >= 40) return clean[..(end + 1)].Trim();
+        return clean.Length <= 220 ? clean : string.Empty;
+    }
+
+    private static int LastSentenceEndIndex(string text)
+    {
+        var last = -1;
+        foreach (var mark in new[] { '.', '!', '?', '…', '。' })
+        {
+            var index = text.LastIndexOf(mark);
+            if (index > last) last = index;
+        }
+        return last;
     }
 
     private static JsonObject? TryParseAiJsonObject(string text)
