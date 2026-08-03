@@ -2729,6 +2729,37 @@ body.posts-page .post-card h3 {
   letter-spacing: 0;
 }
 
+body.posts-page .post-card-title-button {
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: inline;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.18s ease, text-decoration-color 0.18s ease;
+}
+
+body.posts-page .post-card-title-button:hover,
+body.posts-page .post-card-title-button:focus-visible {
+  color: #93c5fd;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+body.posts-page .post-card-title-button:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
 body.posts-page .post-card-author-name {
   margin-top: 6px;
   color: #93c5fd;

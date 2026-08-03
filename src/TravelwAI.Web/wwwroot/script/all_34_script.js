@@ -1219,7 +1219,7 @@ function showInfoPanel(provinceInfo) {
         <div class="province-actions-row">
           <button class="read-more-btn">Xem chi tiết</button>
           <button class="add-memory-btn">Thêm kỷ niệm</button>
-          <button type="button" class="province-ask-ai-btn twai-ai-icon-button" data-travelwai-ask-ai="true" aria-label="Hỏi AI về ${escapeHtml(provinceName)}" title="Hỏi AI về ${escapeHtml(provinceName)}">
+          <button type="button" class="read-more-btn province-ask-ai-btn twai-ai-icon-button" data-travelwai-ask-ai="true" aria-label="Hỏi AI về ${escapeHtml(provinceName)}" title="Hỏi AI về ${escapeHtml(provinceName)}">
             <span data-interface-icon="sparkles"></span>
             <span class="province-ask-ai-label">Hỏi AI</span>
           </button>

@@ -373,7 +373,8 @@ function renderPostActionButton(kind, onClick, text, extraClass = "") {
     ? "post-delete-action-button"
     : (kind === "edit" ? "post-edit-action-button" : (kind === "ai" ? "post-ai-action-button" : "post-view-action-button"));
   const classes = [className, actionClass, "post-card-icon-button", kind === "ai" ? "twai-ai-icon-button" : "", extraClass].filter(Boolean).join(" ");
-  return `<button class="${classes}" type="button" onclick="${onClick}" title="${escapeHtml(text)}" aria-label="${escapeHtml(text)}">${icon}</button>`;
+  const askAiAttribute = kind === "ai" ? ' data-travelwai-ask-ai="true"' : "";
+  return `<button class="${classes}" type="button" onclick="${onClick}"${askAiAttribute} title="${escapeHtml(text)}" aria-label="${escapeHtml(text)}">${icon}</button>`;
 }
 
 function renderPostEngagement(post, jsId) {
@@ -429,7 +430,9 @@ function renderPostCard(post, mode = "month") {
     <article class="post-card ${mode === "community" ? "community-post-card" : ""}" data-post-id="${id}" data-original-post-title="${escapeHtml(title)}">
       ${renderPostMedia(post)}
       <div class="post-card-title-row">
-        <h3>${escapeHtml(title)}</h3>
+        <h3>
+          <button class="post-card-title-button" type="button" onclick="openPostDetailModal('${jsId}')" title="Xem chi tiết ${escapeHtml(title)}" aria-label="Xem chi tiết bài viết ${escapeHtml(title)}">${escapeHtml(title)}</button>
+        </h3>
         <div class="post-card-author-name">${escapeHtml(author)}</div>
       </div>
       <div class="post-card-meta">
