@@ -1,0 +1,98 @@
+@model TravelwAI.Web.Models.ProvinceDetailPageViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chi tiết điểm đến - TravelwAI</title>
+    <link rel="icon" href="/logo/travelwai-icon.webp?v=2026-07-26-brand-icon-v2" type="image/webp" />
+    <link rel="stylesheet" href="/css/detail_style.css?v=2026-07-01-clean-v1" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css"
+    />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-07-27-floating-tools-v2" />
+    <script defer src="/script/site_branding.js?v=2026-07-26-branding-cache-fix-v3"></script>
+</head>
+  <body>
+    @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+    <div class="header">
+      <button class="back-btn" id="backButton">
+        <i class="fas fa-arrow-left"></i> Quay lại
+      </button>
+    </div>
+
+    <div class="container">
+
+      <div class="province-detail" data-server-rendered="@Model.HasData.ToString().ToLowerInvariant()">
+        <div class="content-box">
+                    <h1 class="province-name">@(Model.HasData ? Model.Name : "Chưa chọn tỉnh thành")</h1>
+          <p class="province-detail-lead">@(Model.HasData ? Model.Description : "Chọn một tỉnh thành từ bản đồ để xem mô tả, khu vực, điểm đến nổi bật và thông tin du lịch chi tiết.")</p>
+          @if (Model.HasData)
+          {
+            <div class="province-meta">
+              <span>Khu vực: @Model.Area</span>
+              <span>Vùng: @Model.Region</span>
+              @if (!string.IsNullOrWhiteSpace(Model.BelongsTo))
+              {
+                <span>Thuộc: @Model.BelongsTo</span>
+              }
+              @if (!string.IsNullOrWhiteSpace(Model.NaturalAreaKm2))
+              {
+                <span>Diện tích: @Model.NaturalAreaKm2 km²</span>
+              }
+              @if (!string.IsNullOrWhiteSpace(Model.Population))
+              {
+                <span>Dân số: @Model.Population người</span>
+              }
+            </div>
+          }
+          <div class="province-detail-actions">
+            <button class="download-btn" type="button">
+              <i class="fas fa-download"></i> Tải về thông tin
+            </button>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="gallery">
+        <div class="main-image">
+          <div class="content-box">
+            <div class="image-placeholder">Hình ảnh</div>
+            <div class="image-name">Tên ảnh</div>
+          </div>
+        </div>
+
+        <div class="thumbnail-container">
+          <div class="thumbnail">
+            <div class="content-box">
+              <div class="image-placeholder">Hình ảnh</div>
+              <div class="image-name">Tên ảnh</div>
+            </div>
+          </div>
+          <div class="thumbnail">
+            <div class="content-box">
+              <div class="image-placeholder">Hình ảnh</div>
+              <div class="image-name">Tên ảnh</div>
+            </div>
+          </div>
+          <div class="thumbnail">
+            <div class="content-box">
+              <div class="image-placeholder">Hình ảnh</div>
+              <div class="image-name">Tên ảnh</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <script src="/script/vietnam_provinces.js?v=2026-07-11-festival-names-only-v1"></script>
+    <script src="/script/detail_script.js?v=2026-07-12-language-audit-fix-v2"></script>
+<script src="/script/theme_toggle.js?v=2026-07-27-notification-cleanup-v3"></script>
+</body>
+</html>

@@ -1,0 +1,549 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-icon.webp?v=2026-07-26-brand-icon-v2" type="image/webp" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-07-15-account-plan-live-price-v18" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-07-27-restore-action-icons-v1" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-08-02-admin-revenue-v1" />
+<link rel="stylesheet" href="/css/travelwai_font.css?v=2026-07-27-floating-tools-v2" />
+  <script defer src="/script/site_branding.js?v=2026-07-26-branding-cache-fix-v3"></script>
+</head>
+<body class="tour-admin-page admin-page" data-page="admin">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "admin")
+
+  <main class="tour-admin-shell">
+    <section class="tour-admin-hero">
+      <div>
+        <span class="eyebrow">Quản trị hệ thống</span>
+        <h1>Admin TravelwAI</h1>
+      </div>
+      <div class="tour-actions page-hero-actions sales-hero-actions management-page-switcher" data-admin-page-switcher>
+        <a class="btn-soft btn-page-link admin-role-page-link management-page-link is-current" href="/admin" style="display:none;text-decoration:none" aria-current="page">Admin</a>
+        <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/business" style="display:none;text-decoration:none">Business</a>
+        <a class="btn-soft btn-page-link admin-role-page-link management-page-link" href="/manage" style="display:none;text-decoration:none">Manage</a>
+      </div>
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="stat-card"><span>Tài khoản</span><strong id="adminStatAccounts">0</strong></article>
+      <article class="stat-card"><span>Bị khóa</span><strong id="adminStatLocked">0</strong></article>
+      <article class="stat-card"><span>Tour</span><strong id="adminStatTours">0</strong></article>
+      <article class="stat-card"><span>Lịch trình</span><strong id="adminStatSchedules">0</strong></article>
+      <article class="stat-card"><span>Bài viết</span><strong id="adminStatPosts">0</strong></article>
+    </section>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="accounts" type="button">Tài khoản</button>
+      <button class="tab-btn" data-tab="feedback" type="button">Phản hồi</button>
+      <button class="tab-btn" data-tab="storage" type="button">Dung lượng</button>
+      <button class="tab-btn" data-tab="account-plans" type="button">Gói tài khoản</button>
+      <button class="tab-btn" data-tab="tours" type="button">Tour</button>
+      <button class="tab-btn" data-tab="schedules" type="button">Lịch trình</button>
+      <button class="tab-btn" data-tab="plan-statuses" type="button">Trạng thái</button>
+      <button class="tab-btn" data-tab="revenue" type="button">Doanh thu</button>
+      <button class="tab-btn" data-tab="posts" type="button">Bài viết</button>
+    </div>
+
+    <section class="management-panel admin-tab-panel" id="tab-accounts">
+      <div class="panel-header-row">
+        <div>
+          <h2>Quản lý tài khoản</h2>
+        </div>
+        <div class="sales-list-actions admin-panel-search-actions admin-account-list-actions">
+          <button class="btn-primary btn-add-tour btn-change-avatar admin-excel-export-button" id="exportAdminExcelButton" type="button" title="Xuất dữ liệu admin ra Excel" aria-label="Xuất dữ liệu admin ra Excel">
+            <svg class="interface-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h8M11 10v10M16 10v10"/></svg>
+          </button>
+          <button class="btn-primary btn-add-tour btn-change-avatar admin-chatbot-style-button" id="changeChatbotStyleButton" type="button" title="Tên và phong cách nói chuyện của chatbot" aria-label="Chỉnh tên và phong cách nói chuyện của chatbot">
+            <span data-interface-icon="message-circle"></span>
+          </button>
+          <button class="btn-primary btn-add-tour btn-change-avatar admin-site-logo-button" id="changeSiteLogoButton" type="button" title="Đổi logo TravelwAI" aria-label="Đổi logo TravelwAI">
+            <img data-site-logo src="/logo/travelwai-icon.webp" alt="" aria-hidden="true" />
+          </button>
+          <button class="btn-primary btn-add-tour btn-change-avatar" id="changeSystemSettingsButton" type="button" title="Cấu hình hoa hồng, ưu đãi và phí dịch vụ" aria-label="Cấu hình hoa hồng, ưu đãi và phí dịch vụ"><span data-interface-icon="settings"></span></button>
+          <div class="tour-search-box tour-search-box-small">
+            <input id="accountSearchInput" type="search" placeholder="Tìm tài khoản..." autocomplete="off" />
+            <button class="btn-soft btn-clear-tour-search" id="clearAccountSearch" type="button">Xóa</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap table-scroll-5">
+        <table>
+          <thead>
+            <tr>
+              <th>Tài khoản</th>
+              <th>Vai trò</th>
+              <th>Trạng thái</th>
+              <th>Ưu đãi</th>
+              <th>Ngày tạo</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="accountTableBody"><tr><td colspan="6" class="empty-line">Đang tải...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+
+    <section class="management-panel admin-tab-panel admin-feedback-panel" id="tab-feedback" style="display:none">
+      <div class="panel-header-row admin-feedback-header">
+        <h2>Phản hồi</h2>
+        <div class="admin-feedback-filters">
+          <select id="adminFeedbackStatusFilter" aria-label="Trạng thái">
+            <option value="">Tất cả</option>
+            <option value="new">Mới</option>
+            <option value="processing">Đang xử lý</option>
+            <option value="resolved">Đã xử lý</option>
+            <option value="closed">Đã đóng</option>
+          </select>
+          <div class="tour-search-box tour-search-box-small">
+            <input id="adminFeedbackSearchInput" type="search" placeholder="Tìm phản hồi..." autocomplete="off" />
+            <button class="btn-soft btn-clear-tour-search" id="clearAdminFeedbackSearch" type="button">Xóa</button>
+          </div>
+          <button class="admin-feedback-refresh" id="refreshAdminFeedback" type="button" title="Tải lại" aria-label="Tải lại"><span data-interface-icon="refresh-cw"></span></button>
+        </div>
+      </div>
+      <div class="admin-feedback-layout">
+        <div class="admin-feedback-list" id="adminFeedbackList">
+          <div class="empty-line">Chọn tab để tải dữ liệu.</div>
+        </div>
+        <aside class="admin-feedback-detail" id="adminFeedbackDetail">
+          <div class="admin-feedback-empty">Chọn phản hồi</div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="management-panel admin-tab-panel admin-storage-panel" id="tab-storage" style="display:none">
+      <div class="admin-storage-summary">
+        <div class="admin-storage-summary-row">
+          <h2>Dung lượng</h2>
+          <div class="admin-storage-total-actions">
+            <strong id="adminStorageTotalText">0 MB / 1 GB</strong>
+            <div class="admin-storage-limit-editor">
+              <input id="adminStorageLimitInput" type="number" min="0.001" max="10240" step="0.1" value="1" inputmode="decimal" aria-label="Tổng hạn mức" />
+              <span>GB</span>
+              <button id="saveAdminStorageLimit" type="button" title="Lưu" aria-label="Lưu tổng hạn mức"><span data-interface-icon="check"></span></button>
+            </div>
+          </div>
+        </div>
+        <div class="admin-storage-progress" id="adminStorageTotalTrack" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <span id="adminStorageTotalBar"></span>
+        </div>
+        <div class="admin-storage-summary-meta">
+          <span id="adminStorageAccountCount">0 tài khoản</span>
+          <span id="adminStorageImageCount">0 ảnh</span>
+        </div>
+      </div>
+
+      <div class="panel-header-row admin-storage-header">
+        <h2>Tài khoản</h2>
+        <div class="tour-search-box tour-search-box-small">
+          <input id="storageSearchInput" type="search" placeholder="Tìm tài khoản..." autocomplete="off" />
+          <button class="btn-soft btn-clear-tour-search" id="clearStorageSearch" type="button">Xóa</button>
+        </div>
+      </div>
+
+      <div class="admin-storage-layout">
+        <div class="table-wrap admin-storage-user-table-wrap">
+          <table class="admin-storage-user-table">
+            <thead>
+              <tr><th>Tài khoản</th><th>Dung lượng</th><th>Ảnh</th><th>Thao tác</th></tr>
+            </thead>
+            <tbody id="adminStorageUserBody"><tr><td colspan="4" class="empty-line">Chọn tab để tải dữ liệu.</td></tr></tbody>
+          </table>
+        </div>
+
+        <aside class="admin-storage-detail" id="adminStorageDetail">
+          <div class="admin-storage-detail-empty">Chọn tài khoản</div>
+        </aside>
+      </div>
+    </section>
+
+
+    <section class="management-panel admin-tab-panel" id="tab-account-plans" style="display:none">
+      <div class="panel-header-row">
+        <div>
+          <h2>Bảng giá</h2>
+        </div>
+      </div>
+      <form id="accountPlanSettingsForm">
+        <div class="table-wrap table-scroll-5">
+          <table class="account-plan-settings-table">
+            <thead>
+              <tr>
+                <th>Gói</th>
+                <th>Giá / tháng</th>
+                <th>Dòng phụ</th>
+                <th>Quyền lợi</th>
+                <th>Thu phí</th>
+              </tr>
+            </thead>
+            <tbody id="accountPlanSettingsBody"><tr><td colspan="5" class="empty-line">Đang tải bảng giá...</td></tr></tbody>
+          </table>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-primary" type="submit">Lưu bảng giá</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="management-panel admin-tab-panel" id="tab-tours" style="display:none">
+      <div class="panel-header-row">
+        <div>
+          <h2>Quản lý tour</h2>
+        </div>
+        <div class="sales-list-actions admin-panel-search-actions admin-tour-list-actions">
+          <button class="btn-primary btn-add-tour" type="button" onclick="openTourModal()">Thêm tour</button>
+          <div class="tour-search-box tour-search-box-small">
+            <input id="tourSearchInput" type="search" placeholder="Tìm tour..." autocomplete="off" />
+            <button class="btn-soft btn-clear-tour-search" id="clearTourSearch" type="button">Xóa</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap table-scroll-5">
+        <table>
+          <thead>
+            <tr>
+              <th>Tour</th><th>Điểm đến</th><th>Thời gian</th><th>Giá</th><th>Chỗ</th><th>Trạng thái</th><th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="tourTableBody"><tr><td colspan="7" class="empty-line">Đang tải tour...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="management-panel admin-tab-panel" id="tab-schedules" style="display:none">
+      <div class="panel-header-row">
+        <div>
+          <h2>Quản lý lịch trình</h2>
+        </div>
+        <div class="sales-list-actions admin-panel-search-actions admin-schedule-list-actions">
+          <div class="tour-search-box tour-search-box-small">
+            <input id="scheduleSearchInput" type="search" placeholder="Tìm lịch trình..." autocomplete="off" />
+            <button class="btn-soft btn-clear-tour-search" id="clearScheduleSearch" type="button">Xóa</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap table-scroll-5">
+        <table>
+          <thead>
+            <tr><th>Tên lịch trình</th><th>Người tạo</th><th>Thời gian</th><th>Trạng thái</th><th>Thao tác</th></tr>
+          </thead>
+          <tbody id="scheduleTableBody"><tr><td colspan="5" class="empty-line">Đang tải lịch trình...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="management-panel admin-tab-panel" id="tab-plan-statuses" style="display:none">
+      <div class="panel-header-row">
+        <div>
+          <h2>Quản lý trạng thái kế hoạch</h2>
+                  </div>
+        <div class="sales-list-actions admin-panel-search-actions admin-plan-status-list-actions">
+          <button class="btn-primary btn-admin-add-action" type="button" onclick="openPlanStatusOptionModal()">Thêm trạng thái</button>
+          <button class="btn-primary btn-admin-add-action" type="button" onclick="openTravelTagModal()">Thêm tag</button>
+          <div class="tour-search-box tour-search-box-small">
+            <input id="planStatusSearchInput" type="search" placeholder="Tìm trạng thái..." autocomplete="off" />
+            <button class="btn-soft btn-clear-tour-search" id="clearPlanStatusSearch" type="button">Xóa</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap table-scroll-5">
+        <table>
+          <thead>
+            <tr><th>Trạng thái</th><th>Tag áp dụng</th><th>Cách khớp</th><th>Hiển thị</th><th>Thao tác</th></tr>
+          </thead>
+          <tbody id="planStatusTableBody"><tr><td colspan="5" class="empty-line">Đang tải trạng thái...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="management-panel admin-tab-panel" id="tab-revenue" style="display:none">
+      <div class="panel-header-row">
+        <div>
+          <h2>Doanh thu theo tài khoản</h2>
+        </div>
+        <div class="sales-list-actions admin-panel-search-actions admin-revenue-list-actions">
+          <button class="btn-soft admin-revenue-refresh" id="refreshAdminRevenue" type="button" title="Tải lại doanh thu" aria-label="Tải lại doanh thu"><span data-interface-icon="refresh-cw"></span></button>
+          <div class="tour-search-box tour-search-box-small">
+            <input id="revenueSearchInput" type="search" placeholder="Tìm tài khoản..." autocomplete="off" />
+            <button class="btn-soft btn-clear-tour-search" id="clearRevenueSearch" type="button">Xóa</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap table-scroll-5 admin-revenue-table-wrap">
+        <table class="admin-revenue-table">
+          <thead>
+            <tr>
+              <th>Tài khoản</th>
+              <th>Vai trò</th>
+              <th>Đơn đã bán</th>
+              <th>Doanh thu gốc</th>
+              <th>Ưu đãi Admin chịu</th>
+              <th>Hoa hồng Sales nhận</th>
+              <th>Phí dịch vụ Company trả</th>
+              <th>Doanh thu tài khoản</th>
+            </tr>
+          </thead>
+          <tbody id="adminRevenueTableBody"><tr><td colspan="8" class="empty-line">Chọn tab để tải dữ liệu.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+
+    <section class="management-panel admin-tab-panel" id="tab-posts" style="display:none">
+      <div class="panel-header-row">
+        <div>
+          <h2>Quản lý bài viết</h2>
+        </div>
+        <div class="sales-list-actions admin-panel-search-actions admin-post-list-actions">
+          <button class="btn-primary btn-admin-add-action" type="button" onclick="openPostModal()">Thêm bài viết</button>
+          <div class="tour-search-box tour-search-box-small">
+            <input id="postSearchInput" type="search" placeholder="Tìm bài viết..." autocomplete="off" />
+            <button class="btn-soft btn-clear-tour-search" id="clearAdminPostSearch" type="button">Xóa</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap table-scroll-5">
+        <table>
+          <thead>
+            <tr><th>Bài viết</th><th>Tháng</th><th>Lễ hội</th><th>Tài khoản</th><th>Trạng thái</th><th>Thao tác</th></tr>
+          </thead>
+          <tbody id="postTableBody"><tr><td colspan="6" class="empty-line">Đang tải bài viết...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="form-modal" id="accountModal">
+    <form class="form-card" id="accountForm">
+      <h2>Sửa tài khoản</h2>
+      <input type="hidden" id="accountId" />
+      <div class="form-grid">
+        <div class="form-group"><label>Email</label><input id="accountEmail" disabled /></div>
+        <div class="form-group"><label>Tên hiển thị</label><input id="accountUsername" /></div>
+        <div class="form-group account-role-group"><label for="accountRole">Vai trò</label><select id="accountRole"><option>Free</option><option>VIP</option><option>Premium</option><option>Sales</option><option>Company</option><option>Admin</option></select></div>
+        <div class="form-group account-plan-expiry-group"><label for="accountPlanExpiresAt">Hạn gói</label><input id="accountPlanExpiresAt" type="datetime-local" /></div>
+        <div class="form-group"><label>Hoa hồng</label><input id="accountCommissionPercent" type="number" min="0" max="100" step="1" /></div>
+        <div class="form-group"><label>Cấp hoa hồng</label><select id="accountSalesLevel"><option value="1">Cấp 1</option><option value="2">Cấp 2</option><option value="3">Cấp 3</option><option value="4">Cấp 4</option><option value="5">Cấp 5</option></select></div>
+        <div class="form-group"><label>Ưu đãi</label><input id="accountOfferDiscount" type="number" min="0" max="100" step="1" /></div>
+        <div class="form-group"><label>Cấp ưu đãi</label><select id="accountOfferLevel"><option value="1">Cấp 1</option><option value="2">Cấp 2</option><option value="3">Cấp 3</option><option value="4">Cấp 4</option><option value="5">Cấp 5</option></select></div>
+        <div class="form-group"><label>Dịch vụ</label><input id="accountServicePercent" type="number" min="0" max="100" step="1" /></div>
+        <div class="form-group"><label>Cấp dịch vụ</label><select id="accountServiceLevel"><option value="1">Cấp 1</option><option value="2">Cấp 2</option><option value="3">Cấp 3</option><option value="4">Cấp 4</option><option value="5">Cấp 5</option></select></div>
+        <div class="form-group full account-lock-group">
+          <label class="account-lock-toggle" for="accountLocked">
+            <input id="accountLocked" type="checkbox" />
+            <span class="account-lock-box" aria-hidden="true"></span>
+            <span class="account-lock-text">Khóa tài khoản</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closeAccountModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Lưu tài khoản</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="form-modal" id="chatbotStyleModal">
+    <form class="form-card chatbot-style-card" id="chatbotStyleForm">
+      <h2 class="chatbot-style-title"><span data-interface-icon="message-circle"></span><span>Phong cách nói chuyện</span></h2>
+      <div class="form-group chatbot-name-field">
+        <label for="chatbotDisplayName">Tên chatbot</label>
+        <input id="chatbotDisplayName" maxlength="40" data-no-translate placeholder="WaiGo" />
+      </div>
+      <div class="chatbot-style-workspace">
+        <aside class="chatbot-style-browser">
+          <div class="chatbot-style-browser-toolbar">
+            <label class="chatbot-style-search" for="chatbotStyleSearchInput">
+              <span data-interface-icon="search"></span>
+              <input id="chatbotStyleSearchInput" type="search" autocomplete="off" placeholder="Tìm phong cách" />
+            </label>
+            <button class="chatbot-style-icon-button chatbot-add-style-button" id="addChatbotStyleButton" type="button" title="Thêm phong cách" aria-label="Thêm phong cách">
+              <span data-interface-icon="plus"></span>
+            </button>
+          </div>
+          <div class="chatbot-style-list" id="chatbotStyleList" role="listbox" aria-label="Danh sách phong cách"></div>
+        </aside>
+        <section class="chatbot-style-editor" id="chatbotStyleEditor">
+          <div class="chatbot-style-editor-head">
+            <button class="chatbot-default-style-button" id="chatbotDefaultStyleButton" type="button">Đặt mặc định</button>
+            <button class="chatbot-style-icon-button chatbot-remove-style-button" id="removeChatbotStyleButton" type="button" title="Xóa phong cách" aria-label="Xóa phong cách">
+              <span data-interface-icon="trash-2"></span>
+            </button>
+          </div>
+          <div class="form-group">
+            <label for="chatbotStyleName">Tên phong cách</label>
+            <input id="chatbotStyleName" class="chatbot-style-text-input" type="text" maxlength="60" autocomplete="off" data-no-translate placeholder="Nhập tên phong cách" />
+          </div>
+          <div class="form-group chatbot-style-price-field">
+            <label for="chatbotStylePrice">Giá bán</label>
+            <input id="chatbotStylePrice" class="chatbot-style-text-input" type="number" min="1000" max="100000000" step="1000" inputmode="numeric" data-no-translate />
+          </div>
+          <div class="form-group chatbot-style-prompt-field">
+            <label for="chatbotStylePrompt">Cách nói chuyện</label>
+            <textarea id="chatbotStylePrompt" class="chatbot-style-textarea" rows="9" maxlength="4000" spellcheck="true" data-no-translate placeholder="Nhập cách nói chuyện của phong cách"></textarea>
+          </div>
+          <div class="form-group chatbot-style-word-limit-field">
+            <label for="chatbotStyleMaxResponseWords">Giới hạn độ dài trả lời</label>
+            <input id="chatbotStyleMaxResponseWords" class="chatbot-style-text-input" type="number" min="50" max="2000" step="50" inputmode="numeric" data-no-translate />
+            <small class="form-help">Số từ tối đa. AI được yêu cầu kết thúc trọn câu và chốt ý trước giới hạn.</small>
+          </div>
+        </section>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closeChatbotStyleModal()">Đóng</button>
+        <button class="btn-primary" id="saveChatbotStyleButton" type="submit">Lưu</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="form-modal" id="systemSettingsModal">
+    <div class="form-card system-settings-card">
+      <h2 class="system-settings-icon-title" title="Cấu hình hệ thống" aria-label="Cấu hình hệ thống"><span data-interface-icon="settings"></span></h2>
+      <div class="system-settings-section-title">Cấu hình từng cấp</div>
+      <form id="salesLevelSettingsForm">
+        <div class="table-wrap sales-level-settings-wrap">
+          <table class="sales-level-settings-table">
+            <thead>
+              <tr>
+                <th>Cấp</th>
+                <th>Ưu đãi</th>
+                <th>Hoa hồng</th>
+                <th>Dịch vụ</th>
+              </tr>
+            </thead>
+            <tbody id="salesLevelSettingsGrid"></tbody>
+          </table>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-primary" type="submit">Lưu cấu hình</button>
+        </div>
+      </form>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closeSystemSettingsModal()">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-modal" id="tourModal">
+    <form class="form-card" id="tourForm">
+      <h2 id="tourModalTitle">Thêm tour</h2>
+      <input type="hidden" id="tourId" />
+      <div class="form-grid">
+        <div class="form-group"><label>Tên tour</label><input id="tourName" required /></div>
+        <div class="form-group"><label>Tài khoản</label><select id="tourSalesName" required><option value="">Chọn tài khoản</option></select></div>
+        <div class="form-group"><label>Điểm đến</label><input id="tourDestination" /></div>
+        <div class="form-group"><label>Thời lượng</label><input id="tourDuration" /></div>
+        <div class="form-group"><label>Từ ngày</label><input id="tourStartDate" type="date" /></div>
+        <div class="form-group"><label>Đến ngày</label><input id="tourEndDate" type="date" /></div>
+        <div class="form-group"><label>Giá</label><input id="tourPrice" type="text" inputmode="numeric" autocomplete="off" placeholder="Ví dụ: 0 hoặc 1.000.000" /></div>
+        <div class="form-group"><label>Tổng chỗ</label><input id="tourSlots" type="number" min="0" /></div>
+        <div class="form-group"><label>Đã bán</label><input id="tourSold" type="number" min="0" /></div>
+        <div class="form-group"><label>Trạng thái</label><select id="tourStatus"><option>Đang bán</option><option>Tạm dừng</option><option>Đã bán</option></select></div>
+        <div class="form-group full"><label>Ảnh và video</label><input id="tourImage" type="hidden" /><input id="tourMedia" type="hidden" /><div class="image-attachment-picker"><button class="image-attachment-button" id="tourImageUploadButton" type="button" title="Đính kèm ảnh hoặc video" aria-label="Đính kèm ảnh hoặc video"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 11.6 12 21a6 6 0 0 1-8.5-8.5l9.9-9.9a4 4 0 1 1 5.7 5.7L9.2 18.2a2 2 0 1 1-2.8-2.8l9.2-9.2"/></svg></button><input id="tourImageFile" type="file" accept="image/*,video/*" multiple hidden /><div class="image-attachment-preview" id="tourImagePreview" aria-live="polite"></div></div></div>
+        <div class="form-group full"><label>Mô tả</label><textarea id="tourDescription" rows="3"></textarea></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closeTourModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Lưu tour</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="form-modal" id="planStatusOptionModal">
+    <form class="form-card" id="planStatusOptionForm">
+      <h2>Sửa trạng thái kế hoạch</h2>
+      <input type="hidden" id="planStatusOptionOriginalKey" />
+      <input type="hidden" id="planStatusOptionKey" />
+      <div class="form-grid">
+        <div class="form-group"><label>Tên hiển thị</label><input id="planStatusOptionLabel" placeholder="Đi biển" required /></div>
+        <div class="form-group"><label>Hiển thị</label><select id="planStatusOptionEnabled"><option value="true">Hiện</option><option value="false">Ẩn</option></select></div>
+        <div class="form-group"><label>Thứ tự</label><input id="planStatusOptionOrder" type="number" min="1" value="999" /></div>
+        <div class="form-group"><label>Màu trạng thái</label><input id="planStatusOptionColor" type="color" value="#6366f1" /></div>
+        <div class="form-group full"><label>Tag áp dụng</label><div class="tag-checkbox-grid" id="planStatusTagCheckboxes"></div></div>
+        <div class="form-group full account-lock-group">
+          <label class="account-lock-toggle" for="planStatusOptionMatchAll">
+            <input id="planStatusOptionMatchAll" type="checkbox" />
+            <span class="account-lock-box" aria-hidden="true"></span>
+            <span class="account-lock-text">Bắt buộc khớp tất cả tag</span>
+          </label>
+        </div>
+        <div class="form-group full"><label>Mô tả</label><textarea id="planStatusOptionDescription" rows="3"></textarea></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closePlanStatusOptionModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Lưu trạng thái</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="form-modal" id="travelTagModal">
+    <form class="form-card" id="travelTagForm">
+      <h2>Thêm tag du lịch</h2>
+      <div class="form-grid">
+        <div class="form-group"><label>Tên tag</label><input id="travelTagName" placeholder="Ví dụ: ẩm thực" required /></div>
+        <div class="form-group"><label>Màu tag</label><input id="travelTagColor" type="color" value="#6366f1" /></div>
+        <div class="form-group full"><label>Tag hiện có</label><div class="admin-existing-tag-list" id="travelTagExistingList"></div></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closeTravelTagModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Lưu tag</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="form-modal" id="postModal">
+    <form class="form-card" id="postForm">
+      <h2 id="postModalTitle">Thêm bài viết</h2>
+      <input type="hidden" id="postId" />
+      <input type="hidden" id="postMonth" />
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Lễ hội/ngày lễ</label>
+          <div class="post-ai-keyword-field">
+            <input id="postFestival" placeholder="Nhập lễ hội/ngày lễ" autocomplete="off" />
+            <button class="post-ai-generate-button twai-ai-icon-button" id="postAiGenerateButton" type="button" title="Tự tạo nội dung bằng AI" aria-label="Tự tạo nội dung bài viết bằng AI">
+              <span data-interface-icon="sparkles"></span>
+            </button>
+          </div>
+          <small class="form-help post-ai-generate-status" id="postAiGenerateStatus" aria-live="polite"></small>
+        </div>
+        <div class="form-group"><label>Tiêu đề</label><input id="postTitle" placeholder="Nhập tiêu đề bài viết" /></div>
+        <div class="form-group"><label>Tài khoản</label><select id="postAuthor" required><option value="">Chọn tài khoản</option></select></div>
+        <div class="form-group"><label>Trạng thái</label><select id="postStatus"><option>Hiển thị</option><option>Ẩn</option></select></div>
+        <div class="form-group"><label>Tỉnh thành</label><input id="postProvince" placeholder="Ví dụ: Huế, Hà Nội" /></div>
+        <div class="form-group full"><label>Từ khóa tour</label><input id="postTourKeywords" placeholder="Ví dụ: Huế, Festival, di sản" /></div>
+        <div class="form-group full"><label>Tóm tắt</label><textarea id="postSummary" rows="3"></textarea></div>
+        <div class="form-group full"><label>Nội dung</label><textarea id="postContent" rows="5"></textarea></div>
+        <div class="form-group full"><label>Ảnh và video minh hoạ</label><input id="postImageUrls" type="hidden" /><div class="image-attachment-picker"><button class="image-attachment-button" id="postImageUploadButton" type="button" title="Đính kèm ảnh hoặc video" aria-label="Đính kèm ảnh hoặc video"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 11.6 12 21a6 6 0 0 1-8.5-8.5l9.9-9.9a4 4 0 1 1 5.7 5.7L9.2 18.2a2 2 0 1 1-2.8-2.8l9.2-9.2"/></svg></button><input id="postImageFiles" type="file" accept="image/*,video/*" multiple hidden /><div class="image-attachment-preview" id="postImagePreview" aria-live="polite"></div></div></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closePostModal()">Đóng</button>
+        <button class="btn-primary" type="submit">Lưu bài viết</button>
+      </div>
+    </form>
+  </div>
+
+  <input id="adminSiteLogoInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" hidden />
+  <div class="toast" id="tourToast"></div>
+
+  <script src="/script/accounts.js?v=2026-07-28-stream-cancel-v2"></script>
+  <script src="/script/management_nav.js?v=2026-07-11-business-company-v1"></script>
+  <script src="/script/image_upload_optimizer.js?v=2026-07-10-data-fix-v1"></script>
+  <script src="/script/tour_sales.js?v=2026-07-12-language-audit-fix-v2"></script>
+  <script src="/script/admin_panel.js?v=2026-08-02-admin-revenue-v3"></script>
+  <script src="/script/admin_feedback.js?v=2026-08-01-admin-excel-export-v1"></script>
+  <script src="/script/admin_excel_export.js?v=2026-08-02-admin-excel-no-translation-wait-v6"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-07-28-admin-recipient-v2"></script>
+<script src="/script/theme_toggle.js?v=2026-07-27-notification-cleanup-v3"></script>
+</body>
+</html>
+

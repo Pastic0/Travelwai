@@ -1,0 +1,50 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Giỏ hàng - TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-icon.webp?v=2026-07-26-brand-icon-v2" type="image/webp" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-07-11-business-company-v1" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-07-27-restore-action-icons-v1" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-07-13-ui-payment-fix-v1" />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-07-27-floating-tools-v2" />
+  <script defer src="/script/site_branding.js?v=2026-07-26-branding-cache-fix-v3"></script>
+</head>
+<body class="tour-admin-page cart-page" data-page="cart">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "cart")
+
+  <main class="tour-admin-shell">
+    <section class="tour-admin-hero">
+      <div>
+        <span class="eyebrow">Thanh toán TravelwAI</span>
+        <h1>Giỏ hàng</h1>
+      </div>
+    </section>
+
+    <section class="management-panel">
+      <div class="panel-header-row sales-list-header">
+        <div><h2>Sản phẩm chờ thanh toán</h2></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Sản phẩm</th><th>Loại</th><th>Số lượng</th><th>Tổng tiền</th><th>Trạng thái</th><th>Thao tác</th></tr>
+          </thead>
+          <tbody id="cartTableBody"><tr><td colspan="6" class="empty-line">Đang tải giỏ hàng...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="tourToast"></div>
+  <script src="/script/accounts.js?v=2026-07-28-account-presence-v1"></script>
+  <script src="/script/cart.js?v=2026-07-01-clean-v1"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-07-28-admin-recipient-v2"></script>
+<script src="/script/theme_toggle.js?v=2026-07-27-notification-cleanup-v3"></script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Phân tích địa danh - TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-icon.webp?v=2026-07-26-brand-icon-v2" type="image/webp" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-07-11-business-company-v1" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-07-27-restore-action-icons-v1" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-07-11-multi-media-attachments-v1" />
+  <link rel="stylesheet" href="/css/location_analysis.css?v=2026-08-01-location-analysis-v7" />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-07-27-floating-tools-v2" />
+  <script defer src="/script/site_branding.js?v=2026-07-26-branding-cache-fix-v3"></script>
+</head>
+<body class="tour-admin-page location-analysis-page" data-page="location-analysis">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "location-analysis")
+
+  <main class="tour-admin-shell location-analysis-shell">
+    <section class="tour-admin-hero location-analysis-hero">
+      <div class="location-analysis-hero-copy">
+        <span class="eyebrow">Nhận diện bằng hình ảnh</span>
+        <h1>Phân tích địa danh</h1>
+      </div>
+    </section>
+
+    <section class="location-analysis-workspace">
+      <article class="management-panel analysis-panel upload-panel">
+        <div class="analysis-panel-heading">
+          <div>
+            <h2>Chọn ảnh cần phân tích</h2>
+          </div>
+        </div>
+
+        <div id="locationDropzone" class="location-dropzone" role="button" tabindex="0" aria-label="Chọn, kéo thả hoặc dán ảnh">
+          <input id="locationImageInput" class="location-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" aria-label="Chọn ảnh từ máy" />
+          <div id="locationUploadPlaceholder" class="upload-placeholder">
+            <span class="upload-icon" data-interface-icon="upload"></span>
+            <h3>Kéo thả ảnh vào đây</h3>
+            <p>Nhấn để chọn ảnh hoặc Ctrl+V để dán ảnh đã sao chép</p>
+            <button id="locationChooseImageButton" class="secondary-button" type="button">
+              <span data-interface-icon="file"></span>
+              Chọn ảnh
+            </button>
+            <small>JPG, PNG, WEBP hoặc HEIC · tối đa 10 MB</small>
+          </div>
+
+          <div id="locationImagePreview" class="image-preview" hidden>
+            <img id="locationPreviewImage" alt="Ảnh đã chọn" />
+            <div class="image-preview-overlay">
+              <div>
+                <strong id="locationImageName"></strong>
+                <span id="locationImageMeta"></span>
+              </div>
+              <button id="locationRemoveImageButton" class="icon-button" type="button" aria-label="Xóa ảnh" title="Xóa ảnh">
+                <span data-interface-icon="trash-2"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="analysis-scope">
+          <span class="scope-chip"><span data-interface-icon="map"></span> Địa danh</span>
+          <span class="scope-chip"><span data-interface-icon="gem"></span> Ẩm thực</span>
+        </div>
+
+        <button id="locationAnalyzeButton" class="primary-analysis-button" type="button" disabled>
+          <span data-interface-icon="sparkles"></span>
+          <span>Phân tích bằng AI</span>
+        </button>
+        <div id="locationAnalysisMessage" class="analysis-message" aria-live="polite"></div>
+      </article>
+
+      <article id="locationResultPanel" class="management-panel analysis-panel result-panel" data-result-state="empty">
+        <div class="analysis-panel-heading">
+          <div>
+            <h2>Kết quả phân tích</h2>
+          </div>
+        </div>
+
+        <div id="locationResultEmpty" class="result-empty-state">
+          <div class="result-empty-illustration">
+            <span data-interface-icon="target"></span>
+          </div>
+          <h3>Chưa có kết quả</h3>
+          <p>Chọn một ảnh ở bên trái và bắt đầu phân tích.</p>
+        </div>
+
+        <div id="locationResultLoading" class="result-loading" hidden aria-live="polite">
+          <div class="ai-loader"><span></span><span></span><span></span></div>
+          <h3>AI đang quan sát ảnh</h3>
+          <p>Đang nhận diện nội dung trong ảnh...</p>
+        </div>
+
+        <div id="locationResultContent" class="result-content" hidden>
+          <section class="result-summary-card">
+            <div class="result-summary-topline">
+              <span id="locationResultLabel" class="result-label">Kết quả nhận diện</span>
+              <span id="locationConfidenceBadge" class="confidence-badge">Chưa xác định</span>
+            </div>
+            <h3 id="locationResultTitle">Chưa xác định</h3>
+            <p id="locationResultSummary"></p>
+            <div id="locationResultLocationLine" class="result-location-line" hidden>
+              <span data-interface-icon="map"></span>
+              <span id="locationProvinceText"></span>
+            </div>
+          </section>
+
+          <section id="locationLandmarkCard" class="result-category-card" hidden>
+            <div class="result-category-title"><span data-interface-icon="map"></span><h3>Địa danh</h3></div>
+            <div id="locationLandmarkResult" class="result-category-body"></div>
+          </section>
+
+          <section id="locationFoodCard" class="result-category-card" hidden>
+            <div class="result-category-title"><span data-interface-icon="gem"></span><h3>Ẩm thực</h3></div>
+            <div id="locationFoodResult" class="result-category-body"></div>
+          </section>
+
+          <section id="locationDetailCard" class="result-notes-card" hidden>
+            <div class="result-category-title"><span data-interface-icon="eye"></span><h3>Phân tích chi tiết ảnh</h3></div>
+            <div class="result-detail-block">
+              <strong>Mô tả tổng thể</strong>
+              <div id="locationImageDescription" class="result-category-body"></div>
+            </div>
+            <div id="locationObservationBlock" class="result-detail-block" hidden>
+              <strong>Chi tiết quan sát được</strong>
+              <div id="locationObservationResult" class="result-category-body"></div>
+            </div>
+            <div id="locationEvidenceBlock" class="result-detail-block" hidden>
+              <strong>Căn cứ nhận diện</strong>
+              <div id="locationEvidenceResult" class="result-category-body"></div>
+            </div>
+          </section>
+
+          <button id="locationAnalyzeAgainButton" class="secondary-button analyze-again-button" type="button">
+            <span data-interface-icon="refresh-cw"></span>
+            Phân tích ảnh khác
+          </button>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script src="/script/accounts.js?v=2026-07-28-account-presence-v1"></script>
+  <script src="/script/image_upload_optimizer.js?v=2026-06-24-webp-optimize-v2"></script>
+  <script src="/script/location_analysis.js?v=2026-08-01-location-analysis-v7"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-07-28-admin-recipient-v2"></script>
+  <script src="/script/theme_toggle.js?v=2026-07-27-notification-cleanup-v3"></script>
+</body>
+</html>

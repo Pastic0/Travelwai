@@ -1,0 +1,19 @@
+@await Html.PartialAsync("~/Views/Shared/_TravelwAINotification.cshtml")
+<script src="/script/interface_icons.js?v=2026-07-27-floating-tools-v2"></script>
+<script src="/script/travelwai_pointer_scroll.js?v=2026-07-13-pointer-local-scroll-v1"></script>
+<script src="/script/travelwai_feedback_panel.js?v=2026-07-27-feedback-fix-v2"></script>
+<script src="/script/travelwai_ai_translate.js?v=2026-07-12-comment-bidirectional-input-align-v1"></script>
+
+@await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingChatbot.cshtml")
+
+<div id="travelwaiFloatingTools" class="twai-floating-tools-zone" aria-label="Công cụ nhanh TravelwAI">
+  <button id="travelwaiReloadButton" class="twai-theme-toggle twai-tool-action twai-reload-toggle" style="--twai-tool-index:4" type="button" aria-label="Tải lại" title="Tải lại"><span data-interface-icon="refresh-cw"></span></button>
+  <button id="travelwaiCacheClearButton" class="twai-theme-toggle twai-tool-action twai-cache-clear-toggle" style="--twai-tool-index:3" type="button" aria-label="Dọn dẹp" title="Dọn dẹp"><span data-interface-icon="trash-2"></span></button>
+  <button id="travelwaiLanguageToggle" class="twai-theme-toggle twai-tool-action twai-language-choice active" style="--twai-tool-index:2" type="button" data-language-target="en" aria-label="Chuyển sang tiếng Anh" title="Chuyển sang tiếng Anh" data-no-translate>En</button>
+  <button id="travelwaiThemeToggle" class="twai-theme-toggle twai-tool-action" style="--twai-tool-index:1" type="button" aria-label="Chuyển nền" title="Chuyển nền"><span data-interface-icon="moon"></span></button>
+  <button id="travelwaiToolsRevealButton" class="twai-theme-toggle twai-tools-reveal-toggle" type="button" aria-label="Mở công cụ nhanh" title="Công cụ nhanh" aria-expanded="false" data-no-translate><span data-interface-icon="chevron-up"></span></button>
+</div>
+
+<script src="/script/travelwai_language.js?v=2026-08-02-translate-all-text-v1"></script>
+<script src="/script/travelwai_page_commands.js?v=2026-07-11-business-company-v1"></script>
+<script src="/script/travelwai_pricing_popup.js?v=2026-07-13-ui-payment-fix-v1"></script>

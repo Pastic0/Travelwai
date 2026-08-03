@@ -1,0 +1,162 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bài viết - TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-icon.webp?v=2026-07-26-brand-icon-v2" type="image/webp" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-07-11-business-company-v1" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-07-27-restore-action-icons-v1" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-07-12-compact-nav-ai-icons-v1" />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-07-27-floating-tools-v2" />
+  <script defer src="/script/site_branding.js?v=2026-07-26-branding-cache-fix-v3"></script>
+</head>
+<body class="tour-admin-page posts-page" data-page="posts">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "posts")
+
+  <main class="tour-admin-shell posts-shell">
+    <section class="tour-admin-hero posts-hero">
+      <div>
+        <span class="eyebrow">Bài viết TravelwAI</span>
+        <h1>Bài viết</h1>
+      </div>
+      <div class="posts-hero-actions">
+        <button type="button" id="postTourOfferBtn" class="tour-offer-btn">
+          <svg class="tour-offer-btn-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8"></path>
+            <path d="M2 8h20v4H2z"></path>
+            <path d="M12 8v13"></path>
+            <path d="M12 8H8.5A2.5 2.5 0 1 1 12 5.5V8z"></path>
+            <path d="M12 8h3.5A2.5 2.5 0 1 0 12 5.5V8z"></path>
+          </svg>
+          <span>Ưu đãi</span>
+        </button>
+        <button class="post-month-pill post-add-pill" id="openPublicPostModalButton" type="button">Thêm bài viết</button>
+      </div>
+    </section>
+
+    <section class="tour-search-panel public-tour-search-panel">
+      <div class="tour-search-box">
+        <input id="postSearchInput" type="search" placeholder="Tìm bài viết theo lễ hội, tỉnh thành, ngày lễ..." autocomplete="off" />
+        <button class="btn-soft btn-clear-tour-search" id="clearPostSearch" type="button">Xóa</button>
+      </div>
+    </section>
+
+    <section class="management-panel posts-month-panel">
+      <div class="panel-header-row">
+        <div>
+          <h2>Bài viết nổi bật</h2>
+        </div>
+        <div class="post-view-actions">
+          <button class="post-view-toggle post-my-toggle" id="myPostsFilterButton" type="button" title="Xem bài viết của tôi" aria-label="Xem bài viết của tôi">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="posts-grid" id="postsGrid">
+        <div class="empty-line">Đang tải bài viết...</div>
+      </div>
+    </section>
+  </main>
+
+  <div class="form-modal" id="postDetailModal">
+    <div class="form-card post-detail-card">
+      <h2 id="postDetailTitle">Bài viết</h2>
+      <div class="post-detail-meta" id="postDetailMeta"></div>
+      <div class="post-detail-images" id="postDetailImages"></div>
+      <p id="postDetailContent"></p>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closePostDetailModal()">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-modal" id="postCommentsModal" aria-hidden="true">
+    <div class="form-card post-comments-card">
+      <div class="post-comments-header">
+        <div>
+          <span class="eyebrow">Bình luận</span>
+          <h2 id="postCommentsTitle">Bình luận bài viết</h2>
+        </div>
+        <button class="post-comments-close interface-icon-button" id="closePostCommentsButton" type="button" aria-label="Đóng bình luận" title="Đóng">
+          <span data-interface-icon="x"></span>
+        </button>
+      </div>
+      <div class="post-comments-list" id="postCommentsList">
+        <div class="empty-line">Đang tải bình luận...</div>
+      </div>
+      <form class="post-comment-form" id="postCommentForm">
+        <textarea id="postCommentInput" rows="2" maxlength="1000" placeholder="Nhập bình luận..." required></textarea>
+        <button class="post-comment-send interface-icon-button" id="postCommentSubmitButton" type="submit" aria-label="Gửi bình luận" title="Gửi bình luận">
+          <span data-interface-icon="send"></span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="form-modal" id="publicPostModal">
+    <form class="form-card public-post-card" id="publicPostForm">
+      <h2 id="publicPostModalTitle">Thêm bài viết</h2>
+      <input type="hidden" id="publicPostId" />
+      <input type="hidden" id="publicPostMonth" />
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Lễ hội/ngày lễ</label>
+          <div class="post-ai-keyword-field">
+            <input id="publicPostFestival" placeholder="Nhập lễ hội/ngày lễ" autocomplete="off" />
+            <button class="post-ai-generate-button twai-ai-icon-button" id="publicPostAiGenerateButton" type="button" title="Tự tạo nội dung bằng AI" aria-label="Tự tạo nội dung bài viết bằng AI">
+              <span data-interface-icon="sparkles"></span>
+            </button>
+          </div>
+          <small class="form-help post-ai-generate-status" id="publicPostAiGenerateStatus" aria-live="polite"></small>
+        </div>
+        <div class="form-group"><label>Tiêu đề</label><input id="publicPostTitle" placeholder="Nhập tiêu đề bài viết" /></div>
+        <div class="form-group"><label>Trạng thái</label><select id="publicPostStatus"><option>Hiển thị</option><option>Ẩn</option></select></div>
+        <div class="form-group"><label>Tỉnh thành</label><input id="publicPostProvince" placeholder="Ví dụ: Huế, Hà Nội" /></div>
+        <div class="form-group full"><label>Từ khóa tour</label><input id="publicPostTourKeywords" placeholder="Ví dụ: Huế, Festival, di sản" /></div>
+        <div class="form-group full"><label>Tóm tắt</label><textarea id="publicPostSummary" rows="3"></textarea></div>
+        <div class="form-group full"><label>Nội dung</label><textarea id="publicPostContent" rows="5" required></textarea></div>
+        <div class="form-group full"><label>Ảnh và video minh hoạ</label><input id="publicPostImageUrls" type="hidden" /><div class="image-attachment-picker"><button class="image-attachment-button" id="publicPostImageButton" type="button" title="Đính kèm ảnh hoặc video" aria-label="Đính kèm ảnh hoặc video"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 11.6 12 21a6 6 0 0 1-8.5-8.5l9.9-9.9a4 4 0 1 1 5.7 5.7L9.2 18.2a2 2 0 1 1-2.8-2.8l9.2-9.2"/></svg></button><input id="publicPostImages" type="file" accept="image/*,video/*" multiple hidden /><div class="image-attachment-preview" id="publicPostImagePreview" aria-live="polite"></div></div></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="closePublicPostModal()">Đóng</button>
+        <button class="btn-primary" id="publicPostSubmitButton" type="submit">Lưu bài viết</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="form-modal tour-offer-modal" id="postTourOfferModal">
+    <div class="form-card tour-offer-card">
+      <div class="tour-offer-modal-header">
+        <div>
+          <h2>Ưu đãi</h2>
+        </div>
+        <button type="button" class="tour-offer-close" onclick="closePostTourOfferModal()" aria-label="Đóng"><span data-interface-icon="x"></span></button>
+      </div>
+
+      <div class="tour-offer-progress-wrap">
+        <div class="tour-offer-progress-info">
+          <strong id="postTourOfferDiscountText">Giảm 0%</strong>
+          <span id="postTourOfferProgressText">0/1 bài viết</span>
+        </div>
+        <div class="tour-offer-progress-bar">
+          <span id="postTourOfferProgressFill"></span>
+        </div>
+      </div>
+
+      <div class="tour-offer-invite-list" id="postTourOfferInfo"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="tourToast"></div>
+  <script src="/script/accounts.js?v=2026-07-28-stream-cancel-v2"></script>
+  <script src="/script/image_upload_optimizer.js?v=2026-07-01-clean-v1"></script>
+  <script src="/script/posts.js?v=2026-07-28-ask-ai-cancel-v2"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-07-28-admin-recipient-v2"></script>
+<script src="/script/theme_toggle.js?v=2026-07-27-notification-cleanup-v3"></script>
+</body>
+</html>

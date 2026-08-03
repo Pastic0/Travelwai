@@ -1,0 +1,1275 @@
+@charset "UTF-8";
+
+:root {
+  --travelwai-font: Tahoma, Arial, sans-serif;
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea,
+a,
+p,
+span,
+div,
+label,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+td,
+th,
+small,
+strong,
+em,
+b,
+nav,
+section,
+article,
+header,
+footer,
+main,
+form,
+option,
+optgroup {
+  font-family: var(--travelwai-font) !important;
+}
+
+body {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  font-family: var(--travelwai-font) !important;
+}
+
+svg,
+svg * {
+  font-family: var(--travelwai-font) !important;
+}
+
+.fa,
+.fa-solid,
+.fas,
+[class^="fa-"],
+[class*=" fa-"] {
+  font-family: "Font Awesome 6 Free" !important;
+  font-weight: 900 !important;
+}
+
+.fa-regular,
+.far {
+  font-family: "Font Awesome 6 Free" !important;
+  font-weight: 400 !important;
+}
+
+.fa-brands,
+.fab {
+  font-family: "Font Awesome 6 Brands" !important;
+}
+:root {
+  --twai-page-title-size: clamp(2.15rem, 3.05vw, 3.05rem);
+  --twai-page-title-line: 1.08;
+  --twai-page-title-spacing: -0.035em;
+  --twai-page-eyebrow-size: 0.86rem;
+  --twai-section-title-size: clamp(1.18rem, 1.6vw, 1.45rem);
+  --twai-modal-title-size: clamp(1.25rem, 2vw, 1.65rem);
+}
+
+html,
+body,
+body *:not(.fa):not(.fa-solid):not(.fas):not(.fa-regular):not(.far):not(.fa-brands):not(.fab):not([class^="fa-"]):not([class*=" fa-"]) {
+  font-family: var(--travelwai-font) !important;
+}
+
+input::placeholder,
+textarea::placeholder,
+select,
+option,
+button {
+  font-family: var(--travelwai-font) !important;
+}
+
+.fa,
+.fa-solid,
+.fas,
+[class^="fa-"],
+[class*=" fa-"] {
+  font-family: "Font Awesome 6 Free" !important;
+  font-weight: 900 !important;
+}
+
+.fa-regular,
+.far {
+  font-family: "Font Awesome 6 Free" !important;
+  font-weight: 400 !important;
+}
+
+.fa-brands,
+.fab {
+  font-family: "Font Awesome 6 Brands" !important;
+}
+
+.province-hero h1,
+.content .province-hero h1,
+.tour-admin-hero h1,
+.public-tour-hero h1,
+.schedule-hero h1,
+.notifications-hero h1,
+.profile-hero h1,
+body.contact-page .content .province-hero h1 {
+  font-family: var(--travelwai-font) !important;
+  font-size: var(--twai-page-title-size) !important;
+  line-height: var(--twai-page-title-line) !important;
+  font-weight: 900 !important;
+  letter-spacing: var(--twai-page-title-spacing) !important;
+  margin-top: 0 !important;
+}
+
+.province-hero .eyebrow,
+.content .province-hero .eyebrow,
+.tour-admin-hero .eyebrow,
+.public-tour-hero .eyebrow,
+.schedule-hero .eyebrow,
+.notifications-hero .eyebrow,
+.profile-hero .eyebrow,
+body.contact-page .content .province-hero .eyebrow {
+  font-family: var(--travelwai-font) !important;
+  font-size: var(--twai-page-eyebrow-size) !important;
+  line-height: 1.2 !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.12em !important;
+}
+
+.tour-panel-head h2,
+.panel-head h2,
+.schedule-card-header h2,
+.notification-section-header h2,
+.profile-info-head h2,
+.province-list-panel h2,
+.province-list-title h2,
+.modal-card h2,
+.modal-content h2,
+#tourModalTitle,
+#modalTitle,
+#detailTitle,
+#dayPlanTitle {
+  font-family: var(--travelwai-font) !important;
+  font-size: var(--twai-section-title-size) !important;
+  line-height: 1.25 !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.02em !important;
+}
+
+#tourModalTitle,
+#modalTitle,
+#detailTitle,
+#dayPlanTitle,
+.modal-card > h2,
+.modal-content > h2 {
+  font-size: var(--twai-modal-title-size) !important;
+}
+
+.title,
+.login-title {
+  font-family: var(--travelwai-font) !important;
+  letter-spacing: -0.025em !important;
+  font-weight: 900 !important;
+}
+
+.hero-text h1,
+.hero-text h2 {
+  font-family: var(--travelwai-font) !important;
+  line-height: 1.05 !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.035em !important;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --twai-page-title-size: clamp(1.72rem, 7vw, 2.25rem);
+    --twai-section-title-size: clamp(1.05rem, 4.6vw, 1.28rem);
+    --twai-modal-title-size: clamp(1.15rem, 5vw, 1.42rem);
+  }
+}
+
+.province-name {
+  font-family: var(--travelwai-font) !important;
+  font-size: var(--twai-page-title-size) !important;
+  line-height: var(--twai-page-title-line) !important;
+  font-weight: 900 !important;
+  letter-spacing: var(--twai-page-title-spacing) !important;
+}
+.province-hero .eyebrow,
+.content .province-hero .eyebrow,
+.tour-admin-hero .eyebrow,
+.public-tour-hero .eyebrow,
+.schedule-hero .eyebrow,
+.notifications-hero > span,
+.notifications-hero .eyebrow,
+.profile-hero .eyebrow,
+body.contact-page .content .province-hero .eyebrow {
+  display: none !important;
+}
+.panel-header > div > span:first-child,
+.profile-card-header > div > span:first-child {
+  display: none !important;
+}button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+a[class*="btn"],
+button[class*="btn"],
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-soft,
+.btn-danger,
+.btn-warning,
+.detail-btn,
+.create-btn,
+.login-btn,
+.signup-btn,
+.upload-btn,
+.logout-btn,
+.back-btn,
+.download-btn,
+.memory-journal-btn,
+.province-pill,
+.tab-btn,
+.close-btn,
+.close-panel-btn,
+.action-btn,
+.send-btn,
+.start-chat-btn,
+.btn-accept,
+.btn-decline,
+.btn-add-email,
+#markAllNotificationsReadBtn {
+  text-align: center !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.stat-card,
+.overview-card,
+.notification-stat,
+.notification-section,
+.notification-empty,
+.notification-panel-state,
+.notification-panel-summary,
+.contact-card,
+.profile-summary-card,
+.profile-hero-badge,
+.public-tour-card,
+.public-tour-body,
+.memory-card,
+.memory-journal-card,
+.memory-viewing-modal .memory-card,
+.schedule-card,
+.selected-file-card,
+.management-panel:has(> h2),
+.management-panel:has(> p),
+.management-panel:has(> .empty-state),
+.province-pill,
+.radio-card {
+  text-align: center !important;
+}
+
+.stat-card strong,
+.stat-card span,
+.overview-card strong,
+.overview-card span,
+.notification-stat strong,
+.notification-stat span,
+.profile-hero-badge strong,
+.profile-hero-badge span,
+.public-tour-body h3,
+.public-tour-body p,
+.memory-card h4,
+.memory-card p,
+.schedule-card h3,
+.schedule-card p {
+  text-align: center !important;
+}
+
+.public-tour-body .tour-meta,
+.public-tour-body .tour-actions,
+.schedule-card-top,
+.schedule-card .schedule-header,
+.profile-actions,
+.modal-actions,
+.form-actions,
+.panel-header-row .sales-list-actions,
+.inline-actions {
+  justify-content: center !important;
+}
+
+table,
+thead,
+tbody,
+tr,
+th,
+td,
+.form-card,
+.form-card *,
+.form-group,
+.form-group *,
+.profile-detail-card,
+.profile-detail-card *,
+.schedule-editor-modal,
+.schedule-editor-modal *,
+.modal-content form,
+.modal-content form * {
+  text-align: initial;
+}
+
+.form-card button,
+.form-card .btn-primary,
+.form-card .btn-secondary,
+.form-card .btn-soft,
+.form-card .btn-danger,
+.form-card .btn-warning,
+.schedule-editor-modal button,
+.modal-content form button {
+  text-align: center !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+:root {
+  --travelwai-font: Tahoma, Arial, sans-serif;
+}
+
+html,
+body,
+body *:not(.fa):not(.fa-solid):not(.fas):not(.fa-regular):not(.far):not(.fa-brands):not(.fab):not([class^="fa-"]):not([class*=" fa-"]) {
+  font-family: var(--travelwai-font) !important;
+}
+
+input,
+textarea,
+select,
+button,
+option,
+optgroup,
+input::placeholder,
+textarea::placeholder {
+  font-family: var(--travelwai-font) !important;
+}
+
+:root {
+  --travelwai-font: Tahoma, Arial, sans-serif;
+}
+
+html,
+body,
+body *:not(.fa):not(.fa-solid):not(.fas):not(.fa-regular):not(.far):not(.fa-brands):not(.fab):not([class^="fa-"]):not([class*=" fa-"]) {
+  font-family: var(--travelwai-font) !important;
+}
+
+input,
+textarea,
+select,
+button,
+option,
+optgroup,
+input::placeholder,
+textarea::placeholder,
+svg text,
+svg tspan {
+  font-family: var(--travelwai-font) !important;
+}
+
+.fa,
+.fa-solid,
+.fas,
+[class^="fa-"],
+[class*=" fa-"] {
+  font-family: "Font Awesome 6 Free" !important;
+}
+
+.fa-brands,
+.fab {
+  font-family: "Font Awesome 6 Brands" !important;
+}
+
+:root {
+  --travelwai-font: Tahoma, "Segoe UI", Arial, sans-serif;
+  --twai-page-bg-light: url("/main_site_image/travelwai-bg-light.webp");
+  --twai-page-bg-dark: url("/main_site_image/travelwai-bg-dark.webp");
+  --twai-page-bg-image: var(--twai-page-bg-light);
+}
+
+html[data-travelwai-theme="dark"] {
+  --twai-page-bg-image: var(--twai-page-bg-dark);
+}
+
+html,
+body,
+body *:not(.fa):not(.fa-solid):not(.fas):not(.fa-regular):not(.far):not(.fa-brands):not(.fab):not([class^="fa-"]):not([class*=" fa-"]) {
+  font-family: var(--travelwai-font) !important;
+  font-style: normal !important;
+  font-variant: normal !important;
+  font-kerning: normal !important;
+  text-rendering: auto !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body *:not(.fa):not(.fa-solid):not(.fas):not(.fa-regular):not(.far):not(.fa-brands):not(.fab):not([class^="fa-"]):not([class*=" fa-"]) {
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+}
+
+h1, h2, h3, h4, h5, h6,
+.logo-text a,
+.main-nav a,
+.hero-text h1,
+.hero-text h2,
+.title,
+.login-title,
+.province-name,
+.province-hero h1,
+.tour-admin-hero h1,
+.public-tour-hero h1,
+.schedule-hero h1,
+.notifications-hero h1,
+.profile-hero h1,
+.landing-culture-page .culture-hero-title,
+.landing-culture-page .culture-section-heading h2,
+.landing-culture-page .landing-process-heading h2,
+.landing-culture-page .culture-final h2,
+.public-tour-body h3,
+.memory-card h4,
+.schedule-card h3 {
+  line-height: 1.2 !important;
+  letter-spacing: normal !important;
+}
+
+p, li, label, small, strong, em, b, td, th,
+button, input, select, textarea,
+.btn, .detail-btn, .login-btn, .signup-btn,
+.landing-login-btn, .landing-primary-btn,
+.province-pill, .tab-btn, .action-btn {
+  letter-spacing: normal !important;
+}
+
+p, li, label, td, th, textarea,
+.hero-text p,
+.landing-lead,
+.culture-section-heading p,
+.public-tour-body p,
+.schedule-card p,
+.memory-card p,
+.notification-item p,
+.profile-detail-card p {
+  line-height: 1.55 !important;
+}
+
+.fa,
+.fa-solid,
+.fas,
+[class^="fa-"],
+[class*=" fa-"] {
+  font-family: "Font Awesome 6 Free" !important;
+  font-weight: 900 !important;
+}
+
+.fa-regular,
+.far {
+  font-family: "Font Awesome 6 Free" !important;
+  font-weight: 400 !important;
+}
+
+.fa-brands,
+.fab {
+  font-family: "Font Awesome 6 Brands" !important;
+}
+
+html body {
+  background-image: var(--twai-page-bg-image) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+}
+
+.background-slider,
+.landing-background-slider {
+  background-image: var(--twai-page-bg-image) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  transition: none !important;
+  animation: none !important;
+}
+
+html body {
+  transition: none !important;
+  animation: none !important;
+}
+
+.twai-floating-tools-zone {
+  position: fixed;
+  right: 18px;
+  top: 74px;
+  width: 72px;
+  min-height: 304px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 8px;
+  z-index: 2147483000;
+}
+
+.twai-theme-toggle {
+  width: 54px;
+  height: 54px;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.72);
+  color: #ffffff;
+  font-family: var(--travelwai-font) !important;
+  font-size: 24px;
+  line-height: 1 !important;
+  cursor: pointer;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.34);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 2147483000;
+  transition: opacity 0.16s ease, visibility 0.16s ease, transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.twai-tool-action {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-8px) scale(0.96);
+}
+
+.twai-tools-reveal-toggle {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.twai-floating-tools-zone:hover .twai-tools-reveal-toggle,
+.twai-floating-tools-zone:focus-within .twai-tools-reveal-toggle {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-8px) scale(0.94);
+}
+
+.twai-floating-tools-zone:hover .twai-tool-action,
+.twai-floating-tools-zone:focus-within .twai-tool-action,
+.twai-tool-action:focus-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.twai-theme-toggle:hover {
+  transform: translateY(-2px) scale(1.03);
+  background: rgba(14, 165, 233, 0.86);
+  box-shadow: 0 22px 52px rgba(14, 165, 233, 0.28);
+}
+
+.twai-theme-toggle:active {
+  transform: translateY(0) scale(0.98);
+}
+
+html[data-travelwai-theme="dark"] .twai-theme-toggle {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+@media (max-width: 640px) {
+  .twai-floating-tools-zone {
+    right: 8px;
+    top: 68px;
+    width: 64px;
+    min-height: 280px;
+    gap: 8px;
+  }
+
+  .twai-theme-toggle {
+    width: 48px;
+    height: 48px;
+    font-size: 22px;
+  }
+}
+
+.twai-floating-tools-zone {
+  right: 18px !important;
+  top: 50% !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: 64px !important;
+  min-height: 64px !important;
+  padding: 0 !important;
+  gap: 9px !important;
+  justify-content: center !important;
+  align-items: center !important;
+  transform: translateY(-50%) !important;
+}
+
+.twai-floating-tools-zone:hover,
+.twai-floating-tools-zone:focus-within {
+  min-height: 294px !important;
+}
+
+.twai-theme-toggle {
+  width: 54px !important;
+  height: 54px !important;
+}
+
+.twai-tools-reveal-toggle {
+  position: absolute !important;
+  inset: 5px auto auto 5px !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: none !important;
+}
+
+.twai-floating-tools-zone:hover .twai-tools-reveal-toggle,
+.twai-floating-tools-zone:focus-within .twai-tools-reveal-toggle {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: scale(0.92) !important;
+}
+
+.twai-tool-action {
+  position: relative !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: translateX(8px) scale(0.96) !important;
+}
+
+.twai-floating-tools-zone:hover .twai-tool-action,
+.twai-floating-tools-zone:focus-within .twai-tool-action,
+.twai-tool-action:focus-visible {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: none !important;
+}
+
+@media (max-width: 640px) {
+  .twai-floating-tools-zone {
+    right: 8px !important;
+    top: 50% !important;
+    width: 58px !important;
+  }
+
+  .twai-theme-toggle {
+    width: 48px !important;
+    height: 48px !important;
+  }
+}
+.twai-theme-toggle {
+  position: relative !important;
+}
+
+.twai-floating-tools-zone {
+  right: 14px !important;
+  top: 50% !important;
+  width: 66px !important;
+  min-height: 300px !important;
+  padding: 8px 5px !important;
+  gap: 10px !important;
+  transform: translateY(-50%) !important;
+  background: transparent !important;
+}
+
+.twai-floating-tools-zone::before {
+  content: "";
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  width: 6px;
+  height: 78px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  background: rgba(255,255,255,.34);
+  box-shadow: 0 0 0 1px rgba(15,23,42,.10), 0 12px 24px rgba(15,23,42,.20);
+  transition: opacity .16s ease, background .16s ease, width .16s ease;
+}
+
+.twai-floating-tools-zone:hover::before,
+.twai-floating-tools-zone:focus-within::before {
+  opacity: .18;
+  width: 3px;
+  background: rgba(125,211,252,.72);
+}
+
+.twai-tools-reveal-toggle,
+#travelwaiToolsRevealButton {
+  display: none !important;
+}
+
+.twai-tool-action {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: translateX(16px) scale(.92) !important;
+}
+
+.twai-floating-tools-zone:hover .twai-tool-action,
+.twai-floating-tools-zone:focus-within .twai-tool-action,
+.twai-tool-action:focus-visible {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: translateX(0) scale(1) !important;
+}
+
+.twai-theme-toggle {
+  width: 54px !important;
+  height: 54px !important;
+}
+
+@media (max-width: 640px) {
+  .twai-floating-tools-zone {
+    right: 6px !important;
+    width: 58px !important;
+    min-height: 286px !important;
+  }
+
+  .twai-floating-tools-zone::before {
+    right: 1px;
+  }
+}
+
+
+.twai-pricing-popup {
+  position: fixed;
+  inset: 0;
+  display: none;
+  place-items: center;
+  z-index: 4200;
+  padding: 22px;
+  background: rgba(248, 250, 252, 0.78);
+  backdrop-filter: blur(16px) saturate(1.08);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+}
+.twai-pricing-popup.open { display: grid; }
+.twai-pricing-popup-card {
+  position: relative;
+  width: min(1280px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  border-radius: 28px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 34px 110px rgba(2, 6, 23, .24);
+  padding: clamp(18px, 2.2vw, 30px);
+}
+.twai-pricing-heading { margin: 0 46px 20px 0; color: #0f172a; }
+.twai-pricing-heading h2 { margin: 6px 0 6px; font-size: clamp(26px, 3vw, 42px); }
+.twai-pricing-heading p { margin: 0; color: #64748b; font-weight: 700; }
+.twai-pricing-grid { display: grid; grid-template-columns: repeat(5, minmax(190px, 1fr)); gap: clamp(14px, 1.4vw, 22px); }
+.twai-price-card { position: relative; min-height: 520px; border: 1px solid rgba(15, 23, 42, .14); border-radius: 24px; background: rgba(255,255,255,.96); color: #111827; padding: 28px 24px; display: flex; flex-direction: column; box-shadow: 0 16px 42px rgba(15, 23, 42, .10); }
+.twai-price-card.is-featured { border-color: #111827; box-shadow: 0 20px 54px rgba(15, 23, 42, .16); }
+.twai-price-ribbon { position: absolute; top: -15px; left: 28px; border-radius: 999px; padding: 7px 16px; background: #111827; color: #fff; font-size: 11px; font-weight: 950; letter-spacing: .18em; }
+.twai-price-card h3 { margin: 6px 0 24px; font-size: 24px; }
+.twai-price-card strong { font-size: clamp(28px, 2.8vw, 42px); line-height: 1; }
+.twai-price-subtitle { margin: 10px 0 8px; color: #94a3b8; font-size: 12px; letter-spacing: .18em; text-transform: uppercase; font-weight: 900; }
+.twai-price-card em { color: #57534e; font-size: 14px; }
+.twai-price-card ul { margin: 26px 0 28px; padding: 24px 0 0 18px; border-top: 1px solid rgba(15,23,42,.12); display: grid; gap: 13px; color: #475569; line-height: 1.45; }
+.twai-price-card li::marker { color: #16a34a; }
+.twai-price-cta { margin-top: auto; min-height: 48px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; text-align: center; text-decoration: none; border: 1px solid rgba(15,23,42,.16); background: #fff; color: #111827; font-weight: 950; }
+.twai-price-cta.primary { background: #111827; color: #fff; border-color: #111827; }
+@media (max-width: 1180px) { .twai-pricing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .twai-pricing-grid { grid-template-columns: 1fr; } .twai-price-card { min-height: auto; } }
+
+
+.twai-pricing-popup {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  align-items: center !important;
+  justify-items: center !important;
+  padding: 18px !important;
+}
+.twai-pricing-popup-card {
+  width: min(1080px, calc(100vw - 28px)) !important;
+  max-height: 90vh !important;
+  border-radius: 22px !important;
+  padding: 18px !important;
+  background: rgba(255, 255, 255, .98) !important;
+  box-shadow: 0 18px 56px rgba(15, 23, 42, .18) !important;
+}
+.twai-pricing-heading {
+  margin: 0 42px 14px 0 !important;
+}
+.twai-pricing-heading .eyebrow {
+  font-size: 11px !important;
+  letter-spacing: .14em !important;
+}
+.twai-pricing-heading h2 {
+  margin: 4px 0 !important;
+  font-size: clamp(20px, 2.1vw, 28px) !important;
+  line-height: 1.18 !important;
+}
+.twai-pricing-heading p {
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+}
+.twai-pricing-grid {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+  align-items: stretch !important;
+}
+.twai-price-card {
+  grid-column: span 2 !important;
+  min-height: 0 !important;
+  border-radius: 18px !important;
+  padding: 18px !important;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, .08) !important;
+}
+.twai-price-card-sales {
+  grid-column: 2 / span 2 !important;
+}
+.twai-price-card-company {
+  grid-column: 4 / span 2 !important;
+}
+.twai-price-card h3 {
+  margin: 0 0 12px !important;
+  font-size: 20px !important;
+}
+.twai-price-card strong {
+  font-size: clamp(24px, 2.1vw, 32px) !important;
+}
+.twai-price-subtitle {
+  margin: 8px 0 6px !important;
+  font-size: 10px !important;
+  letter-spacing: .13em !important;
+}
+.twai-price-card em {
+  font-size: 13px !important;
+}
+.twai-price-card ul {
+  margin: 16px 0 18px !important;
+  padding: 16px 0 0 17px !important;
+  gap: 8px !important;
+  line-height: 1.35 !important;
+  font-size: 14px !important;
+}
+.twai-price-cta {
+  min-height: 42px !important;
+  font-size: 14px !important;
+}
+.twai-price-ribbon {
+  top: -12px !important;
+  left: 18px !important;
+  padding: 5px 12px !important;
+  font-size: 10px !important;
+  letter-spacing: .13em !important;
+}
+@media (max-width: 900px) {
+  .twai-pricing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .twai-price-card,
+  .twai-price-card-sales,
+  .twai-price-card-company { grid-column: auto !important; }
+}
+@media (max-width: 620px) {
+  .twai-pricing-popup { padding: 10px !important; }
+  .twai-pricing-popup-card { width: calc(100vw - 16px) !important; padding: 14px !important; }
+  .twai-pricing-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+  .twai-price-card { padding: 14px !important; }
+}
+
+.twai-pricing-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.twai-pricing-bottom-close {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 28px;
+  min-width: 128px;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.22);
+}
+
+.twai-pricing-bottom-close:hover {
+  transform: translateY(-1px);
+}
+.twai-chatbot-tool-icon { width: 25px; height: 25px; display: block; object-fit: contain; pointer-events: none; }
+
+
+.interface-icon,
+[data-interface-icon] > .interface-icon {
+  width: 1.1em;
+  height: 1.1em;
+  display: inline-block;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -0.16em;
+  pointer-events: none;
+}
+.interface-icon-button,
+[data-interface-icon] {
+  line-height: 1;
+}
+
+
+.twai-theme-toggle.twai-chatbot-launcher {
+  position: fixed !important;
+  right: max(18px, env(safe-area-inset-right)) !important;
+  bottom: max(18px, env(safe-area-inset-bottom)) !important;
+  top: auto !important;
+  left: auto !important;
+  width: 58px !important;
+  height: 58px !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: none !important;
+  z-index: 2147483000 !important;
+  background: linear-gradient(135deg, #075bb8 0%, #0d74da 55%, #1692f0 100%) !important;
+  border-color: rgba(255, 255, 255, .82) !important;
+  box-shadow: 0 18px 44px rgba(3, 91, 184, .38) !important;
+}
+
+.twai-theme-toggle.twai-chatbot-launcher:hover {
+  transform: translateY(-3px) scale(1.04) !important;
+  box-shadow: 0 22px 52px rgba(3, 91, 184, .46) !important;
+}
+
+.twai-theme-toggle.twai-chatbot-launcher:active {
+  transform: translateY(0) scale(.98) !important;
+}
+
+.twai-chatbot-launcher .twai-chatbot-tool-icon {
+  width: 31px;
+  height: 31px;
+}
+
+@media (max-width: 640px) {
+  .twai-theme-toggle.twai-chatbot-launcher {
+    right: max(10px, env(safe-area-inset-right)) !important;
+    bottom: max(10px, env(safe-area-inset-bottom)) !important;
+    width: 52px !important;
+    height: 52px !important;
+  }
+
+  .twai-chatbot-launcher .twai-chatbot-tool-icon {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+
+.twai-tool-action,
+#travelwaiReloadButton,
+#travelwaiCacheClearButton,
+#travelwaiThemeToggle {
+  background: rgba(2, 6, 23, 0.92) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.38) !important;
+}
+
+.twai-tool-action:hover,
+#travelwaiReloadButton:hover,
+#travelwaiCacheClearButton:hover,
+#travelwaiThemeToggle:hover {
+  background: rgba(15, 23, 42, 0.98) !important;
+  box-shadow: 0 20px 48px rgba(2, 6, 23, 0.46) !important;
+}
+
+.twai-theme-toggle.twai-chatbot-launcher {
+  overflow: hidden !important;
+  padding: 0 !important;
+  background: rgba(2, 6, 23, 0.92) !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  box-shadow: 0 22px 54px rgba(2, 6, 23, 0.42) !important;
+}
+
+.twai-theme-toggle.twai-chatbot-launcher:hover {
+  background: rgba(2, 6, 23, 0.98) !important;
+  box-shadow: 0 26px 60px rgba(2, 6, 23, 0.48) !important;
+}
+
+.twai-chatbot-launcher .twai-chatbot-tool-icon {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+  border-radius: 50% !important;
+}
+
+
+img[data-site-logo],
+img[src*="/logo/travelwai-icon.webp"],
+img[src*="logo/travelwai-icon.webp"] {
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+}
+
+.twai-chatbot-avatar,
+.twai-chatbot-tool-icon,
+.logo img[data-site-logo],
+.landing-logo img[data-site-logo],
+.logo img[src*="travelwai-icon"],
+.landing-logo img[src*="travelwai-icon"] {
+  border-radius: 50% !important;
+  object-fit: cover !important;
+}
+
+
+.waigo-brand-avatar {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: 1 / 1 !important;
+  border-radius: 50% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  background: #ffffff !important;
+}
+
+.waigo-avatar-shell {
+  overflow: hidden !important;
+  border-radius: 50% !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, .18) !important;
+}
+
+.twai-chatbot-launcher .waigo-brand-avatar {
+  box-shadow: none !important;
+}
+
+
+.twai-floating-tools-zone:hover,
+.twai-floating-tools-zone:focus-within {
+  min-height: 326px !important;
+}
+
+.twai-language-choice {
+  font-size: 14px !important;
+  font-weight: 950 !important;
+  letter-spacing: .02em !important;
+  color: rgba(255, 255, 255, .84) !important;
+  background: rgba(2, 6, 23, .92) !important;
+  border-color: rgba(255, 255, 255, .18) !important;
+}
+
+.twai-language-choice.active {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb) !important;
+  border-color: rgba(255, 255, 255, .7) !important;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, .4) !important;
+}
+
+.twai-language-choice:focus-visible {
+  outline: 3px solid rgba(125, 211, 252, .55) !important;
+  outline-offset: 2px !important;
+}
+
+html.twai-language-translating #travelwaiLanguageToggle {
+  cursor: progress !important;
+}
+
+@media (max-width: 640px) {
+  .twai-floating-tools-zone:hover,
+  .twai-floating-tools-zone:focus-within {
+    min-height: 278px !important;
+  }
+
+  .twai-language-choice {
+    font-size: 12px !important;
+  }
+}
+
+/* Floating quick tools: one launcher above the WaiGo chatbot, actions expand upward. */
+.twai-floating-tools-zone {
+  position: fixed !important;
+  right: max(18px, env(safe-area-inset-right)) !important;
+  bottom: max(88px, calc(env(safe-area-inset-bottom) + 78px)) !important;
+  top: auto !important;
+  left: auto !important;
+  width: 60px !important;
+  height: 60px !important;
+  min-height: 60px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: block !important;
+  transform: none !important;
+  background: transparent !important;
+  z-index: 2147483000 !important;
+  overflow: visible !important;
+}
+
+.twai-floating-tools-zone::before {
+  display: none !important;
+}
+
+.twai-floating-tools-zone .twai-tools-reveal-toggle,
+#travelwaiToolsRevealButton {
+  position: absolute !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  top: auto !important;
+  left: auto !important;
+  width: 60px !important;
+  height: 60px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.36) !important;
+  border-radius: 50% !important;
+  color: #fff !important;
+  background: linear-gradient(145deg, #0a69c2 0%, #1687e8 100%) !important;
+  box-shadow: 0 20px 52px rgba(8, 101, 189, 0.34) !important;
+  backdrop-filter: blur(18px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.2) !important;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease !important;
+}
+
+.twai-floating-tools-zone .twai-tools-reveal-toggle:hover,
+.twai-floating-tools-zone .twai-tools-reveal-toggle:focus-visible,
+.twai-floating-tools-zone.is-open .twai-tools-reveal-toggle {
+  transform: translateY(-3px) scale(1.04) !important;
+  border-color: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: 0 24px 62px rgba(8, 101, 189, 0.42) !important;
+}
+
+.twai-floating-tools-zone .twai-tools-reveal-toggle .interface-icon {
+  width: 28px !important;
+  height: 28px !important;
+  stroke-width: 2.4px !important;
+}
+
+.twai-floating-tools-zone .twai-tool-action {
+  position: absolute !important;
+  right: 3px !important;
+  bottom: calc(var(--twai-tool-index, 1) * 66px) !important;
+  top: auto !important;
+  left: auto !important;
+  width: 54px !important;
+  height: 54px !important;
+  margin: 0 !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: translateY(14px) scale(.9) !important;
+  transition: opacity .17s ease, visibility .17s ease, transform .17s ease, background .17s ease, box-shadow .17s ease !important;
+}
+
+.twai-floating-tools-zone:hover .twai-tool-action,
+.twai-floating-tools-zone:focus-within .twai-tool-action,
+.twai-floating-tools-zone.is-open .twai-tool-action,
+.twai-floating-tools-zone .twai-tool-action:focus-visible {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  transform: translateY(0) scale(1) !important;
+}
+
+.twai-floating-tools-zone:hover .twai-tools-reveal-toggle,
+.twai-floating-tools-zone:focus-within .twai-tools-reveal-toggle,
+.twai-floating-tools-zone.is-open .twai-tools-reveal-toggle {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+@media (max-width: 640px) {
+  .twai-floating-tools-zone {
+    right: max(10px, env(safe-area-inset-right)) !important;
+    bottom: max(72px, calc(env(safe-area-inset-bottom) + 62px)) !important;
+    width: 52px !important;
+    height: 52px !important;
+    min-height: 52px !important;
+  }
+
+  .twai-floating-tools-zone .twai-tools-reveal-toggle,
+  #travelwaiToolsRevealButton {
+    width: 52px !important;
+    height: 52px !important;
+  }
+
+  .twai-floating-tools-zone .twai-tool-action {
+    right: 2px !important;
+    bottom: calc(var(--twai-tool-index, 1) * 58px) !important;
+    width: 48px !important;
+    height: 48px !important;
+  }
+}
+
+/* Keep the hover path continuous while moving from the launcher to expanded tools. */
+.twai-floating-tools-zone::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 48px;
+  width: 60px;
+  height: 278px;
+  pointer-events: none;
+  background: transparent;
+  z-index: 0;
+}
+
+.twai-floating-tools-zone:hover::after,
+.twai-floating-tools-zone:focus-within::after,
+.twai-floating-tools-zone.is-open::after {
+  pointer-events: auto;
+}
+
+.twai-floating-tools-zone .twai-tool-action {
+  z-index: 2 !important;
+}
+
+.twai-floating-tools-zone .twai-tools-reveal-toggle,
+#travelwaiToolsRevealButton {
+  z-index: 3 !important;
+}
+
+@media (max-width: 640px) {
+  .twai-floating-tools-zone::after {
+    bottom: 42px;
+    width: 52px;
+    height: 244px;
+  }
+}

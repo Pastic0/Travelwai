@@ -1,0 +1,71 @@
+<link rel="stylesheet" href="/css/travelwai_chatbot_view.css?v=2026-07-27-ai-stop-v1" />
+
+<div class="twai-floating-chatbot-component" data-waigo-floating-component>
+  <button id="travelwaiChatbotButton" class="twai-chatbot-launcher" type="button" data-contact-panel-trigger aria-label="Mở WaiGo" title="WaiGo" data-chatbot-name-title>
+    <img class="twai-chatbot-tool-icon waigo-brand-avatar" src="/logo/travelwai-icon.webp?v=2026-07-12-waigo-avatar-v2" alt="" aria-hidden="true" />
+  </button>
+
+  <aside class="twai-chatbot-view" id="contact-panel" aria-hidden="true" aria-label="Hội thoại WaiGo">
+    <header class="twai-chatbot-header" id="supportChatDragHandle" data-chat-drag-handle title="Giữ và kéo để di chuyển">
+      <div class="twai-chatbot-user-info">
+        <div class="twai-chatbot-avatar-wrap waigo-avatar-shell">
+          <img class="twai-chatbot-avatar waigo-brand-avatar" src="/logo/travelwai-icon.webp?v=2026-07-12-waigo-avatar-v2" alt="WaiGo" data-chatbot-name-alt />
+          <span class="twai-chatbot-online-dot" aria-hidden="true"></span>
+        </div>
+        <div class="twai-chatbot-user-details">
+          <div class="twai-chatbot-title-row">
+            <h3 data-chatbot-name data-no-translate>WaiGo</h3>
+            <button class="waigo-style-picker-button" id="floatingWaigoStyleButton" type="button" aria-label="Chọn phong cách nói chuyện" title="Chọn phong cách nói chuyện" aria-haspopup="menu" aria-expanded="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M8 14v6"/></svg>
+            </button>
+            <button class="waigo-style-store-button" id="floatingWaigoStyleStoreButton" type="button" data-waigo-style-store-button aria-label="Cửa hàng phong cách" title="Cửa hàng phong cách">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l2-5h14l2 5"/><path d="M5 13v7h14v-7"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/><path d="M9 20v-5h6v5"/></svg>
+            </button>
+            <div class="waigo-style-menu" id="floatingWaigoStyleMenu" role="menu" hidden></div>
+          </div>
+          <p>Sẵn sàng</p>
+        </div>
+      </div>
+
+      <div class="twai-chatbot-header-actions" aria-label="Điều khiển chatbot">
+        <button class="twai-chatbot-icon-btn" id="clearSupportChatHistory" type="button" aria-label="Xóa lịch sử trò chuyện" title="Xóa lịch sử">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 5v6m4-6v6"/></svg>
+        </button>
+        <button class="twai-chatbot-icon-btn twai-chatbot-close-btn" type="button" data-close-contact-panel aria-label="Đóng chatbot" title="Đóng">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="twai-chatbot-body">
+      <div class="twai-chatbot-messages" id="supportAdminMessages" aria-live="polite" data-chat-message-list></div>
+
+      <form class="twai-chatbot-input-area" id="supportAdminForm">
+        <input id="supportAiImageInput" type="file" accept="image/*,video/*" multiple hidden />
+        <div class="twai-chatbot-image-preview" id="supportAiImagePreview" hidden aria-live="polite"></div>
+        <div class="twai-chatbot-suggestions" aria-label="Gợi ý câu hỏi">
+          <button type="button" class="twai-chatbot-suggestion" data-translate-attrs="data-ai-suggestion" data-ai-suggestion="Ẩm thực và đặc sản">Ẩm thực và đặc sản</button>
+          <button type="button" class="twai-chatbot-suggestion" data-translate-attrs="data-ai-suggestion" data-ai-suggestion="Lịch sử và nguồn gốc">Lịch sử và nguồn gốc</button>
+          <button type="button" class="twai-chatbot-suggestion" data-translate-attrs="data-ai-suggestion" data-ai-suggestion="Địa danh và di tích">Địa danh và di tích</button>
+        </div>
+        <div class="twai-chatbot-input-shell">
+          <button class="twai-chatbot-attach-btn" id="supportAiImageButton" type="button" aria-label="Đính kèm ảnh hoặc video" title="Đính kèm ảnh hoặc video">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <input id="supportAdminInput" maxlength="1200" autocomplete="off" placeholder="Nhập câu hỏi..." />
+          <button class="twai-chatbot-translate-btn" id="supportTranslateConversationButton" type="button" data-ai-translate-control data-ai-translate-mode="conversation" data-ai-translation-list="#supportAdminMessages" data-ai-translation-target="interface" data-ai-translation-available="false" aria-label="Dịch toàn bộ tin nhắn" title="Dịch toàn bộ tin nhắn" aria-pressed="false" disabled>
+            <span data-ai-translate-label>Dịch</span>
+          </button>
+          <button class="twai-chatbot-send-btn admin-support-send-btn" type="submit" aria-label="Gửi tin nhắn" title="Gửi">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M22 2 11 13"/></svg>
+          </button>
+        </div>
+        <div class="support-admin-status" id="supportAdminStatus" hidden></div>
+        <a class="twai-chatbot-open-messaging" href="/messaging?chat=ai">Mở trong trang Nhắn tin</a>
+      </form>
+    </div>
+  </aside>
+</div>
+
+<script defer src="/script/travelwai_chatbot_settings.js?v=2026-07-27-style-store-fix-v1"></script>
+<script defer src="/script/travelwai_contact_panel.js?v=2026-07-29-ai-image-opt-v1"></script>

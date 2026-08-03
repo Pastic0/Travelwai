@@ -1,0 +1,41 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trang chính - TravelwAI</title>
+    <link rel="icon" href="/logo/travelwai-icon.webp?v=2026-07-26-brand-icon-v2" type="image/webp" />
+
+
+    <link rel="stylesheet" href="/css/main_site_style.css?v=2026-07-11-business-company-v1" />
+    <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-07-27-restore-action-icons-v1" />
+<link rel="stylesheet" href="/css/travelwai_font.css?v=2026-07-27-floating-tools-v2" />
+  <script defer src="/script/site_branding.js?v=2026-07-26-branding-cache-fix-v3"></script>
+</head>
+  <body>
+    @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+    <div class="background-slider"></div>
+
+    @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "")
+
+    <main class="content">
+      <div class="hero-text">
+        <h1>Khám phá Việt Nam</h1>
+        <h2>theo cách riêng của bạn</h2>
+        <p>TravelwAI giúp bạn tìm điểm đến, xem bản đồ 34 tỉnh thành, lập lịch trình, quản lý kế hoạch và kết nối hỗ trợ trong cùng một giao diện hiện đại.</p>
+        <div class="main-hero-actions">
+          <a href="/provinces" class="detail-btn">Xem bản đồ 34 tỉnh thành</a>
+          <a href="#" class="detail-btn" data-pricing-trigger>Xem bảng giá</a>
+        </div>
+      </div>
+    </main>
+    <script src="/script/accounts.js?v=2026-07-28-account-presence-v1"></script>
+    <script src="/script/main_site_script.js?v=2026-07-01-clean-v1"></script>
+    <script src="/script/travelwai_notification_panel.js?v=2026-07-28-admin-recipient-v2"></script>
+<script src="/script/theme_toggle.js?v=2026-07-27-notification-cleanup-v3"></script>
+</body>
+</html>
+

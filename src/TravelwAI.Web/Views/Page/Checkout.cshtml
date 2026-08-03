@@ -1,0 +1,55 @@
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Thanh toán - TravelwAI</title>
+  <link rel="icon" href="/logo/travelwai-icon.webp?v=2026-07-26-brand-icon-v2" type="image/webp" />
+  <link rel="stylesheet" href="/css/main_site_style.css?v=2026-07-11-business-company-v1" />
+  <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-07-27-restore-action-icons-v1" />
+  <link rel="stylesheet" href="/css/tour_admin.css?v=2026-07-16-payment-layout-v28" />
+  <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-07-27-floating-tools-v2" />
+  <script defer src="/script/site_branding.js?v=2026-07-26-branding-cache-fix-v3"></script>
+</head>
+<body class="tour-admin-page checkout-page" data-page="checkout">
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAIFloatingTools.cshtml")
+  @await Html.PartialAsync("~/Views/Shared/_TravelwAINav.cshtml", "checkout")
+
+  <main class="tour-admin-shell checkout-shell">
+    <section class="tour-admin-hero">
+      <div>
+        <span class="eyebrow">TravelwAI Pay</span>
+        <h1>Thanh toán</h1>
+      </div>
+      <div class="tour-actions page-hero-actions">
+        <a class="btn-soft btn-page-link" href="/cart" style="text-decoration:none">Giỏ hàng</a>
+      </div>
+    </section>
+
+    <section class="checkout-grid">
+      <article class="management-panel checkout-summary-card">
+        <div class="panel-header-row"><div><h2>Thông tin đơn</h2></div></div>
+        <div id="checkoutSummary" class="checkout-summary-box">Đang tải...</div>
+      </article>
+      <article class="management-panel checkout-pay-card">
+        <div class="panel-header-row"><div><h2>Thanh toán</h2></div></div>
+        <div class="checkout-pay-box">
+          <button class="btn-primary checkout-pay-button" type="button" id="checkoutPayButton">Thanh toán</button>
+          <a class="btn-soft checkout-back-button" href="/home">Trang chính</a>
+          <div class="checkout-payment-details" id="checkoutPaymentDetails" hidden></div>
+        </div>
+        <p class="checkout-status" id="checkoutStatus"></p>
+      </article>
+    </section>
+  </main>
+
+  <div class="toast" id="tourToast"></div>
+  <script src="/script/accounts.js?v=2026-07-28-account-presence-v1"></script>
+  <script src="/script/checkout.js?v=2026-07-16-payment-layout-v28"></script>
+  <script src="/script/travelwai_notification_panel.js?v=2026-07-28-admin-recipient-v2"></script>
+<script src="/script/theme_toggle.js?v=2026-07-27-notification-cleanup-v3"></script>
+</body>
+</html>
