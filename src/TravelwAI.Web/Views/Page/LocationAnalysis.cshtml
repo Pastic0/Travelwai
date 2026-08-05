@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="/css/main_site_style.css?v=2026-07-11-business-company-v1" />
   <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-07-27-restore-action-icons-v1" />
   <link rel="stylesheet" href="/css/tour_admin.css?v=2026-07-11-multi-media-attachments-v1" />
-  <link rel="stylesheet" href="/css/location_analysis.css?v=2026-08-05-location-analysis-stream-v1" />
+  <link rel="stylesheet" href="/css/location_analysis.css?v=2026-08-05-location-analysis-fields-stream-v2" />
   <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-07-27-floating-tools-v2" />
   <script defer src="/script/site_branding.js?v=2026-07-26-branding-cache-fix-v3"></script>
 </head>
@@ -91,18 +91,18 @@
 
         <div id="locationResultLoading" class="result-loading" hidden aria-live="polite">
           <div class="ai-loader"><span></span><span></span><span></span></div>
-          <h3 id="locationLoadingTitle">AI đang quan sát ảnh</h3>
-          <p id="locationLoadingStatus">Đang nhận diện nội dung trong ảnh...</p>
-          <div class="analysis-stream" aria-label="Luồng phân tích trực tiếp">
-            <div class="analysis-stream-heading">
-              <span class="analysis-stream-dot" aria-hidden="true"></span>
-              <strong>Phản hồi trực tiếp</strong>
-            </div>
-            <pre id="locationStreamOutput" class="analysis-stream-output"></pre>
-          </div>
+          <h3>AI đang quan sát ảnh</h3>
+          <p>Đang nhận diện nội dung trong ảnh...</p>
         </div>
 
         <div id="locationResultContent" class="result-content" hidden>
+          <div id="locationStreamingBanner" class="result-streaming-banner" hidden aria-live="polite">
+            <span class="result-streaming-spinner" aria-hidden="true"></span>
+            <div>
+              <strong>AI đang điền kết quả</strong>
+              <span id="locationStreamingStatus">Đang quan sát ảnh và nhận diện nội dung...</span>
+            </div>
+          </div>
           <section class="result-summary-card">
             <div class="result-summary-topline">
               <span id="locationResultLabel" class="result-label">Kết quả nhận diện</span>
@@ -153,7 +153,7 @@
 
   <script src="/script/accounts.js?v=2026-07-28-account-presence-v1"></script>
   <script src="/script/image_upload_optimizer.js?v=2026-06-24-webp-optimize-v2"></script>
-  <script src="/script/location_analysis.js?v=2026-08-05-location-analysis-stream-v1"></script>
+  <script src="/script/location_analysis.js?v=2026-08-05-location-analysis-fields-stream-v2"></script>
   <script src="/script/travelwai_notification_panel.js?v=2026-07-28-admin-recipient-v2"></script>
   <script src="/script/theme_toggle.js?v=2026-07-27-notification-cleanup-v3"></script>
 </body>

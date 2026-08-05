@@ -41,10 +41,9 @@
     elements.resultPanel = $("locationResultPanel");
     elements.empty = $("locationResultEmpty");
     elements.loading = $("locationResultLoading");
-    elements.loadingTitle = $("locationLoadingTitle");
-    elements.loadingStatus = $("locationLoadingStatus");
-    elements.streamOutput = $("locationStreamOutput");
     elements.content = $("locationResultContent");
+    elements.streamingBanner = $("locationStreamingBanner");
+    elements.streamingStatus = $("locationStreamingStatus");
     elements.resultLabel = $("locationResultLabel");
     elements.locationLine = $("locationResultLocationLine");
     elements.landmarkCard = $("locationLandmarkCard");
@@ -99,27 +98,265 @@
   }
 
   function resetStreamingPreview() {
-    if (elements.loadingTitle) {
-      elements.loadingTitle.textContent = localize("AI đang quan sát ảnh", "AI is examining the image");
-    }
-    if (elements.loadingStatus) {
-      elements.loadingStatus.textContent = localize(
-        "Đang kết nối luồng phân tích...",
-        "Connecting to the analysis stream..."
+    elements.resultPanel?.classList.remove("is-streaming");
+    if (elements.streamingBanner) elements.streamingBanner.hidden = true;
+    if (elements.streamingStatus) {
+      elements.streamingStatus.textContent = localize(
+        "Đang quan sát ảnh và nhận diện nội dung...",
+        "Examining the image and identifying its content..."
       );
     }
-    if (elements.streamOutput) elements.streamOutput.textContent = "";
   }
 
   function setLoadingStatus(message) {
-    if (!elements.loadingStatus || !message) return;
-    elements.loadingStatus.textContent = String(message);
+    if (!elements.streamingStatus || !message) return;
+    elements.streamingStatus.textContent = String(message);
   }
 
-  function appendStreamingDelta(delta) {
-    if (!elements.streamOutput || !delta) return;
-    elements.streamOutput.textContent += String(delta);
-    elements.streamOutput.scrollTop = elements.streamOutput.scrollHeight;
+  function setStreamingText(target, value, fallback) {
+    if (!target) return;
+    const text = String(value || "").trim();
+    target.textContent = text || fallback || "";
+    target.classList.toggle("is-streaming-placeholder", !text);
+  }
+
+  function beginStreamingAnalysis() {
+    resetResultCards();
+    elements.resultPanel?.classList.add("is-streaming");
+    if (elements.streamingBanner) elements.streamingBanner.hidden = false;
+    if (elements.analyzeAgainButton) elements.analyzeAgainButton.hidden = true;
+
+    elements.resultLabel.textContent = localize("Đang nhận diện", "Identifying");
+    const badge = $("locationConfidenceBadge");
+    badge.className = "confidence-badge is-analyzing";
+    badge.textContent = localize("Đang phân tích", "Analyzing");
+    setStreamingText(
+      $("locationResultTitle"),
+      "",
+      localize("Đang xác định địa danh hoặc món ăn...", "Identifying the landmark or food...")
+    );
+    setStreamingText(
+      $("locationResultSummary"),
+      "",
+      localize("Thông tin sẽ được điền ngay khi AI nhận diện được.", "Information will appear as soon as AI identifies it.")
+    );
+
+    elements.detailCard.hidden = false;
+    renderList(
+      $("locationImageDescription"),
+      [localize("Đang phân tích các chi tiết trong ảnh...", "Analyzing visual details in the image...")]
+    );
+    $("locationImageDescription")?.classList.add("is-streaming-placeholder");
+    setResultState("content");
+  }
+
+  function decodePartialJsonString(raw, startIndex) {
+    let value = "";
+    let index = startIndex;
+
+    while (index < raw.length) {
+      const character = raw[index];
+      if (character === '"') return { value, complete: true, end: index + 1 };
+      if (character !== "\\") {
+        value += character;
+        index += 1;
+        continue;
+      }
+
+      if (index + 1 >= raw.length) return { value, complete: false, end: raw.length };
+      const escaped = raw[index + 1];
+      const escapes = {
+        '"': '"',
+        "\\": "\\",
+        "/": "/",
+        "b": "\b",
+        "f": "\f",
+        "n": "\n",
+        "r": "\r",
+        "t": "\t"
+      };
+
+      if (escaped === "u") {
+        const code = raw.slice(index + 2, index + 6);
+        if (code.length < 4 || !/^[0-9a-f]{4}$/i.test(code)) {
+          return { value, complete: false, end: raw.length };
+        }
+        value += String.fromCharCode(parseInt(code, 16));
+        index += 6;
+        continue;
+      }
+
+      value += Object.prototype.hasOwnProperty.call(escapes, escaped) ? escapes[escaped] : escaped;
+      index += 2;
+    }
+
+    return { value, complete: false, end: raw.length };
+  }
+
+  function findJsonPropertyValue(raw, key) {
+    const escapedKey = String(key).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = new RegExp(`"${escapedKey}"\\s*:\\s*`).exec(raw);
+    return match ? match.index + match[0].length : -1;
+  }
+
+  function extractStreamingString(raw, key) {
+    const valueStart = findJsonPropertyValue(raw, key);
+    if (valueStart < 0) return { found: false, complete: false, value: "" };
+    const quoteIndex = raw.indexOf('"', valueStart);
+    if (quoteIndex < 0 || raw.slice(valueStart, quoteIndex).trim()) {
+      return { found: true, complete: false, value: "" };
+    }
+    const parsed = decodePartialJsonString(raw, quoteIndex + 1);
+    return { found: true, complete: parsed.complete, value: parsed.value };
+  }
+
+  function extractStreamingNumber(raw, key) {
+    const valueStart = findJsonPropertyValue(raw, key);
+    if (valueStart < 0) return { found: false, complete: false, value: null };
+    const fragment = raw.slice(valueStart);
+    const match = fragment.match(/^-?\d+(?:\.\d+)?/);
+    if (!match) return { found: true, complete: false, value: null };
+    const next = fragment[match[0].length] || "";
+    return {
+      found: true,
+      complete: Boolean(next) && /[},\s]/.test(next),
+      value: Number(match[0])
+    };
+  }
+
+  function extractStreamingArray(raw, key) {
+    const valueStart = findJsonPropertyValue(raw, key);
+    if (valueStart < 0) return { found: false, complete: false, values: [] };
+    const bracketIndex = raw.indexOf("[", valueStart);
+    if (bracketIndex < 0 || raw.slice(valueStart, bracketIndex).trim()) {
+      return { found: true, complete: false, values: [] };
+    }
+
+    const values = [];
+    let index = bracketIndex + 1;
+    let complete = false;
+    while (index < raw.length) {
+      while (index < raw.length && /[\s,]/.test(raw[index])) index += 1;
+      if (index >= raw.length) break;
+      if (raw[index] === "]") {
+        complete = true;
+        break;
+      }
+      if (raw[index] !== '"') break;
+
+      const parsed = decodePartialJsonString(raw, index + 1);
+      if (parsed.value.trim()) values.push(parsed.value.trim());
+      index = parsed.end;
+      if (!parsed.complete) break;
+    }
+
+    return { found: true, complete, values };
+  }
+
+  function readStreamingAnalysis(raw) {
+    const data = {};
+    const fields = {};
+    const stringKeys = [
+      "content_type", "location_status", "confidence", "title", "landmark",
+      "address", "district", "province", "country", "summary", "image_description"
+    ];
+    const arrayKeys = ["landmarks", "foods", "observations", "identification_basis"];
+
+    for (const key of stringKeys) {
+      const result = extractStreamingString(raw, key);
+      fields[key] = result;
+      if (result.found) data[key] = result.value;
+    }
+
+    const score = extractStreamingNumber(raw, "confidence_score");
+    fields.confidence_score = score;
+    if (score.found && score.value !== null) data.confidence_score = score.value;
+
+    for (const key of arrayKeys) {
+      const result = extractStreamingArray(raw, key);
+      fields[key] = result;
+      if (result.found) data[key] = result.values;
+    }
+
+    return { data, fields };
+  }
+
+  function renderStreamingAnalysis(raw) {
+    const { data, fields } = readStreamingAnalysis(raw);
+    const contentType = String(data.content_type || "").trim().toLowerCase();
+    const hasType = fields.content_type?.found && contentType;
+
+    if (hasType) {
+      if (contentType === "landmark") elements.resultLabel.textContent = localize("Địa danh", "Landmark");
+      else if (contentType === "food") elements.resultLabel.textContent = localize("Ẩm thực", "Food");
+      else elements.resultLabel.textContent = localize("Kết quả nhận diện", "Recognition result");
+    }
+
+    if (fields.title?.found) {
+      setStreamingText(
+        $("locationResultTitle"),
+        data.title,
+        localize("Đang xác định tên...", "Identifying the name...")
+      );
+    }
+
+    if (fields.summary?.found) {
+      setStreamingText(
+        $("locationResultSummary"),
+        data.summary,
+        localize("Đang tổng hợp kết quả...", "Summarizing the result...")
+      );
+    }
+
+    if (fields.confidence_score?.complete || fields.confidence?.complete) {
+      renderConfidence(data);
+    }
+
+    const locationText = buildLocationText(data);
+    if (locationText) {
+      $("locationProvinceText").textContent = locationText;
+      elements.locationLine.hidden = false;
+    }
+
+    if (contentType === "landmark") {
+      const landmarks = cleanList(data.landmarks);
+      const fallback = String(data.landmark || data.title || "").trim();
+      renderList(
+        $("locationLandmarkResult"),
+        landmarks.length ? landmarks : [fallback || localize("Đang nhận diện địa danh...", "Identifying the landmark...")]
+      );
+      $("locationLandmarkResult")?.classList.toggle("is-streaming-placeholder", !landmarks.length && !fallback);
+      elements.landmarkCard.hidden = false;
+      elements.foodCard.hidden = true;
+    } else if (contentType === "food") {
+      const foods = cleanList(data.foods);
+      const fallback = String(data.title || "").trim();
+      renderList(
+        $("locationFoodResult"),
+        foods.length ? foods : [fallback || localize("Đang nhận diện món ăn...", "Identifying the food...")]
+      );
+      $("locationFoodResult")?.classList.toggle("is-streaming-placeholder", !foods.length && !fallback);
+      elements.foodCard.hidden = false;
+      elements.landmarkCard.hidden = true;
+    }
+
+    if (fields.image_description?.found) {
+      renderList(
+        $("locationImageDescription"),
+        [data.image_description || localize("Đang phân tích mô tả...", "Analyzing the description...")]
+      );
+      $("locationImageDescription")?.classList.toggle("is-streaming-placeholder", !data.image_description);
+    }
+
+    if (fields.observations?.found && data.observations.length) {
+      renderList($("locationObservationResult"), data.observations);
+      elements.observationBlock.hidden = false;
+    }
+
+    if (fields.identification_basis?.found && data.identification_basis.length) {
+      renderList($("locationEvidenceResult"), data.identification_basis);
+      elements.evidenceBlock.hidden = false;
+    }
   }
 
   async function readNdjsonStream(response, onEvent) {
@@ -176,6 +413,11 @@
     elements.observationBlock.hidden = true;
     elements.evidenceBlock.hidden = true;
     elements.locationLine.hidden = true;
+    [
+      "locationResultTitle", "locationResultSummary", "locationLandmarkResult",
+      "locationFoodResult", "locationImageDescription", "locationObservationResult",
+      "locationEvidenceResult"
+    ].forEach((id) => $(id)?.classList.remove("is-streaming-placeholder"));
   }
 
   function clearSelection(options = {}) {
@@ -345,6 +587,9 @@
   function renderAnalysis(data) {
     const type = resolveContentType(data);
     resetResultCards();
+    elements.resultPanel?.classList.remove("is-streaming");
+    if (elements.streamingBanner) elements.streamingBanner.hidden = true;
+    if (elements.analyzeAgainButton) elements.analyzeAgainButton.hidden = false;
     renderConfidence(data);
 
     const summary = String(data?.summary || "").trim();
@@ -414,7 +659,7 @@
     setAnalyzing(true);
     setMessage("");
     resetStreamingPreview();
-    setResultState("loading");
+    beginStreamingAnalysis();
 
     try {
       const response = await fetch("/api/ai/location-analysis/stream", {
@@ -449,8 +694,8 @@
         if (type === "delta") {
           const delta = String(event.delta || "");
           streamedReply += delta;
-          appendStreamingDelta(delta);
-          setLoadingStatus(localize("AI đang gửi kết quả theo thời gian thực...", "AI is streaming the result in real time..."));
+          renderStreamingAnalysis(streamedReply);
+          setLoadingStatus(localize("AI đang điền thông tin vào kết quả...", "AI is filling in the result..."));
           return;
         }
         if (type === "completed") {
@@ -473,6 +718,8 @@
       renderAnalysis(parsed);
       setMessage(localize("Phân tích hoàn tất.", "Analysis completed."), "success");
     } catch (error) {
+      elements.resultPanel?.classList.remove("is-streaming");
+      if (elements.streamingBanner) elements.streamingBanner.hidden = true;
       setResultState("empty");
       setMessage(error?.message || "", "error");
     } finally {
