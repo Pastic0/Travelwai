@@ -2,11 +2,11 @@
   "use strict";
 
   const DEFAULT_LOGO_URL = "/logo/travelwai-icon.webp";
-  const DEFAULT_LOGO_VERSION = "2026-07-26-brand-icon-v2";
+  const DEFAULT_LOGO_VERSION = "2026-08-05-brand-icon-v4";
   const DEFAULT_LIGHT_BACKGROUND_URL = "/main_site_image/travelwai-bg-light.webp";
   const DEFAULT_DARK_BACKGROUND_URL = "/main_site_image/travelwai-bg-dark.webp";
   const DEFAULT_BACKGROUND_VERSION = "2026-07-26-branding-cache-fix-v3";
-  const CACHE_KEY = "travelwai_site_branding_v3";
+  const CACHE_KEY = "travelwai_site_branding_v4";
 
   let currentLogoUrl = DEFAULT_LOGO_URL;
   let currentLogoVersion = DEFAULT_LOGO_VERSION;
@@ -44,6 +44,7 @@
         backgroundDarkUrl: currentDarkBackgroundUrl,
         backgroundDarkVersion: currentDarkBackgroundVersion
       }));
+      localStorage.removeItem("travelwai_site_branding_v3");
       localStorage.removeItem("travelwai_site_branding_v2");
       localStorage.removeItem("travelwai_site_branding_v1");
       localStorage.removeItem("travelwaiBackgroundVersion");
@@ -64,7 +65,19 @@
     const stillUsesDefaultLogo = currentValue.includes("travelwai-icon.webp");
     if (!force && !stillUsesDefaultLogo) return;
     element.setAttribute("data-site-logo", "true");
-    if (currentValue !== versionedUrl) element.setAttribute(attributeName, versionedUrl);
+    if (currentValue === versionedUrl) return;
+
+    // Browsers cache favicons more aggressively than normal images. Replacing
+    // the link node forces the tab icon to be re-evaluated after a logo change.
+    if (element.tagName === "LINK" && element.relList?.contains("icon")) {
+      const replacement = element.cloneNode(true);
+      replacement.setAttribute("href", versionedUrl);
+      replacement.setAttribute("data-site-logo", "true");
+      element.replaceWith(replacement);
+      return;
+    }
+
+    element.setAttribute(attributeName, versionedUrl);
   }
 
   function updateTree(root, versionedUrl, force = false) {
@@ -158,7 +171,7 @@
   async function refresh() {
     const requestRevision = stateRevision;
     try {
-      const response = await fetch("/api/site-branding", { cache: "no-store", headers: { Accept: "application/json" } });
+      const response = await fetch(`/api/site-branding?branding=${Date.now()}`, { cache: "no-store", headers: { Accept: "application/json", "Cache-Control": "no-cache" } });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.success === false) return;
       // Do not let a slower response containing old settings overwrite a logo
@@ -210,4 +223,8 @@
   };
 
   refresh();
+  window.addEventListener("pageshow", event => {
+    if (event.persisted) refresh();
+  });
+  window.addEventListener("focus", refresh);
 })();

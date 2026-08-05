@@ -41,7 +41,10 @@ function decodeUnicodeEscapes(value) {
   });
 }
 const AI_HISTORY_PREFIX = "travelwai-admin-support-history";
-const AI_AVATAR_URL = "/logo/travelwai-icon.webp?v=2026-07-12-waigo-avatar-v2";
+const DEFAULT_AI_AVATAR_URL = "/logo/travelwai-icon.webp?v=2026-08-05-brand-icon-v4";
+let AI_AVATAR_URL = window.TravelwAISiteBranding?.getLogoUrl?.()
+  || window.TravelwAISiteLogoUrl
+  || DEFAULT_AI_AVATAR_URL;
 let AI_DISPLAY_NAME = "WaiGo";
 let isAiSending = false;
 let activeAiJobId = "";
@@ -50,6 +53,26 @@ let aiJobPollController = null;
 let aiStartRequestController = null;
 let isCancellingAiJob = false;
 let aiCancelRequested = false;
+
+function applyMessagingBranding(detail) {
+  const nextAvatar = String(
+    detail?.logoUrl
+    || window.TravelwAISiteBranding?.getLogoUrl?.()
+    || window.TravelwAISiteLogoUrl
+    || DEFAULT_AI_AVATAR_URL
+  ).trim() || DEFAULT_AI_AVATAR_URL;
+  if (AI_AVATAR_URL === nextAvatar) return;
+  AI_AVATAR_URL = nextAvatar;
+
+  document.querySelectorAll("img[data-ai-avatar], .waigo-brand-avatar").forEach(image => {
+    image.setAttribute("data-site-logo", "true");
+    if (image.getAttribute("src") !== nextAvatar) image.setAttribute("src", nextAvatar);
+  });
+
+  if (typeof renderMessages === "function") renderMessages();
+  if (typeof renderConversations === "function") renderConversations(activeConversationSearchQuery);
+  if (typeof updateConversationSelection === "function") updateConversationSelection();
+}
 
 function applyMessagingChatbotSettings(settings) {
   AI_DISPLAY_NAME = String(settings?.chatbotName || "WaiGo").trim() || "WaiGo";
@@ -469,6 +492,10 @@ window.addEventListener("travelwai:ai-job-updated", function (event) {
 
 window.addEventListener("storage", function (event) {
   if (event.key === getAiJobStorageKey()) resumeActiveAiJob();
+});
+
+window.addEventListener("travelwai:brandingchange", event => {
+  applyMessagingBranding(event?.detail || {});
 });
 
 window.addEventListener("travelwai:chatbot-settings-changed", event => {

@@ -240,10 +240,15 @@
     }
   }
 
+  function cleanAnalysisText(value) {
+    const text = String(value ?? "").trim();
+    return /^(exact|probable)$/i.test(text) ? "" : text;
+  }
+
   function cleanList(value) {
     const values = Array.isArray(value) ? value : (value ? [value] : []);
     return values
-      .map((item) => String(item || "").trim())
+      .map((item) => cleanAnalysisText(item))
       .filter(Boolean)
       .filter((item, index, array) => array.indexOf(item) === index)
       .slice(0, 6);
@@ -403,7 +408,6 @@
     const confidenceScore = extractPartialJsonNumber(rawJson, "confidence_score");
     const title = extractPartialJsonString(rawJson, "title");
     const landmark = extractPartialJsonString(rawJson, "landmark");
-    const address = extractPartialJsonString(rawJson, "address");
     const district = extractPartialJsonString(rawJson, "district");
     const province = extractPartialJsonString(rawJson, "province");
     const country = extractPartialJsonString(rawJson, "country");
@@ -421,17 +425,16 @@
     elements.content.classList.add("is-streaming");
 
     const partialData = {
-      content_type: contentType.value,
-      confidence: confidence.value,
+      content_type: cleanAnalysisText(contentType.value),
+      confidence: cleanAnalysisText(confidence.value),
       confidence_score: confidenceScore.value,
-      title: title.value,
-      landmark: landmark.value,
-      address: address.value,
-      district: district.value,
-      province: province.value,
-      country: country.value,
-      summary: summary.value,
-      image_description: imageDescription.value,
+      title: cleanAnalysisText(title.value),
+      landmark: cleanAnalysisText(landmark.value),
+      district: cleanAnalysisText(district.value),
+      province: cleanAnalysisText(province.value),
+      country: cleanAnalysisText(country.value),
+      summary: cleanAnalysisText(summary.value),
+      image_description: cleanAnalysisText(imageDescription.value),
       landmarks: landmarks.values,
       foods: foods.values,
       observations: observations.values,
@@ -449,10 +452,10 @@
     }
 
     if (title.found) {
-      $("locationResultTitle").textContent = title.value || localize("Đang nhận diện...", "Identifying...");
+      $("locationResultTitle").textContent = partialData.title || localize("Đang nhận diện...", "Identifying...");
     }
     if (summary.found) {
-      $("locationResultSummary").textContent = summary.value || localize("Đang hoàn thiện kết luận...", "Finalizing the conclusion...");
+      $("locationResultSummary").textContent = partialData.summary || localize("Đang hoàn thiện kết luận...", "Finalizing the conclusion...");
     }
 
     const locationText = buildLocationText(partialData);
@@ -462,12 +465,12 @@
     }
 
     if (type === "landmark" && (landmark.found || landmarks.found || title.found)) {
-      const values = landmarks.values.length ? landmarks.values : cleanList([landmark.value || title.value]);
+      const values = landmarks.values.length ? landmarks.values : cleanList([partialData.landmark || partialData.title]);
       renderStreamingList($("locationLandmarkResult"), values, localize("Đang xác định địa danh...", "Identifying the landmark..."));
       revealStreamingBlock(elements.landmarkCard);
       elements.foodCard.hidden = true;
     } else if (type === "food" && (foods.found || title.found)) {
-      const values = foods.values.length ? foods.values : cleanList([title.value]);
+      const values = foods.values.length ? foods.values : cleanList([partialData.title]);
       renderStreamingList($("locationFoodResult"), values, localize("Đang xác định món ăn...", "Identifying the food..."));
       revealStreamingBlock(elements.foodCard);
       elements.landmarkCard.hidden = true;
@@ -476,7 +479,7 @@
     if (imageDescription.found) {
       renderStreamingList(
         $("locationImageDescription"),
-        imageDescription.value ? [imageDescription.value] : [],
+        partialData.image_description ? [partialData.image_description] : [],
         localize("AI đang mô tả ảnh...", "AI is describing the image...")
       );
       revealStreamingBlock(elements.detailCard);
@@ -511,7 +514,7 @@
   }
 
   function buildLocationText(data) {
-    const values = [data?.address, data?.district, data?.province, data?.country]
+    const values = [data?.district, data?.province, data?.country]
       .map((value) => String(value || "").trim())
       .filter(Boolean)
       .filter((value, index, array) => array.indexOf(value) === index);
@@ -562,6 +565,19 @@
   }
 
   function renderAnalysis(data) {
+    const normalizedData = { ...(data || {}) };
+    delete normalizedData.location_status;
+    delete normalizedData.locationStatus;
+    delete normalizedData.address;
+    normalizedData.title = cleanAnalysisText(normalizedData.title);
+    normalizedData.landmark = cleanAnalysisText(normalizedData.landmark);
+    normalizedData.summary = cleanAnalysisText(normalizedData.summary);
+    normalizedData.image_description = cleanAnalysisText(normalizedData.image_description);
+    normalizedData.district = cleanAnalysisText(normalizedData.district);
+    normalizedData.province = cleanAnalysisText(normalizedData.province);
+    normalizedData.country = cleanAnalysisText(normalizedData.country);
+    data = normalizedData;
+
     const type = resolveContentType(data);
     resetResultCards();
     renderConfidence(data);

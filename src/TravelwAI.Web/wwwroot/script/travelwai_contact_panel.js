@@ -8,7 +8,13 @@
   const AI_JOB_POLL_MS = 1200;
   const CONTACT_HISTORY_LIMIT = 100;
   const CHAT_MESSAGE_PAYLOAD_TYPE = "travelwai-chat-message";
-  const WAIGO_AVATAR_URL = "/logo/travelwai-icon.webp?v=2026-07-12-waigo-avatar-v2";
+  const DEFAULT_WAIGO_AVATAR_URL = "/logo/travelwai-icon.webp?v=2026-08-05-brand-icon-v4";
+
+  function getWaigoAvatarUrl() {
+    return window.TravelwAISiteBranding?.getLogoUrl?.()
+      || window.TravelwAISiteLogoUrl
+      || DEFAULT_WAIGO_AVATAR_URL;
+  }
 
   let currentUser = null;
   let isSending = false;
@@ -33,11 +39,24 @@
     mode: "travelwai",
     id: "travelwai-ai",
     displayName: "WaiGo",
-    avatar: WAIGO_AVATAR_URL
+    avatar: getWaigoAvatarUrl()
   };
 
   function getPanel() {
     return document.getElementById("contact-panel");
+  }
+
+  function applyChatbotBranding(detail) {
+    const nextAvatar = String(detail?.logoUrl || getWaigoAvatarUrl()).trim() || DEFAULT_WAIGO_AVATAR_URL;
+    if (managerConfig.avatar === nextAvatar) return;
+    managerConfig.avatar = nextAvatar;
+
+    document.querySelectorAll(".waigo-brand-avatar").forEach(image => {
+      image.setAttribute("data-site-logo", "true");
+      if (image.getAttribute("src") !== nextAvatar) image.setAttribute("src", nextAvatar);
+    });
+
+    if (initialized || getPanel()?.classList.contains("open")) renderMessages();
   }
 
   function applyChatbotSettings(settings) {
@@ -1585,6 +1604,10 @@
 
   window.addEventListener("travelwai:chatbot-settings-changed", event => {
     applyChatbotSettings(event?.detail || {});
+  });
+
+  window.addEventListener("travelwai:brandingchange", event => {
+    applyChatbotBranding(event?.detail || {});
   });
 
   document.addEventListener("DOMContentLoaded", function () {

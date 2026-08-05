@@ -11,7 +11,7 @@ public sealed class SiteBrandingController : ControllerBase
     private const string SettingsCollection = "site_settings";
     private const string BrandingDocumentId = "branding";
     private const string DefaultLogoUrl = "/logo/travelwai-icon.webp";
-    private const string DefaultLogoVersion = "2026-07-26-brand-icon-v2";
+    private const string DefaultLogoVersion = "2026-08-05-brand-icon-v4";
     private const string DefaultLightBackgroundUrl = "/main_site_image/travelwai-bg-light.webp";
     private const string DefaultDarkBackgroundUrl = "/main_site_image/travelwai-bg-dark.webp";
     private const string DefaultBackgroundVersion = "2026-07-26-branding-cache-fix-v3";
@@ -25,6 +25,10 @@ public sealed class SiteBrandingController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get()
     {
+        Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0";
+        Response.Headers["Pragma"] = "no-cache";
+        Response.Headers["Expires"] = "0";
+
         var settings = await _repo.GetByIdAsync(SettingsCollection, BrandingDocumentId);
         var logoUrl = ReadText(settings, "logo_url", "logoUrl");
         var logoVersion = ReadText(settings, "logo_version", "logoVersion", "updated_at", "updatedAt");
