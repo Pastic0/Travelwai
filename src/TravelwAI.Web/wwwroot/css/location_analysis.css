@@ -393,6 +393,7 @@
 
 .result-panel .result-empty-state,
 .result-panel .result-loading,
+.result-panel .result-error-state,
 .result-panel .result-content {
   display: none;
 }
@@ -405,12 +406,17 @@
   display: flex;
 }
 
+.result-panel[data-result-state="error"] .result-error-state {
+  display: flex;
+}
+
 .result-panel[data-result-state="content"] .result-content {
   display: grid;
 }
 
 .result-empty-state,
-.result-loading {
+.result-loading,
+.result-error-state {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -441,14 +447,16 @@
 }
 
 .result-empty-state h3,
-.result-loading h3 {
+.result-loading h3,
+.result-error-state h3 {
   margin: 0;
   color: var(--analysis-text);
   font-size: 1.25rem;
 }
 
 .result-empty-state p,
-.result-loading p {
+.result-loading p,
+.result-error-state p {
   max-width: 410px;
   margin: 8px 0 0;
   color: var(--analysis-muted);
@@ -547,6 +555,21 @@
 @keyframes analysisTextPulse {
   0%, 100% { opacity: 0.55; }
   50% { opacity: 1; }
+}
+
+.stream-reveal {
+  animation: analysisFieldReveal 0.34s ease-out both;
+}
+
+@keyframes analysisFieldReveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .result-panel.is-streaming .result-summary-card,
@@ -874,7 +897,8 @@
 }
 
 .result-panel .result-empty-state,
-.result-panel .result-loading {
+.result-panel .result-loading,
+.result-panel .result-error-state {
   flex: 1 1 auto;
   min-height: 0;
 }

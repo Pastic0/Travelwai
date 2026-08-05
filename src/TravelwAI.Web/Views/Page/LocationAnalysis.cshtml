@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="/css/main_site_style.css?v=2026-07-11-business-company-v1" />
   <link rel="stylesheet" href="/css/travelwai_nav_contact.css?v=2026-07-27-restore-action-icons-v1" />
   <link rel="stylesheet" href="/css/tour_admin.css?v=2026-07-11-multi-media-attachments-v1" />
-  <link rel="stylesheet" href="/css/location_analysis.css?v=2026-08-05-location-analysis-fields-stream-v2" />
+  <link rel="stylesheet" href="/css/location_analysis.css?v=2026-08-05-location-analysis-ordered-stream-v3" />
   <link rel="stylesheet" href="/css/travelwai_font.css?v=2026-07-27-floating-tools-v2" />
   <script defer src="/script/site_branding.js?v=2026-07-26-branding-cache-fix-v3"></script>
 </head>
@@ -95,6 +95,13 @@
           <p>Đang nhận diện nội dung trong ảnh...</p>
         </div>
 
+        <div id="locationResultError" class="result-error-state" hidden aria-live="assertive">
+          <div class="result-empty-illustration">
+            <span data-interface-icon="refresh-cw"></span>
+          </div>
+          <h3>Vui lòng thử lại</h3>
+        </div>
+
         <div id="locationResultContent" class="result-content" hidden>
           <div id="locationStreamingBanner" class="result-streaming-banner" hidden aria-live="polite">
             <span class="result-streaming-spinner" aria-hidden="true"></span>
@@ -103,7 +110,7 @@
               <span id="locationStreamingStatus">Đang quan sát ảnh và nhận diện nội dung...</span>
             </div>
           </div>
-          <section class="result-summary-card">
+          <section id="locationSummaryCard" class="result-summary-card" hidden>
             <div class="result-summary-topline">
               <span id="locationResultLabel" class="result-label">Kết quả nhận diện</span>
               <span id="locationConfidenceBadge" class="confidence-badge">Chưa xác định</span>
@@ -153,7 +160,7 @@
 
   <script src="/script/accounts.js?v=2026-07-28-account-presence-v1"></script>
   <script src="/script/image_upload_optimizer.js?v=2026-06-24-webp-optimize-v2"></script>
-  <script src="/script/location_analysis.js?v=2026-08-05-location-analysis-fields-stream-v2"></script>
+  <script src="/script/location_analysis.js?v=2026-08-05-location-analysis-ordered-stream-v3"></script>
   <script src="/script/travelwai_notification_panel.js?v=2026-07-28-admin-recipient-v2"></script>
   <script src="/script/theme_toggle.js?v=2026-07-27-notification-cleanup-v3"></script>
 </body>
