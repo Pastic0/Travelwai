@@ -376,29 +376,6 @@
   height: 19px;
 }
 
-.primary-analysis-button.is-cancel-analysis {
-  cursor: pointer;
-}
-
-.primary-analysis-button.is-cancel-analysis:hover > span,
-.primary-analysis-button.is-cancel-analysis:focus-visible > span {
-  display: none;
-}
-
-.primary-analysis-button.is-cancel-analysis::after {
-  content: "";
-  display: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  background: #fff;
-}
-
-.primary-analysis-button.is-cancel-analysis:hover::after,
-.primary-analysis-button.is-cancel-analysis:focus-visible::after {
-  display: block;
-}
-
 .analysis-message {
   min-height: 21px;
   margin-top: 10px;
@@ -416,7 +393,6 @@
 
 .result-panel .result-empty-state,
 .result-panel .result-loading,
-.result-panel .result-error-state,
 .result-panel .result-content {
   display: none;
 }
@@ -429,17 +405,12 @@
   display: flex;
 }
 
-.result-panel[data-result-state="error"] .result-error-state {
-  display: flex;
-}
-
 .result-panel[data-result-state="content"] .result-content {
   display: grid;
 }
 
 .result-empty-state,
-.result-loading,
-.result-error-state {
+.result-loading {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -470,16 +441,14 @@
 }
 
 .result-empty-state h3,
-.result-loading h3,
-.result-error-state h3 {
+.result-loading h3 {
   margin: 0;
   color: var(--analysis-text);
   font-size: 1.25rem;
 }
 
 .result-empty-state p,
-.result-loading p,
-.result-error-state p {
+.result-loading p {
   max-width: 410px;
   margin: 8px 0 0;
   color: var(--analysis-muted);
@@ -509,96 +478,6 @@
 @keyframes analysisPulse {
   0%, 80%, 100% { transform: scale(0.65); opacity: 0.45; }
   40% { transform: scale(1); opacity: 1; }
-}
-
-.result-loading {
-  justify-content: flex-start;
-  overflow: hidden;
-}
-
-.result-streaming-banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 15px;
-  border: 1px solid rgba(56, 189, 248, 0.24);
-  border-radius: 16px;
-  color: #dbeafe;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.13), rgba(37, 99, 235, 0.08));
-}
-
-.result-streaming-banner[hidden] {
-  display: none;
-}
-
-.result-streaming-banner strong {
-  color: #bae6fd;
-  font-size: 0.88rem;
-}
-
-.result-streaming-spinner {
-  flex: 0 0 12px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #38bdf8;
-  box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.5);
-  animation: analysisStreamPulse 1.35s ease-out infinite;
-}
-
-@keyframes analysisStreamPulse {
-  0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.5); }
-  70% { box-shadow: 0 0 0 9px rgba(56, 189, 248, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
-}
-
-[data-travelwai-theme="light"] .result-streaming-banner,
-.location-analysis-page.travelwai-theme-light .result-streaming-banner {
-  color: #1e3a8a;
-  border-color: rgba(37, 99, 235, 0.18);
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.07), rgba(14, 165, 233, 0.04));
-}
-
-[data-travelwai-theme="light"] .result-streaming-banner strong,
-.location-analysis-page.travelwai-theme-light .result-streaming-banner strong {
-  color: #1d4ed8;
-}
-
-.confidence-badge.is-analyzing {
-  color: #bae6fd;
-  background: rgba(14, 165, 233, 0.17);
-  animation: analysisTextPulse 1.2s ease-in-out infinite;
-}
-
-.is-streaming-placeholder {
-  color: #94a3b8 !important;
-  animation: analysisTextPulse 1.2s ease-in-out infinite;
-}
-
-@keyframes analysisTextPulse {
-  0%, 100% { opacity: 0.55; }
-  50% { opacity: 1; }
-}
-
-.stream-reveal {
-  animation: analysisFieldReveal 0.34s ease-out both;
-}
-
-@keyframes analysisFieldReveal {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.result-panel.is-streaming .result-summary-card,
-.result-panel.is-streaming .result-category-card,
-.result-panel.is-streaming .result-notes-card {
-  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .result-content {
@@ -664,6 +543,23 @@
   line-height: 1.6;
 }
 
+.result-location-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 13px;
+  color: #e2e8f0;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.result-location-line svg {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: #fbbf24;
+}
 
 .result-grid {
   display: grid;
@@ -777,7 +673,9 @@
 }
 
 [data-travelwai-theme="light"] .scope-chip,
-.location-analysis-page.travelwai-theme-light .scope-chip {
+.location-analysis-page.travelwai-theme-light .scope-chip,
+[data-travelwai-theme="light"] .result-location-line,
+.location-analysis-page.travelwai-theme-light .result-location-line {
   color: #334155;
 }
 
@@ -889,8 +787,7 @@
 }
 
 .result-panel .result-empty-state,
-.result-panel .result-loading,
-.result-panel .result-error-state {
+.result-panel .result-loading {
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -935,3 +832,163 @@
 }
 
 .location-analysis-hero-copy { max-width: 100%; }
+
+/* Location analysis v8: cancellable AI streaming and progressive result reveal. */
+.result-panel .analysis-panel-heading {
+  justify-content: space-between;
+}
+
+.analysis-stop-button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 6px 11px 6px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-radius: 999px;
+  color: #dbeafe;
+  background: rgba(14, 165, 233, 0.12);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.analysis-stop-button:hover,
+.analysis-stop-button:focus-visible {
+  color: #fff;
+  border-color: rgba(248, 113, 113, 0.72);
+  background: rgba(220, 38, 38, 0.78);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.analysis-stop-button.is-stopping {
+  cursor: wait;
+  opacity: 0.78;
+}
+
+.analysis-stop-visual {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.analysis-progress-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.36);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: locationAnalysisSpin 0.72s linear infinite;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.analysis-stop-square {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.analysis-stop-button:hover .analysis-progress-spinner,
+.analysis-stop-button:focus-visible .analysis-progress-spinner {
+  opacity: 0;
+  transform: scale(0.7);
+}
+
+.analysis-stop-button:hover .analysis-stop-square,
+.analysis-stop-button:focus-visible .analysis-stop-square {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.analysis-stop-button.is-stopping .analysis-progress-spinner {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.analysis-stop-button.is-stopping .analysis-stop-square {
+  opacity: 0;
+}
+
+@keyframes locationAnalysisSpin {
+  to { transform: rotate(360deg); }
+}
+
+.primary-analysis-button.is-analyzing {
+  cursor: pointer;
+  opacity: 1;
+}
+
+.primary-analysis-button.is-analyzing:hover {
+  border-color: rgba(248, 113, 113, 0.72);
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.confidence-badge.is-pending {
+  color: #bae6fd;
+  background: rgba(14, 165, 233, 0.16);
+}
+
+.result-content.is-streaming .result-summary-card {
+  border-color: rgba(56, 189, 248, 0.28);
+}
+
+.stream-reveal {
+  animation: locationStreamReveal 0.24s ease-out both;
+}
+
+.stream-placeholder {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+@keyframes locationStreamReveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-travelwai-theme="light"] .analysis-stop-button,
+.location-analysis-page.travelwai-theme-light .analysis-stop-button {
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.24);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+[data-travelwai-theme="light"] .analysis-stop-button:hover,
+[data-travelwai-theme="light"] .analysis-stop-button:focus-visible,
+.location-analysis-page.travelwai-theme-light .analysis-stop-button:hover,
+.location-analysis-page.travelwai-theme-light .analysis-stop-button:focus-visible {
+  color: #fff;
+  border-color: rgba(220, 38, 38, 0.66);
+  background: #dc2626;
+}
+
+@media (max-width: 520px) {
+  .analysis-stop-button {
+    width: 34px;
+    min-width: 34px;
+    padding: 6px;
+  }
+
+  .analysis-stop-button > span:last-child {
+    display: none;
+  }
+}

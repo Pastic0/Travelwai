@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Http.Features;
 using TravelwAI.Business.Interfaces;
 using TravelwAI.Web.Models;
 using TravelwAI.Web.Services;
@@ -141,7 +140,7 @@ public sealed class AiController : ApiControllerBase
         }
     }
 
-    [HttpPost("location-analysis/stream")]
+    [HttpPost("location-analysis-stream")]
     [RequestSizeLimit(8 * 1024 * 1024)]
     public async Task<IActionResult> AnalyzeLocationImageStream(
         [FromBody] LocationImageAnalysisRequest request,
@@ -172,7 +171,6 @@ public sealed class AiController : ApiControllerBase
         Response.Headers["Cache-Control"] = "no-cache, no-store";
         Response.Headers["Pragma"] = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
-        HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
         await Response.StartAsync(cancellationToken);
 
         var completed = false;
@@ -185,18 +183,28 @@ public sealed class AiController : ApiControllerBase
             await WriteNdjsonAsync(new
             {
                 type = "status",
-                message = language == "en"
-                    ? "AI is examining the image and comparing visual clues..."
-                    : "AI đang quan sát ảnh và đối chiếu các dấu hiệu thị giác..."
+                message = language == "en" ? "AI is examining the image..." : "AI đang quan sát ảnh..."
             }, cancellationToken);
 
             Task StreamDelta(string delta, CancellationToken token) =>
                 WriteNdjsonAsync(new { type = "delta", delta }, token);
 
-            var analysis = await _ollama.AnalyzeTravelImageAsync(
+            Task NotifyRetry(int retryAttempt, int maxRetries, CancellationToken token) =>
+                WriteNdjsonAsync(new
+                {
+                    type = "reset",
+                    retryAttempt,
+                    maxRetries,
+                    message = language == "en"
+                        ? $"The AI server had an internal error. Retrying {retryAttempt}/{maxRetries}..."
+                        : $"Máy chủ AI gặp lỗi nội bộ. Đang thử lại {retryAttempt}/{maxRetries}..."
+                }, token);
+
+            var analysis = await _ollama.AnalyzeTravelImageStreamingAsync(
                 image,
                 language,
                 StreamDelta,
+                NotifyRetry,
                 cancellationToken);
 
             completed = true;
@@ -210,17 +218,18 @@ public sealed class AiController : ApiControllerBase
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
+        catch (IOException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
         catch (OperationCanceledException ex)
         {
-            _logger.LogWarning(ex, "Ollama phân tích ảnh phản hồi quá lâu cho người dùng {UserId}", current.userId);
+            _logger.LogWarning(ex, "AI phân tích ảnh phản hồi quá lâu cho người dùng {UserId}", current.userId);
             await TryWriteLocationAnalysisErrorAsync("AI phân tích ảnh phản hồi quá lâu.");
         }
         catch (InvalidOperationException ex)
         {
             _logger.LogError(ex, "Ollama không thể streaming phân tích địa danh cho người dùng {UserId}", current.userId);
-            await TryWriteLocationAnalysisErrorAsync(
-                ex.Message,
-                IsInternalServerErrorMessage(ex.Message) ? "InternalServerError" : null);
+            await TryWriteLocationAnalysisErrorAsync(ex.Message);
         }
         catch (HttpRequestException ex)
         {
@@ -245,7 +254,7 @@ public sealed class AiController : ApiControllerBase
 
         return new EmptyResult();
 
-        async Task TryWriteLocationAnalysisErrorAsync(string message, string? code = null)
+        async Task TryWriteLocationAnalysisErrorAsync(string message)
         {
             if (cancellationToken.IsCancellationRequested) return;
             try
@@ -254,22 +263,13 @@ public sealed class AiController : ApiControllerBase
                 {
                     type = "error",
                     success = false,
-                    code,
                     message
                 }, CancellationToken.None);
             }
             catch (Exception writeException)
             {
-                _logger.LogDebug(writeException, "Client đã ngắt kết nối trước khi nhận lỗi phân tích ảnh.");
+                _logger.LogDebug(writeException, "Client đã ngắt kết nối trước khi nhận lỗi phân tích ảnh AI.");
             }
-        }
-
-        static bool IsInternalServerErrorMessage(string? message)
-        {
-            if (string.IsNullOrWhiteSpace(message)) return false;
-            return message.Contains("InternalServerError", StringComparison.OrdinalIgnoreCase)
-                || message.Contains("Internal Server Error", StringComparison.OrdinalIgnoreCase)
-                || message.Contains("HTTP 500", StringComparison.OrdinalIgnoreCase);
         }
     }
 
