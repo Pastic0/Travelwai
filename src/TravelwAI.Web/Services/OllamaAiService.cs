@@ -216,6 +216,13 @@ public sealed class OllamaAiService
     public Task<string> AnalyzeTravelImageAsync(
         string image,
         string language,
+        CancellationToken cancellationToken) =>
+        AnalyzeTravelImageAsync(image, language, onDelta: null, cancellationToken);
+
+    public Task<string> AnalyzeTravelImageAsync(
+        string image,
+        string language,
+        Func<string, CancellationToken, Task>? onDelta,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(image))
@@ -278,7 +285,7 @@ public sealed class OllamaAiService
 
         return SendStreamingRequestAsync(
             request,
-            onDelta: null,
+            onDelta,
             sanitizeChatAnswer: false,
             maxResponseWords: null,
             cancellationToken: cancellationToken);

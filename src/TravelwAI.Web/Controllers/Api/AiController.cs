@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http.Features;
 using TravelwAI.Business.Interfaces;
 using TravelwAI.Web.Models;
 using TravelwAI.Web.Services;
@@ -136,6 +137,127 @@ public sealed class AiController : ApiControllerBase
                     reservation.Usage.UsageEventId,
                     current.userId!,
                     AiUsageLimitService.ChatFeature);
+            }
+        }
+    }
+
+    [HttpPost("location-analysis/stream")]
+    [RequestSizeLimit(8 * 1024 * 1024)]
+    public async Task<IActionResult> AnalyzeLocationImageStream(
+        [FromBody] LocationImageAnalysisRequest request,
+        CancellationToken cancellationToken)
+    {
+        var current = await CurrentUserAsync();
+        if (!current.ok) return current.error!;
+
+        var image = (request?.Image ?? string.Empty).Trim();
+        if (image.Length == 0)
+            return BadRequest(new { success = false, message = "Vui lòng chọn ảnh cần phân tích." });
+        if (image.Length > 3_500_000)
+            return BadRequest(new { success = false, message = "Ảnh chưa được tối ưu hoặc có dung lượng quá lớn." });
+        try
+        {
+            _ = Convert.FromBase64String(image);
+        }
+        catch (FormatException)
+        {
+            return BadRequest(new { success = false, message = "Dữ liệu ảnh không đúng định dạng base64." });
+        }
+
+        var reservation = await ReserveChatUsageAsync(current.userId!, current.authUser, cancellationToken);
+        if (reservation.Error is not null) return reservation.Error;
+
+        Response.StatusCode = StatusCodes.Status200OK;
+        Response.ContentType = "application/x-ndjson; charset=utf-8";
+        Response.Headers["Cache-Control"] = "no-cache, no-store";
+        Response.Headers["Pragma"] = "no-cache";
+        Response.Headers["X-Accel-Buffering"] = "no";
+        HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+        await Response.StartAsync(cancellationToken);
+
+        var completed = false;
+        try
+        {
+            var language = string.Equals(request?.Language, "en", StringComparison.OrdinalIgnoreCase)
+                ? "en"
+                : "vi";
+
+            await WriteNdjsonAsync(new
+            {
+                type = "status",
+                message = language == "en"
+                    ? "AI is examining the image and comparing visual clues..."
+                    : "AI đang quan sát ảnh và đối chiếu các dấu hiệu thị giác..."
+            }, cancellationToken);
+
+            Task StreamDelta(string delta, CancellationToken token) =>
+                WriteNdjsonAsync(new { type = "delta", delta }, token);
+
+            var analysis = await _ollama.AnalyzeTravelImageAsync(
+                image,
+                language,
+                StreamDelta,
+                cancellationToken);
+
+            completed = true;
+            await WriteNdjsonAsync(new
+            {
+                type = "completed",
+                success = true,
+                analysis
+            }, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogWarning(ex, "Ollama phân tích ảnh phản hồi quá lâu cho người dùng {UserId}", current.userId);
+            await TryWriteLocationAnalysisErrorAsync("AI phân tích ảnh phản hồi quá lâu.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Ollama không thể streaming phân tích địa danh cho người dùng {UserId}", current.userId);
+            await TryWriteLocationAnalysisErrorAsync(ex.Message);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Không thể kết nối Ollama để streaming phân tích địa danh cho người dùng {UserId}", current.userId);
+            await TryWriteLocationAnalysisErrorAsync("Không thể kết nối máy chủ AI để phân tích ảnh.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi streaming phân tích địa danh không xác định cho người dùng {UserId}", current.userId);
+            await TryWriteLocationAnalysisErrorAsync("Dịch vụ phân tích ảnh tạm thời không khả dụng.");
+        }
+        finally
+        {
+            if (!completed)
+            {
+                await ReleaseUsageSafelyAsync(
+                    reservation.Usage.UsageEventId,
+                    current.userId!,
+                    AiUsageLimitService.ChatFeature);
+            }
+        }
+
+        return new EmptyResult();
+
+        async Task TryWriteLocationAnalysisErrorAsync(string message)
+        {
+            if (cancellationToken.IsCancellationRequested) return;
+            try
+            {
+                await WriteNdjsonAsync(new
+                {
+                    type = "error",
+                    success = false,
+                    message
+                }, CancellationToken.None);
+            }
+            catch (Exception writeException)
+            {
+                _logger.LogDebug(writeException, "Client đã ngắt kết nối trước khi nhận lỗi phân tích ảnh.");
             }
         }
     }

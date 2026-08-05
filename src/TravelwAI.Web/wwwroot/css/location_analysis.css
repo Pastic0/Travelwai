@@ -480,6 +480,86 @@
   40% { transform: scale(1); opacity: 1; }
 }
 
+.result-loading {
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.analysis-stream {
+  width: 100%;
+  min-height: 240px;
+  margin-top: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(125, 211, 252, 0.2);
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.58);
+  text-align: left;
+}
+
+.analysis-stream-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid rgba(125, 211, 252, 0.14);
+  color: #bae6fd;
+  background: rgba(14, 165, 233, 0.07);
+  font-size: 0.82rem;
+}
+
+.analysis-stream-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.5);
+  animation: analysisStreamPulse 1.35s ease-out infinite;
+}
+
+.analysis-stream-output {
+  width: 100%;
+  min-height: 195px;
+  max-height: 330px;
+  margin: 0;
+  overflow: auto;
+  padding: 14px;
+  color: #dbeafe;
+  background: transparent;
+  font: 500 0.82rem/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+}
+
+.analysis-stream-output:empty::before {
+  content: "Đang chờ AI gửi dữ liệu...";
+  color: #64748b;
+}
+
+@keyframes analysisStreamPulse {
+  0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.5); }
+  70% { box-shadow: 0 0 0 8px rgba(56, 189, 248, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+}
+
+[data-travelwai-theme="light"] .analysis-stream,
+.location-analysis-page.travelwai-theme-light .analysis-stream {
+  border-color: rgba(37, 99, 235, 0.18);
+  background: #f8fafc;
+}
+
+[data-travelwai-theme="light"] .analysis-stream-heading,
+.location-analysis-page.travelwai-theme-light .analysis-stream-heading {
+  color: #1d4ed8;
+  border-bottom-color: rgba(37, 99, 235, 0.12);
+  background: rgba(37, 99, 235, 0.055);
+}
+
+[data-travelwai-theme="light"] .analysis-stream-output,
+.location-analysis-page.travelwai-theme-light .analysis-stream-output {
+  color: #334155;
+}
+
 .result-content {
   display: grid;
   gap: 14px;

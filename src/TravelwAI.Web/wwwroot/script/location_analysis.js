@@ -41,6 +41,9 @@
     elements.resultPanel = $("locationResultPanel");
     elements.empty = $("locationResultEmpty");
     elements.loading = $("locationResultLoading");
+    elements.loadingTitle = $("locationLoadingTitle");
+    elements.loadingStatus = $("locationLoadingStatus");
+    elements.streamOutput = $("locationStreamOutput");
     elements.content = $("locationResultContent");
     elements.resultLabel = $("locationResultLabel");
     elements.locationLine = $("locationResultLocationLine");
@@ -79,9 +82,9 @@
 
   function setMessage(text, type) {
     if (!elements.message) return;
-    elements.message.textContent = type === "error"
+    elements.message.textContent = text || (type === "error"
       ? localize("Hãy thử lại sau.", "Please try again later.")
-      : (text || "");
+      : "");
     elements.message.classList.toggle("is-error", type === "error");
     elements.message.classList.toggle("is-success", type === "success");
   }
@@ -93,6 +96,64 @@
     elements.loading.hidden = nextState !== "loading";
     elements.content.hidden = nextState !== "content";
     if (nextState === "content") elements.content.scrollTop = 0;
+  }
+
+  function resetStreamingPreview() {
+    if (elements.loadingTitle) {
+      elements.loadingTitle.textContent = localize("AI đang quan sát ảnh", "AI is examining the image");
+    }
+    if (elements.loadingStatus) {
+      elements.loadingStatus.textContent = localize(
+        "Đang kết nối luồng phân tích...",
+        "Connecting to the analysis stream..."
+      );
+    }
+    if (elements.streamOutput) elements.streamOutput.textContent = "";
+  }
+
+  function setLoadingStatus(message) {
+    if (!elements.loadingStatus || !message) return;
+    elements.loadingStatus.textContent = String(message);
+  }
+
+  function appendStreamingDelta(delta) {
+    if (!elements.streamOutput || !delta) return;
+    elements.streamOutput.textContent += String(delta);
+    elements.streamOutput.scrollTop = elements.streamOutput.scrollHeight;
+  }
+
+  async function readNdjsonStream(response, onEvent) {
+    if (!response.body || typeof response.body.getReader !== "function") {
+      const body = await response.text();
+      for (const line of body.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        onEvent(JSON.parse(trimmed));
+      }
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+      let newlineIndex;
+      while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 1);
+        if (!line) continue;
+        onEvent(JSON.parse(line));
+      }
+
+      if (done) break;
+    }
+
+    const remaining = buffer.trim();
+    if (remaining) onEvent(JSON.parse(remaining));
   }
 
   function setAnalyzing(value) {
@@ -127,6 +188,7 @@
     elements.placeholder.hidden = false;
     elements.analyzeButton.disabled = true;
     resetResultCards();
+    resetStreamingPreview();
     setMessage("");
     if (options.resetResult !== false) setResultState("empty");
   }
@@ -351,14 +413,16 @@
 
     setAnalyzing(true);
     setMessage("");
+    resetStreamingPreview();
     setResultState("loading");
 
     try {
-      const response = await fetch("/api/ai/location-analysis", {
+      const response = await fetch("/api/ai/location-analysis/stream", {
         method: "POST",
         credentials: "same-origin",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/x-ndjson",
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
@@ -367,18 +431,50 @@
         })
       });
 
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || result.success === false) throw new Error("analysis-failed");
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload.message || localize("Không thể bắt đầu phân tích ảnh.", "Unable to start image analysis."));
+      }
 
-      const reply = String(result.analysis || "").trim();
+      let streamedReply = "";
+      let completedReply = "";
+      let streamError = "";
+
+      await readNdjsonStream(response, (event) => {
+        const type = String(event?.type || "").toLowerCase();
+        if (type === "status") {
+          setLoadingStatus(event.message);
+          return;
+        }
+        if (type === "delta") {
+          const delta = String(event.delta || "");
+          streamedReply += delta;
+          appendStreamingDelta(delta);
+          setLoadingStatus(localize("AI đang gửi kết quả theo thời gian thực...", "AI is streaming the result in real time..."));
+          return;
+        }
+        if (type === "completed") {
+          completedReply = String(event.analysis || streamedReply).trim();
+          return;
+        }
+        if (type === "error") {
+          streamError = String(event.message || localize("Phân tích ảnh thất bại.", "Image analysis failed."));
+        }
+      });
+
+      if (streamError) throw new Error(streamError);
+
+      const reply = (completedReply || streamedReply).trim();
       const parsed = parseAiJson(reply);
-      if (!parsed) throw new Error("invalid-analysis");
+      if (!parsed) {
+        throw new Error(localize("AI trả về kết quả không đúng định dạng.", "AI returned an invalid result format."));
+      }
 
       renderAnalysis(parsed);
       setMessage(localize("Phân tích hoàn tất.", "Analysis completed."), "success");
-    } catch (_) {
+    } catch (error) {
       setResultState("empty");
-      setMessage("", "error");
+      setMessage(error?.message || "", "error");
     } finally {
       setAnalyzing(false);
     }
