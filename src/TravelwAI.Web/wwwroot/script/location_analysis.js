@@ -2,10 +2,13 @@
   "use strict";
 
   const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+  const MAX_INTERNAL_SERVER_RETRIES = 5;
+  const INTERNAL_SERVER_RETRY_DELAY_MS = 400;
   let selectedFile = null;
   let selectedImageData = "";
   let selectedPreviewUrl = "";
   let isAnalyzing = false;
+  let analysisAbortController = null;
   let streamingRevealStage = 0;
 
   const elements = {};
@@ -428,13 +431,15 @@
     }
   }
 
-  async function revealRemainingStreamingFields(raw) {
+  async function revealRemainingStreamingFields(raw, signal) {
     const finalRaw = String(raw || "");
     for (let index = 0; index < 8; index += 1) {
+      if (signal?.aborted) throw createAbortError();
+
       const previousStage = streamingRevealStage;
       renderStreamingAnalysis(finalRaw);
       if (streamingRevealStage === previousStage) break;
-      await new Promise((resolve) => window.setTimeout(resolve, 90));
+      await waitForDelay(90, signal);
     }
   }
 
@@ -474,10 +479,35 @@
 
   function setAnalyzing(value) {
     isAnalyzing = value;
-    elements.analyzeButton.disabled = value || !selectedImageData;
+    elements.analyzeButton.disabled = !selectedImageData;
+    elements.analyzeButton.classList.toggle("is-cancel-analysis", value);
+    elements.analyzeButton.setAttribute(
+      "aria-label",
+      value
+        ? localize("Dừng AI phân tích địa danh", "Stop AI landmark analysis")
+        : localize("Phân tích bằng AI", "Analyze with AI")
+    );
+    elements.analyzeButton.title = value
+      ? localize("Bấm để dừng phân tích", "Click to stop analysis")
+      : "";
     elements.analyzeButton.querySelector("span:last-child").textContent = value
-      ? localize("Đang phân tích...", "Analyzing...")
+      ? localize("AI đang phân tích...", "AI is analyzing...")
       : localize("Phân tích bằng AI", "Analyze with AI");
+  }
+
+  function cancelLocationAnalysis() {
+    const controller = analysisAbortController;
+    if (!controller || controller.signal.aborted) return;
+
+    controller.abort("user-cancelled");
+    if (analysisAbortController !== controller) return;
+    analysisAbortController = null;
+
+    setAnalyzing(false);
+    resetStreamingPreview();
+    resetResultCards();
+    setResultState("empty");
+    setMessage("");
   }
 
   function clearPreviewUrl() {
@@ -725,8 +755,143 @@
     setResultState("content");
   }
 
+  function isInternalServerError(value) {
+    const status = Number(value?.status ?? value?.statusCode ?? value?.httpStatus ?? 0);
+    if (status === 500) return true;
+
+    let text = "";
+    if (typeof value === "string") {
+      text = value;
+    } else if (value) {
+      try {
+        text = JSON.stringify(value);
+      } catch (_) {
+        text = String(value?.message || value?.error || value?.title || value?.statusText || "");
+      }
+    }
+
+    return /internal\s*server\s*error/i.test(text)
+      || /internalservererror/i.test(text)
+      || /\bhttp\s*500\b/i.test(text);
+  }
+
+  function createAbortError() {
+    try {
+      return new DOMException("The operation was aborted.", "AbortError");
+    } catch (_) {
+      const error = new Error("The operation was aborted.");
+      error.name = "AbortError";
+      return error;
+    }
+  }
+
+  function isAbortError(error) {
+    return error?.name === "AbortError" || error?.code === 20;
+  }
+
+  function waitForDelay(delay, signal) {
+    if (signal?.aborted) return Promise.reject(createAbortError());
+
+    return new Promise((resolve, reject) => {
+      const timeoutId = window.setTimeout(() => {
+        signal?.removeEventListener("abort", handleAbort);
+        resolve();
+      }, Math.max(0, Number(delay) || 0));
+
+      function handleAbort() {
+        window.clearTimeout(timeoutId);
+        signal?.removeEventListener("abort", handleAbort);
+        reject(createAbortError());
+      }
+
+      signal?.addEventListener("abort", handleAbort, { once: true });
+    });
+  }
+
+  function waitForRetry(attempt, signal) {
+    const delay = Math.min(INTERNAL_SERVER_RETRY_DELAY_MS * Math.max(1, attempt), 1600);
+    return waitForDelay(delay, signal);
+  }
+
+  async function performLocationAnalysisAttempt(token, signal) {
+    if (signal?.aborted) throw createAbortError();
+
+    const response = await fetch("/api/ai/location-analysis/stream", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/x-ndjson",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        Image: selectedImageData,
+        Language: getCurrentLanguage()
+      }),
+      signal
+    });
+
+    if (!response.ok) {
+      const rawError = await response.text().catch(() => "");
+      let errorPayload = rawError;
+      try {
+        errorPayload = rawError ? JSON.parse(rawError) : {};
+      } catch (_) {
+      }
+
+      const requestError = new Error("analysis-failed");
+      requestError.status = response.status;
+      requestError.isInternalServerError = response.status === 500
+        || isInternalServerError(response.statusText)
+        || isInternalServerError(errorPayload);
+      throw requestError;
+    }
+
+    let streamedReply = "";
+    let completedReply = "";
+    let streamError = null;
+
+    await readNdjsonStream(response, (event) => {
+      const type = String(event?.type || "").toLowerCase();
+      if (type === "status") {
+        setLoadingStatus(event.message);
+        return;
+      }
+      if (type === "delta") {
+        const delta = String(event.delta || "");
+        streamedReply += delta;
+        renderStreamingAnalysis(streamedReply);
+        setLoadingStatus(localize("AI đang điền thông tin vào kết quả...", "AI is filling in the result..."));
+        return;
+      }
+      if (type === "completed") {
+        completedReply = String(event.analysis || streamedReply).trim();
+        return;
+      }
+      if (type === "error") {
+        streamError = event || { message: "analysis-failed" };
+      }
+    });
+
+    if (streamError) {
+      const requestError = new Error(String(streamError.message || "analysis-failed"));
+      requestError.isInternalServerError = isInternalServerError(streamError);
+      throw requestError;
+    }
+
+    const reply = (completedReply || streamedReply).trim();
+    const parsed = parseAiJson(reply);
+    if (!parsed) throw new Error("analysis-failed");
+
+    return { reply, parsed };
+  }
+
   async function analyzeImage() {
-    if (!selectedImageData || isAnalyzing) return;
+    if (isAnalyzing) {
+      cancelLocationAnalysis();
+      return;
+    }
+    if (!selectedImageData) return;
 
     let token = getToken();
     if (!token && typeof window.refreshTokenIfNeeded === "function") {
@@ -744,75 +909,68 @@
       return;
     }
 
+    const abortController = new AbortController();
+    analysisAbortController = abortController;
+    const { signal } = abortController;
+
     setAnalyzing(true);
     setMessage("");
     resetStreamingPreview();
     beginStreamingAnalysis();
 
     try {
-      const response = await fetch("/api/ai/location-analysis/stream", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/x-ndjson",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          Image: selectedImageData,
-          Language: getCurrentLanguage()
-        })
-      });
+      let result = null;
 
-      if (!response.ok) {
-        await response.json().catch(() => ({}));
-        throw new Error("analysis-failed");
+      for (let retryCount = 0; retryCount <= MAX_INTERNAL_SERVER_RETRIES; retryCount += 1) {
+        if (signal.aborted) throw createAbortError();
+
+        if (retryCount > 0) {
+          resetStreamingPreview();
+          beginStreamingAnalysis();
+          await waitForRetry(retryCount, signal);
+        }
+
+        try {
+          result = await performLocationAnalysisAttempt(token, signal);
+          break;
+        } catch (error) {
+          const canRetry = error?.isInternalServerError === true
+            && retryCount < MAX_INTERNAL_SERVER_RETRIES;
+          if (canRetry) continue;
+          throw error;
+        }
       }
 
-      let streamedReply = "";
-      let completedReply = "";
-      let streamError = "";
+      if (!result) throw new Error("analysis-failed");
+      if (signal.aborted) throw createAbortError();
 
-      await readNdjsonStream(response, (event) => {
-        const type = String(event?.type || "").toLowerCase();
-        if (type === "status") {
-          setLoadingStatus(event.message);
-          return;
-        }
-        if (type === "delta") {
-          const delta = String(event.delta || "");
-          streamedReply += delta;
-          renderStreamingAnalysis(streamedReply);
-          setLoadingStatus(localize("AI đang điền thông tin vào kết quả...", "AI is filling in the result..."));
-          return;
-        }
-        if (type === "completed") {
-          completedReply = String(event.analysis || streamedReply).trim();
-          return;
-        }
-        if (type === "error") {
-          streamError = String(event.message || localize("Phân tích ảnh thất bại.", "Image analysis failed."));
-        }
-      });
+      await revealRemainingStreamingFields(result.reply, signal);
+      if (signal.aborted) throw createAbortError();
 
-      if (streamError) throw new Error("analysis-failed");
-
-      const reply = (completedReply || streamedReply).trim();
-      const parsed = parseAiJson(reply);
-      if (!parsed) {
-        throw new Error("analysis-failed");
-      }
-
-      await revealRemainingStreamingFields(reply);
-      renderAnalysis(parsed);
+      renderAnalysis(result.parsed);
       setMessage(localize("Phân tích hoàn tất.", "Analysis completed."), "success");
-    } catch (_) {
-      resetStreamingPreview();
-      resetResultCards();
-      setResultState("error");
-      setMessage(localize("Vui lòng thử lại", "Please try again"), "error");
+    } catch (error) {
+      if (isAbortError(error) || signal.aborted) {
+        if (analysisAbortController === abortController) {
+          resetStreamingPreview();
+          resetResultCards();
+          setResultState("empty");
+          setMessage("");
+        }
+        return;
+      }
+
+      if (analysisAbortController === abortController) {
+        resetStreamingPreview();
+        resetResultCards();
+        setResultState("error");
+        setMessage(localize("Vui lòng thử lại", "Please try again"), "error");
+      }
     } finally {
-      setAnalyzing(false);
+      if (analysisAbortController === abortController) {
+        analysisAbortController = null;
+        setAnalyzing(false);
+      }
     }
   }
 
@@ -878,7 +1036,13 @@
       event.stopPropagation();
       if (!isAnalyzing) clearSelection();
     });
-    elements.analyzeButton.addEventListener("click", () => void analyzeImage());
+    elements.analyzeButton.addEventListener("click", () => {
+      if (isAnalyzing) {
+        cancelLocationAnalysis();
+        return;
+      }
+      void analyzeImage();
+    });
     elements.analyzeAgainButton.addEventListener("click", (event) => {
       clearSelection();
       openFilePicker(event);
@@ -902,7 +1066,10 @@
     });
 
     document.addEventListener("paste", handlePaste);
-    window.addEventListener("beforeunload", clearPreviewUrl);
+    window.addEventListener("beforeunload", () => {
+      analysisAbortController?.abort("page-unload");
+      clearPreviewUrl();
+    });
   }
 
   document.addEventListener("DOMContentLoaded", function () {

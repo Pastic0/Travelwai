@@ -218,7 +218,9 @@ public sealed class AiController : ApiControllerBase
         catch (InvalidOperationException ex)
         {
             _logger.LogError(ex, "Ollama không thể streaming phân tích địa danh cho người dùng {UserId}", current.userId);
-            await TryWriteLocationAnalysisErrorAsync(ex.Message);
+            await TryWriteLocationAnalysisErrorAsync(
+                ex.Message,
+                IsInternalServerErrorMessage(ex.Message) ? "InternalServerError" : null);
         }
         catch (HttpRequestException ex)
         {
@@ -243,7 +245,7 @@ public sealed class AiController : ApiControllerBase
 
         return new EmptyResult();
 
-        async Task TryWriteLocationAnalysisErrorAsync(string message)
+        async Task TryWriteLocationAnalysisErrorAsync(string message, string? code = null)
         {
             if (cancellationToken.IsCancellationRequested) return;
             try
@@ -252,6 +254,7 @@ public sealed class AiController : ApiControllerBase
                 {
                     type = "error",
                     success = false,
+                    code,
                     message
                 }, CancellationToken.None);
             }
@@ -259,6 +262,14 @@ public sealed class AiController : ApiControllerBase
             {
                 _logger.LogDebug(writeException, "Client đã ngắt kết nối trước khi nhận lỗi phân tích ảnh.");
             }
+        }
+
+        static bool IsInternalServerErrorMessage(string? message)
+        {
+            if (string.IsNullOrWhiteSpace(message)) return false;
+            return message.Contains("InternalServerError", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("Internal Server Error", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("HTTP 500", StringComparison.OrdinalIgnoreCase);
         }
     }
 
