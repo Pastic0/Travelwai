@@ -1,29 +1,44 @@
 (function () {
   "use strict";
 
-  const DEFAULT_LOGO_URL = "/logo/travelwai-icon.webp";
-  const DEFAULT_LOGO_VERSION = "2026-08-05-brand-icon-v4";
   const DEFAULT_LIGHT_BACKGROUND_URL = "/main_site_image/travelwai-bg-light.webp";
   const DEFAULT_DARK_BACKGROUND_URL = "/main_site_image/travelwai-bg-dark.webp";
   const DEFAULT_BACKGROUND_VERSION = "2026-07-26-branding-cache-fix-v3";
-  const CACHE_KEY = "travelwai_site_branding_v4";
+  const CACHE_KEY = "travelwai_site_branding_v5";
+  const LEGACY_CACHE_KEYS = [
+    "travelwai_site_branding_v4",
+    "travelwai_site_branding_v3",
+    "travelwai_site_branding_v2",
+    "travelwai_site_branding_v1"
+  ];
 
-  let currentLogoUrl = DEFAULT_LOGO_URL;
-  let currentLogoVersion = DEFAULT_LOGO_VERSION;
+  let currentLogoUrl = "";
+  let currentLogoVersion = "";
   let currentLightBackgroundUrl = DEFAULT_LIGHT_BACKGROUND_URL;
   let currentLightBackgroundVersion = DEFAULT_BACKGROUND_VERSION;
   let currentDarkBackgroundUrl = DEFAULT_DARK_BACKGROUND_URL;
   let currentDarkBackgroundVersion = DEFAULT_BACKGROUND_VERSION;
   let stateRevision = 0;
+  let logoApplyRevision = 0;
 
-  function normalizeUrl(value, fallback) {
+  function normalizeUrl(value, fallback = "") {
     const text = String(value || "").trim();
     if (!text || /^javascript:/i.test(text)) return fallback;
     return text;
   }
 
-  function withVersion(url, version, fallback) {
+  function normalizeLogoUrl(value) {
+    const text = normalizeUrl(value);
+    if (!text) return "";
+    // The packaged legacy logo was removed. Never revive it from HTML,
+    // localStorage, API data, browser history, or old service-worker caches.
+    if (/\/?logo\/travelwai-icon\.webp(?:[?#]|$)/i.test(text)) return "";
+    return text;
+  }
+
+  function withVersion(url, version, fallback = "") {
     const safeUrl = normalizeUrl(url, fallback);
+    if (!safeUrl) return "";
     const safeVersion = String(version || "").trim();
     if (!safeVersion || safeVersion === "default") return safeUrl;
     const separator = safeUrl.includes("?") ? "&" : "?";
@@ -31,7 +46,15 @@
   }
 
   function toCssUrl(url) {
-    return `url("${String(url || "").replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}")`;
+    if (!url) return "none";
+    return `url("${String(url).replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}")`;
+  }
+
+  function removeLegacyCaches() {
+    try {
+      LEGACY_CACHE_KEYS.forEach(key => localStorage.removeItem(key));
+      localStorage.removeItem("travelwaiBackgroundVersion");
+    } catch (_) { }
   }
 
   function persistCache() {
@@ -44,10 +67,7 @@
         backgroundDarkUrl: currentDarkBackgroundUrl,
         backgroundDarkVersion: currentDarkBackgroundVersion
       }));
-      localStorage.removeItem("travelwai_site_branding_v3");
-      localStorage.removeItem("travelwai_site_branding_v2");
-      localStorage.removeItem("travelwai_site_branding_v1");
-      localStorage.removeItem("travelwaiBackgroundVersion");
+      removeLegacyCaches();
     } catch (_) { }
   }
 
@@ -55,21 +75,59 @@
     if (!(element instanceof Element)) return false;
     if (element.matches("[data-site-logo]")) return true;
     const raw = element.getAttribute("src") || element.getAttribute("href") || "";
-    return raw.includes("/logo/travelwai-icon.webp") || raw.includes("logo/travelwai-icon.webp");
+    return /\/?logo\/travelwai-icon\.webp(?:[?#]|$)/i.test(raw);
   }
 
-  function updateElement(element, versionedUrl, force = false) {
-    if (!(element instanceof Element) || !isTravelwAILogoElement(element)) return;
+  function clearLogoElement(element) {
+    if (!(element instanceof Element)) return;
     const attributeName = element.tagName === "LINK" ? "href" : "src";
-    const currentValue = element.getAttribute(attributeName) || "";
-    const stillUsesDefaultLogo = currentValue.includes("travelwai-icon.webp");
-    if (!force && !stillUsesDefaultLogo) return;
+    element.removeAttribute(attributeName);
     element.setAttribute("data-site-logo", "true");
-    if (currentValue === versionedUrl) return;
+    if (element.tagName === "IMG") {
+      element.hidden = true;
+      element.classList.remove("site-logo-ready");
+    }
+  }
 
-    // Browsers cache favicons more aggressively than normal images. Replacing
-    // the link node forces the tab icon to be re-evaluated after a logo change.
+  function setImageLogo(image, versionedUrl, revision) {
+    if (!(image instanceof HTMLImageElement)) return;
+    const current = image.getAttribute("src") || "";
+    if (current === versionedUrl && image.complete && image.naturalWidth > 0) {
+      image.hidden = false;
+      image.classList.add("site-logo-ready");
+      return;
+    }
+
+    // Keep a previously loaded uploaded logo visible until the replacement is decoded.
+    // A new empty element stays hidden instead of flashing a white circle.
+    if (/\/?logo\/travelwai-icon\.webp(?:[?#]|$)/i.test(current)) clearLogoElement(image);
+    const loader = new Image();
+    loader.decoding = "async";
+    loader.onload = () => {
+      if (revision !== logoApplyRevision || versionedUrl !== getLogoUrl()) return;
+      image.setAttribute("src", versionedUrl);
+      image.hidden = false;
+      image.classList.add("site-logo-ready");
+    };
+    loader.onerror = () => {
+      if (revision !== logoApplyRevision) return;
+      if (!(image.complete && image.naturalWidth > 0)) clearLogoElement(image);
+    };
+    loader.src = versionedUrl;
+    loader.decode?.().then(loader.onload).catch(() => { });
+  }
+
+  function updateElement(element, versionedUrl) {
+    if (!(element instanceof Element) || !isTravelwAILogoElement(element)) return;
+    element.setAttribute("data-site-logo", "true");
+
+    if (!versionedUrl) {
+      clearLogoElement(element);
+      return;
+    }
+
     if (element.tagName === "LINK" && element.relList?.contains("icon")) {
+      if (element.getAttribute("href") === versionedUrl) return;
       const replacement = element.cloneNode(true);
       replacement.setAttribute("href", versionedUrl);
       replacement.setAttribute("data-site-logo", "true");
@@ -77,14 +135,14 @@
       return;
     }
 
-    element.setAttribute(attributeName, versionedUrl);
+    if (element.tagName === "IMG") setImageLogo(element, versionedUrl, logoApplyRevision);
   }
 
-  function updateTree(root, versionedUrl, force = false) {
+  function updateTree(root, versionedUrl) {
     if (!root) return;
-    if (root instanceof Element) updateElement(root, versionedUrl, force);
-    root.querySelectorAll?.("img[data-site-logo], img[src*='travelwai-icon.webp'], link[data-site-logo], link[rel~='icon'][href*='travelwai-icon.webp']")
-      .forEach(element => updateElement(element, versionedUrl, force));
+    if (root instanceof Element) updateElement(root, versionedUrl);
+    root.querySelectorAll?.("img[data-site-logo], link[data-site-logo], img[src*='travelwai-icon.webp'], link[rel~='icon'][href*='travelwai-icon.webp']")
+      .forEach(element => updateElement(element, versionedUrl));
   }
 
   function dispatchBrandingChange() {
@@ -101,12 +159,14 @@
 
   function applyLogo(url, version, persist = true) {
     stateRevision += 1;
-    currentLogoUrl = normalizeUrl(url, DEFAULT_LOGO_URL);
-    currentLogoVersion = String(version || DEFAULT_LOGO_VERSION);
+    logoApplyRevision += 1;
+    currentLogoUrl = normalizeLogoUrl(url);
+    currentLogoVersion = currentLogoUrl ? String(version || "") : "";
     const versionedUrl = getLogoUrl();
 
     document.documentElement.style.setProperty("--travelwai-site-logo", toCssUrl(versionedUrl));
-    updateTree(document, versionedUrl, true);
+    document.documentElement.classList.toggle("has-site-logo", Boolean(versionedUrl));
+    updateTree(document, versionedUrl);
     window.TravelwAISiteLogoUrl = versionedUrl;
 
     if (persist) persistCache();
@@ -144,7 +204,7 @@
   }
 
   function getLogoUrl() {
-    return withVersion(currentLogoUrl, currentLogoVersion, DEFAULT_LOGO_URL);
+    return withVersion(currentLogoUrl, currentLogoVersion);
   }
 
   function getBackgroundUrl(theme) {
@@ -155,9 +215,23 @@
 
   function readCachedBranding() {
     try {
-      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-      if (!cached) return;
-      if (cached.logoUrl) applyLogo(cached.logoUrl, cached.logoVersion || cached.version || DEFAULT_LOGO_VERSION, false);
+      let cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+      if (!cached) {
+        // Migrate only a remotely uploaded logo. The packaged legacy path is rejected.
+        for (const key of LEGACY_CACHE_KEYS) {
+          const candidate = JSON.parse(localStorage.getItem(key) || "null");
+          if (candidate) {
+            cached = candidate;
+            break;
+          }
+        }
+      }
+      if (!cached) {
+        removeLegacyCaches();
+        return;
+      }
+
+      applyLogo(cached.logoUrl, cached.logoVersion || cached.version || "", false);
       applyBackgrounds(
         cached.backgroundLightUrl || DEFAULT_LIGHT_BACKGROUND_URL,
         cached.backgroundLightVersion || DEFAULT_BACKGROUND_VERSION,
@@ -165,20 +239,24 @@
         cached.backgroundDarkVersion || DEFAULT_BACKGROUND_VERSION,
         false
       );
-    } catch (_) { }
+      persistCache();
+    } catch (_) {
+      removeLegacyCaches();
+    }
   }
 
   async function refresh() {
     const requestRevision = stateRevision;
     try {
-      const response = await fetch(`/api/site-branding?branding=${Date.now()}`, { cache: "no-store", headers: { Accept: "application/json", "Cache-Control": "no-cache" } });
+      const response = await fetch(`/api/site-branding?branding=${Date.now()}`, {
+        cache: "no-store",
+        headers: { Accept: "application/json", "Cache-Control": "no-cache" }
+      });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.success === false) return;
-      // Do not let a slower response containing old settings overwrite a logo
-      // or background that the admin changed while this request was in flight.
       if (requestRevision !== stateRevision) return;
       const data = result.data || result;
-      applyLogo(data.logoUrl || data.logo_url || DEFAULT_LOGO_URL, data.version || data.logoVersion || DEFAULT_LOGO_VERSION, false);
+      applyLogo(data.logoUrl || data.logo_url || "", data.version || data.logoVersion || "", false);
       applyBackgrounds(
         data.backgroundLightUrl || data.background_light_url || DEFAULT_LIGHT_BACKGROUND_URL,
         data.backgroundLightVersion || data.background_light_version || DEFAULT_BACKGROUND_VERSION,
@@ -192,9 +270,9 @@
 
   readCachedBranding();
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => updateTree(document, getLogoUrl(), true), { once: true });
+    document.addEventListener("DOMContentLoaded", () => updateTree(document, getLogoUrl()), { once: true });
   } else {
-    updateTree(document, getLogoUrl(), true);
+    updateTree(document, getLogoUrl());
   }
 
   const observer = new MutationObserver(mutations => {
@@ -208,7 +286,12 @@
       }
     });
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["src", "href"] });
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["src", "href"]
+  });
 
   window.TravelwAISiteBranding = {
     applyLogo,
@@ -217,7 +300,7 @@
     refresh,
     getLogoUrl,
     getBackgroundUrl,
-    defaultLogoUrl: DEFAULT_LOGO_URL,
+    defaultLogoUrl: "",
     defaultLightBackgroundUrl: DEFAULT_LIGHT_BACKGROUND_URL,
     defaultDarkBackgroundUrl: DEFAULT_DARK_BACKGROUND_URL
   };

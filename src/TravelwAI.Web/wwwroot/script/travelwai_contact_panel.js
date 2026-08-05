@@ -8,7 +8,7 @@
   const AI_JOB_POLL_MS = 1200;
   const CONTACT_HISTORY_LIMIT = 100;
   const CHAT_MESSAGE_PAYLOAD_TYPE = "travelwai-chat-message";
-  const DEFAULT_WAIGO_AVATAR_URL = "/logo/travelwai-icon.webp?v=2026-08-05-brand-icon-v4";
+  const DEFAULT_WAIGO_AVATAR_URL = "";
 
   function getWaigoAvatarUrl() {
     return window.TravelwAISiteBranding?.getLogoUrl?.()
@@ -47,7 +47,7 @@
   }
 
   function applyChatbotBranding(detail) {
-    const nextAvatar = String(detail?.logoUrl || getWaigoAvatarUrl()).trim() || DEFAULT_WAIGO_AVATAR_URL;
+    const nextAvatar = String(detail?.logoUrl || getWaigoAvatarUrl()).trim();
     if (managerConfig.avatar === nextAvatar) return;
     managerConfig.avatar = nextAvatar;
 
@@ -268,12 +268,11 @@
     if (isUser) {
       avatar.textContent = (getUserDisplayName(currentUser) || "B").charAt(0).toUpperCase();
     } else {
-      const img = document.createElement("img");
-      img.src = buildManagerAvatarUrl();
-      img.alt = managerConfig.displayName;
-      img.className = "waigo-brand-avatar";
-      avatar.classList.add("waigo-avatar-shell");
-      avatar.appendChild(img);
+      // The message list is rebuilt on every streaming chunk. A CSS background
+      // reuses the already loaded uploaded logo and avoids a white image flash.
+      avatar.classList.add("waigo-avatar-shell", "waigo-logo-background");
+      avatar.setAttribute("role", "img");
+      avatar.setAttribute("aria-label", managerConfig.displayName);
     }
 
     const bubble = document.createElement("div");

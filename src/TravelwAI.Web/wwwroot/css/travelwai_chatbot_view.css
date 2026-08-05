@@ -183,7 +183,7 @@
   padding: 0 !important;
   overflow: visible;
   border-radius: 50%;
-  background: #fff;
+  background: transparent;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2);
 }
 
@@ -193,7 +193,7 @@
   display: block !important;
   border: 2px solid rgba(255, 255, 255, 0.92) !important;
   border-radius: 50% !important;
-  background: #fff !important;
+  background: transparent !important;
   object-fit: cover !important;
   object-position: center !important;
 }
@@ -364,7 +364,7 @@
   place-items: center !important;
   border: 1px solid rgba(29, 116, 194, 0.18) !important;
   border-radius: 50% !important;
-  background: #fff !important;
+  background: transparent !important;
   color: #0a5aa8 !important;
   box-shadow: 0 4px 12px rgba(8, 74, 145, 0.10) !important;
   font-size: 0.72rem !important;

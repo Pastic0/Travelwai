@@ -10,8 +10,6 @@ public sealed class SiteBrandingController : ControllerBase
 {
     private const string SettingsCollection = "site_settings";
     private const string BrandingDocumentId = "branding";
-    private const string DefaultLogoUrl = "/logo/travelwai-icon.webp";
-    private const string DefaultLogoVersion = "2026-08-05-brand-icon-v4";
     private const string DefaultLightBackgroundUrl = "/main_site_image/travelwai-bg-light.webp";
     private const string DefaultDarkBackgroundUrl = "/main_site_image/travelwai-bg-dark.webp";
     private const string DefaultBackgroundVersion = "2026-07-26-branding-cache-fix-v3";
@@ -42,8 +40,8 @@ public sealed class SiteBrandingController : ControllerBase
             success = true,
             data = new
             {
-                logoUrl = string.IsNullOrWhiteSpace(logoUrl) ? DefaultLogoUrl : logoUrl,
-                version = string.IsNullOrWhiteSpace(logoVersion) ? DefaultLogoVersion : logoVersion,
+                logoUrl,
+                version = logoVersion,
                 backgroundLightUrl = string.IsNullOrWhiteSpace(lightBackgroundUrl) ? DefaultLightBackgroundUrl : lightBackgroundUrl,
                 backgroundLightVersion = string.IsNullOrWhiteSpace(lightBackgroundVersion) ? DefaultBackgroundVersion : lightBackgroundVersion,
                 backgroundDarkUrl = string.IsNullOrWhiteSpace(darkBackgroundUrl) ? DefaultDarkBackgroundUrl : darkBackgroundUrl,

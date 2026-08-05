@@ -1032,9 +1032,7 @@ html[data-travelwai-theme="dark"] .twai-theme-toggle {
 }
 
 
-img[data-site-logo],
-img[src*="/logo/travelwai-icon.webp"],
-img[src*="logo/travelwai-icon.webp"] {
+img[data-site-logo] {
   border-radius: 50% !important;
   object-fit: cover !important;
   aspect-ratio: 1 / 1;
@@ -1044,9 +1042,7 @@ img[src*="logo/travelwai-icon.webp"] {
 .twai-chatbot-avatar,
 .twai-chatbot-tool-icon,
 .logo img[data-site-logo],
-.landing-logo img[data-site-logo],
-.logo img[src*="travelwai-icon"],
-.landing-logo img[src*="travelwai-icon"] {
+.landing-logo img[data-site-logo] {
   border-radius: 50% !important;
   object-fit: cover !important;
 }
@@ -1060,14 +1056,30 @@ img[src*="logo/travelwai-icon.webp"] {
   border-radius: 50% !important;
   object-fit: cover !important;
   object-position: center !important;
-  background: #ffffff !important;
+  background: transparent !important;
 }
 
 .waigo-avatar-shell {
   overflow: hidden !important;
   border-radius: 50% !important;
-  background: #ffffff !important;
+  background-color: transparent !important;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, .18) !important;
+}
+
+.waigo-logo-background {
+  background-color: transparent !important;
+  background-image: var(--travelwai-site-logo, none) !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: cover !important;
+}
+
+img[data-site-logo][hidden] {
+  visibility: hidden !important;
+}
+
+img[data-site-logo].site-logo-ready {
+  visibility: visible !important;
 }
 
 .twai-chatbot-launcher .waigo-brand-avatar {

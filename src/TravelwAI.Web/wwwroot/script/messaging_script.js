@@ -41,7 +41,7 @@ function decodeUnicodeEscapes(value) {
   });
 }
 const AI_HISTORY_PREFIX = "travelwai-admin-support-history";
-const DEFAULT_AI_AVATAR_URL = "/logo/travelwai-icon.webp?v=2026-08-05-brand-icon-v4";
+const DEFAULT_AI_AVATAR_URL = "";
 let AI_AVATAR_URL = window.TravelwAISiteBranding?.getLogoUrl?.()
   || window.TravelwAISiteLogoUrl
   || DEFAULT_AI_AVATAR_URL;
@@ -60,7 +60,7 @@ function applyMessagingBranding(detail) {
     || window.TravelwAISiteBranding?.getLogoUrl?.()
     || window.TravelwAISiteLogoUrl
     || DEFAULT_AI_AVATAR_URL
-  ).trim() || DEFAULT_AI_AVATAR_URL;
+  ).trim();
   if (AI_AVATAR_URL === nextAvatar) return;
   AI_AVATAR_URL = nextAvatar;
 
@@ -1269,10 +1269,12 @@ function createConversationElement(conversation, searchQuery = "") {
   div.dataset.conversationName = displayName;
   div.dataset.lastMessage = lastMessage;
 
+  const avatarMarkup = isAi
+    ? `<div class="user-avatar waigo-avatar-shell waigo-logo-background" role="img" aria-label="${escapeHtml(displayName)}"></div>`
+    : `<div class="user-avatar"><img loading="lazy" decoding="async" src="${escapeHtml(avatarSrc)}" alt="${escapeHtml(displayName)}" onerror="this.src='logo/profile-icon-white.webp'" /></div>`;
+
   div.innerHTML = `
-        <div class="user-avatar${isAi ? " waigo-avatar-shell" : ""}">
-            <img loading="lazy" decoding="async" class="${isAi ? "waigo-brand-avatar" : ""}" src="${escapeHtml(avatarSrc)}" alt="${escapeHtml(displayName)}" onerror="this.src='logo/profile-icon-white.webp'" />
-        </div>
+        ${avatarMarkup}
         <div class="conversation-item-info">
             <div class="conversation-item-name">${highlightSearchTerm(displayName, searchQuery)}</div>
             ${!isAi && !isGroup ? `<div class="conversation-presence ${getUserPresenceClass(otherParticipant)}"><span class="presence-dot"></span>${getUserPresenceLabel(otherParticipant)}</div>` : ""}
@@ -1525,11 +1527,21 @@ function showConversationInterface() {
   }
 
   const headerAvatar = document.getElementById("conversationUserAvatar");
-  headerAvatar.src = isAiMode ? AI_AVATAR_URL : (getUserAvatarUrl(otherParticipant) || "logo/profile-icon-white.webp");
-  headerAvatar.classList.toggle("waigo-brand-avatar", isAiMode);
-  headerAvatar.parentElement?.classList.toggle("waigo-avatar-shell", isAiMode);
-  headerAvatar.onerror = () =>
-    (headerAvatar.src = "logo/profile-icon-white.webp");
+  const headerAvatarShell = headerAvatar?.parentElement;
+  headerAvatarShell?.classList.toggle("waigo-avatar-shell", isAiMode);
+  headerAvatarShell?.classList.toggle("waigo-logo-background", isAiMode);
+  if (headerAvatar) {
+    if (isAiMode) {
+      headerAvatar.removeAttribute("src");
+      headerAvatar.hidden = true;
+      headerAvatar.classList.remove("waigo-brand-avatar");
+      headerAvatar.onerror = null;
+    } else {
+      headerAvatar.hidden = false;
+      headerAvatar.src = getUserAvatarUrl(otherParticipant) || "logo/profile-icon-white.webp";
+      headerAvatar.onerror = () => (headerAvatar.src = "logo/profile-icon-white.webp");
+    }
+  }
 }
 
 function getConversationNameActionIcon() {
@@ -2068,11 +2080,14 @@ const createAvatarContent = (profilePic, initial, isCurrentUser = false, isWaigo
     isCurrentUser ? "avatar-sent" : "avatar-received"
   }${isWaigo ? " waigo-avatar-shell" : ""}`;
 
-  if (profilePic) {
+  if (isWaigo) {
+    avatar.classList.add("waigo-logo-background");
+    avatar.setAttribute("role", "img");
+    avatar.setAttribute("aria-label", AI_DISPLAY_NAME);
+  } else if (profilePic) {
     const img = document.createElement("img");
     img.src = resolveAvatarUrl(profilePic);
     img.alt = initial;
-    if (isWaigo) img.classList.add("waigo-brand-avatar");
     img.onerror = () => {
       const initialSpan = document.createElement("span");
       initialSpan.textContent = initial;

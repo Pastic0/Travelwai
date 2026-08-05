@@ -1396,7 +1396,7 @@ function displaySearchResults(users) {
           : API_BASE;
         picUrl = base + (picUrl.startsWith("/") ? picUrl : "/" + picUrl);
       } else if (!picUrl.startsWith("http")) {
-        picUrl = "/logo/travelwai-icon.webp?v=2026-08-05-brand-icon-v4";
+        picUrl = picUrl.startsWith("/") ? picUrl : `/${picUrl}`;
       }
 
       img.src = picUrl;

@@ -3548,7 +3548,7 @@ body.messaging-page .messaging-layout {
 body.messaging-page .waigo-avatar-shell {
   overflow: hidden !important;
   border-radius: 50% !important;
-  background: #ffffff !important;
+  background-color: transparent !important;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, .18) !important;
 }
 body.messaging-page img.waigo-brand-avatar {
@@ -3558,7 +3558,7 @@ body.messaging-page img.waigo-brand-avatar {
   border-radius: 50% !important;
   object-fit: cover !important;
   object-position: center !important;
-  background: #ffffff !important;
+  background: transparent !important;
 }
 
 
