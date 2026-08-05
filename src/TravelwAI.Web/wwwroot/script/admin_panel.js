@@ -1284,8 +1284,7 @@ function getAdminRevenueSearchText(item) {
 }
 
 function formatAdminRevenueRelevantMoney(value, applicable) {
-  if (!applicable) return '<span class="admin-revenue-not-applicable" title="Tài khoản này không nhận khoản tiền này">—</span>';
-  return formatAdminRevenueMoney(value);
+  return formatAdminRevenueMoney(applicable ? value : 0);
 }
 
 function renderAdminRevenue() {
