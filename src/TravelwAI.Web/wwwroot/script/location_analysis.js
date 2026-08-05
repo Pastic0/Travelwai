@@ -51,7 +51,6 @@
     elements.stopButtonLabel = $("locationAnalysisStopLabel");
     elements.content = $("locationResultContent");
     elements.resultLabel = $("locationResultLabel");
-    elements.locationLine = $("locationResultLocationLine");
     elements.landmarkCard = $("locationLandmarkCard");
     elements.foodCard = $("locationFoodCard");
     elements.detailCard = $("locationDetailCard");
@@ -142,7 +141,6 @@
     elements.detailCard.hidden = true;
     elements.observationBlock.hidden = true;
     elements.evidenceBlock.hidden = true;
-    elements.locationLine.hidden = true;
   }
 
   function resetStreamingResult() {
@@ -154,7 +152,6 @@
     $("locationConfidenceBadge").textContent = localize("Đang đánh giá", "Evaluating");
     $("locationResultTitle").textContent = localize("Đang nhận diện...", "Identifying...");
     $("locationResultSummary").textContent = "";
-    $("locationProvinceText").textContent = "";
     $("locationLandmarkResult").innerHTML = "";
     $("locationFoodResult").innerHTML = "";
     $("locationImageDescription").innerHTML = "";
@@ -408,9 +405,6 @@
     const confidenceScore = extractPartialJsonNumber(rawJson, "confidence_score");
     const title = extractPartialJsonString(rawJson, "title");
     const landmark = extractPartialJsonString(rawJson, "landmark");
-    const district = extractPartialJsonString(rawJson, "district");
-    const province = extractPartialJsonString(rawJson, "province");
-    const country = extractPartialJsonString(rawJson, "country");
     const summary = extractPartialJsonString(rawJson, "summary");
     const imageDescription = extractPartialJsonString(rawJson, "image_description");
     const landmarks = extractPartialJsonStringArray(rawJson, "landmarks");
@@ -430,9 +424,6 @@
       confidence_score: confidenceScore.value,
       title: cleanAnalysisText(title.value),
       landmark: cleanAnalysisText(landmark.value),
-      district: cleanAnalysisText(district.value),
-      province: cleanAnalysisText(province.value),
-      country: cleanAnalysisText(country.value),
       summary: cleanAnalysisText(summary.value),
       image_description: cleanAnalysisText(imageDescription.value),
       landmarks: landmarks.values,
@@ -456,12 +447,6 @@
     }
     if (summary.found) {
       $("locationResultSummary").textContent = partialData.summary || localize("Đang hoàn thiện kết luận...", "Finalizing the conclusion...");
-    }
-
-    const locationText = buildLocationText(partialData);
-    if (locationText) {
-      $("locationProvinceText").textContent = locationText;
-      revealStreamingBlock(elements.locationLine);
     }
 
     if (type === "landmark" && (landmark.found || landmarks.found || title.found)) {
@@ -511,14 +496,6 @@
     target.innerHTML = list.length <= 1
       ? `<p>${escapeHtml(list[0] || localize("Chưa xác định", "Not identified"))}</p>`
       : `<ul>${list.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
-  }
-
-  function buildLocationText(data) {
-    const values = [data?.district, data?.province, data?.country]
-      .map((value) => String(value || "").trim())
-      .filter(Boolean)
-      .filter((value, index, array) => array.indexOf(value) === index);
-    return values.join(", ");
   }
 
   function normalizeConfidence(data) {
@@ -573,9 +550,6 @@
     normalizedData.landmark = cleanAnalysisText(normalizedData.landmark);
     normalizedData.summary = cleanAnalysisText(normalizedData.summary);
     normalizedData.image_description = cleanAnalysisText(normalizedData.image_description);
-    normalizedData.district = cleanAnalysisText(normalizedData.district);
-    normalizedData.province = cleanAnalysisText(normalizedData.province);
-    normalizedData.country = cleanAnalysisText(normalizedData.country);
     data = normalizedData;
 
     const type = resolveContentType(data);
@@ -594,11 +568,6 @@
       renderList($("locationLandmarkResult"), landmarkValues.length ? landmarkValues : [title]);
       elements.landmarkCard.hidden = false;
 
-      const locationText = buildLocationText(data);
-      if (locationText) {
-        $("locationProvinceText").textContent = locationText;
-        elements.locationLine.hidden = false;
-      }
     } else if (type === "food") {
       elements.resultLabel.textContent = localize("Ẩm thực", "Food");
       const foodValues = cleanList(data?.foods);
@@ -725,7 +694,7 @@
         if (type === "reset") {
           resetStreamingResult();
           setResultState("loading");
-          const retryMessage = event.message || localize("Máy chủ AI gặp lỗi, đang thử lại...", "The AI server failed, retrying...");
+          const retryMessage = event.message || localize("Đang thử lại...", "Retrying...");
           updateLoadingStatus(retryMessage);
           setMessage(retryMessage);
           return;
@@ -736,7 +705,11 @@
           return;
         }
         if (type === "error") {
-          throw new Error(event.message || localize("Không thể phân tích ảnh.", "Unable to analyze the image."));
+          const rawMessage = String(event.message || "").trim();
+          const safeMessage = /InternalServerError|Internal Server Error|internal_server_error/i.test(rawMessage)
+            ? localize("Vui lòng thử lại", "Please try again")
+            : (rawMessage || localize("Không thể phân tích ảnh.", "Unable to analyze the image."));
+          throw new Error(safeMessage);
         }
       };
 

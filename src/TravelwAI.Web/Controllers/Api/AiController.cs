@@ -116,7 +116,8 @@ public sealed class AiController : ApiControllerBase
         catch (InvalidOperationException ex)
         {
             _logger.LogError(ex, "Ollama không thể phân tích địa danh cho người dùng {UserId}", current.userId);
-            return StatusCode(StatusCodes.Status502BadGateway, new { success = false, message = ex.Message });
+            var message = GetSafeLocationAnalysisError(ex);
+            return StatusCode(StatusCodes.Status502BadGateway, new { success = false, message });
         }
         catch (HttpRequestException ex)
         {
@@ -196,8 +197,8 @@ public sealed class AiController : ApiControllerBase
                     retryAttempt,
                     maxRetries,
                     message = language == "en"
-                        ? $"The AI server had an internal error. Retrying {retryAttempt}/{maxRetries}..."
-                        : $"Máy chủ AI gặp lỗi nội bộ. Đang thử lại {retryAttempt}/{maxRetries}..."
+                        ? "Retrying..."
+                        : "Đang thử lại..."
                 }, token);
 
             var analysis = await _ollama.AnalyzeTravelImageStreamingAsync(
@@ -229,7 +230,7 @@ public sealed class AiController : ApiControllerBase
         catch (InvalidOperationException ex)
         {
             _logger.LogError(ex, "Ollama không thể streaming phân tích địa danh cho người dùng {UserId}", current.userId);
-            await TryWriteLocationAnalysisErrorAsync(ex.Message);
+            await TryWriteLocationAnalysisErrorAsync(GetSafeLocationAnalysisError(ex));
         }
         catch (HttpRequestException ex)
         {
@@ -271,6 +272,30 @@ public sealed class AiController : ApiControllerBase
                 _logger.LogDebug(writeException, "Client đã ngắt kết nối trước khi nhận lỗi phân tích ảnh AI.");
             }
         }
+    }
+
+    private static string GetSafeLocationAnalysisError(InvalidOperationException exception)
+    {
+        var message = (exception.Message ?? string.Empty).Trim();
+        if (string.Equals(message, "Vui lòng thử lại", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(message, "Please try again", StringComparison.OrdinalIgnoreCase))
+            return message;
+
+        return ContainsInternalServerError(exception) ? "Vui lòng thử lại" : message;
+    }
+
+    private static bool ContainsInternalServerError(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            var message = current.Message ?? string.Empty;
+            if (message.Contains("InternalServerError", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("Internal Server Error", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("internal_server_error", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     [HttpPost("chat")]
