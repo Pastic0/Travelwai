@@ -5489,7 +5489,20 @@ body.admin-page .admin-account-list-actions .admin-excel-export-button:disabled 
   justify-content: center;
 }
 
-.admin-revenue-not-applicable {
+.admin-revenue-impact-positive {
+  color: #15803d;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-revenue-impact-negative {
+  color: #dc2626;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-revenue-impact-zero {
   color: var(--text-muted, #94a3b8);
   font-weight: 600;
+  white-space: nowrap;
 }

@@ -1952,11 +1952,11 @@ public sealed class AdminApiController : ApiControllerBase
         var ownCompanyOrders = accountOrders.Where(item => IsCompanyRole(item.OwnerRole)).ToList();
 
         decimal grossRevenue = accountOrders.Sum(item => GetOrderOriginalTotal(item.Order));
+        // Impact fields are signed: positive means the account receives money,
+        // negative means the amount is deducted from the account.
         decimal discountDeducted = 0m;
-        // These fields represent money RECEIVED by the account shown in the row.
-        // Sales receives commission. Company does not receive the service fee; it pays it to Admin.
         decimal commission = ownSalesOrders.Sum(item => GetOrderCommissionAmount(item.Order));
-        decimal serviceFee = 0m;
+        decimal serviceFee = -ownCompanyOrders.Sum(item => GetOrderServiceAmount(item.Order));
         decimal revenue = commission
             + ownCompanyOrders.Sum(item => Math.Max(0, GetOrderOriginalTotal(item.Order) - GetOrderServiceAmount(item.Order)));
         var orderCount = accountOrders.Count;
@@ -1973,11 +1973,12 @@ public sealed class AdminApiController : ApiControllerBase
 
             grossRevenue = allAdminOrders.Sum(item => GetOrderOriginalTotal(item.Order))
                 + allSalesOrders.Sum(item => GetOrderOriginalTotal(item.Order));
-            discountDeducted = allAdminOrders.Sum(item => GetOrderDiscountAmount(item.Order))
+            discountDeducted = -(allAdminOrders.Sum(item => GetOrderDiscountAmount(item.Order))
                 + allSalesOrders.Sum(item => GetOrderDiscountAmount(item.Order))
-                + allCompanyOrders.Sum(item => GetOrderDiscountAmount(item.Order));
-            // Sales commission is an expense of Admin, not money received by Admin.
-            commission = 0m;
+                + allCompanyOrders.Sum(item => GetOrderDiscountAmount(item.Order)));
+            // Admin pays Sales commission, so it is shown as a negative impact.
+            commission = -allSalesOrders.Sum(item => GetOrderCommissionAmount(item.Order));
+            // Admin receives the service fee paid by Company, so it is positive.
             serviceFee = allCompanyOrders.Sum(item => GetOrderServiceAmount(item.Order));
             revenue = allAdminOrders.Sum(item => GetAdminOwnedOrderRevenue(item.Order))
                 + allSalesOrders.Sum(item => GetAdminSalesOrderRevenue(item.Order))
@@ -2002,9 +2003,10 @@ public sealed class AdminApiController : ApiControllerBase
         }
 
         var discountRelevant = isPrimaryAdmin;
-        // Only show a received amount in the role that actually receives it.
-        var commissionRelevant = !IsAdminRole(role) && ownSalesOrders.Count > 0;
-        var serviceFeeRelevant = isPrimaryAdmin;
+        // Show both sides of each transfer: Sales receives commission while Admin pays it;
+        // Company pays the service fee while Admin receives it.
+        var commissionRelevant = isPrimaryAdmin || ownSalesOrders.Count > 0;
+        var serviceFeeRelevant = isPrimaryAdmin || ownCompanyOrders.Count > 0;
 
         var username = TextAny(account, "username", "displayName", "display_name");
         var email = accountEmail;

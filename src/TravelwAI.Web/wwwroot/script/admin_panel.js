@@ -1283,8 +1283,18 @@ function getAdminRevenueSearchText(item) {
   ].join(" "));
 }
 
-function formatAdminRevenueRelevantMoney(value, applicable) {
-  return formatAdminRevenueMoney(applicable ? value : 0);
+function formatAdminRevenueImpactMoney(value, applicable) {
+  const amount = applicable ? Number(value) || 0 : 0;
+  if (amount === 0) {
+    return '<span class="admin-revenue-impact-zero">0đ</span>';
+  }
+
+  const sign = amount > 0 ? "+" : "−";
+  const className = amount > 0
+    ? "admin-revenue-impact-positive"
+    : "admin-revenue-impact-negative";
+  const formatted = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(Math.abs(amount));
+  return `<strong class="${className}">${sign}${formatted}đ</strong>`;
 }
 
 function renderAdminRevenue() {
@@ -1313,9 +1323,9 @@ function renderAdminRevenue() {
         <td><span class="badge badge-user">${escapeHtml(item.role || "Free")}</span></td>
         <td>${Math.max(0, Number(item.orderCount) || 0)}</td>
         <td><strong>${formatAdminRevenueMoney(item.grossRevenue)}</strong></td>
-        <td>${formatAdminRevenueRelevantMoney(item.discountDeducted, discountRelevant)}</td>
-        <td>${formatAdminRevenueRelevantMoney(item.commission, commissionRelevant)}</td>
-        <td>${formatAdminRevenueRelevantMoney(item.serviceFee, serviceFeeRelevant)}</td>
+        <td>${formatAdminRevenueImpactMoney(item.discountDeducted, discountRelevant)}</td>
+        <td>${formatAdminRevenueImpactMoney(item.commission, commissionRelevant)}</td>
+        <td>${formatAdminRevenueImpactMoney(item.serviceFee, serviceFeeRelevant)}</td>
         <td><strong class="admin-revenue-total">${formatAdminRevenueMoney(item.revenue)}</strong></td>
       </tr>`;
   }).join("");
