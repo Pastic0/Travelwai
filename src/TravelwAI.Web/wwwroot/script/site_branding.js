@@ -113,8 +113,9 @@
       if (revision !== logoApplyRevision) return;
       if (!(image.complete && image.naturalWidth > 0)) clearLogoElement(image);
     };
+    // Do not call onload again through decode(); doing both can assign the
+    // same src twice and recreate the image while the chatbot is streaming.
     loader.src = versionedUrl;
-    loader.decode?.().then(loader.onload).catch(() => { });
   }
 
   function updateElement(element, versionedUrl) {
@@ -256,7 +257,18 @@
       if (!response.ok || result.success === false) return;
       if (requestRevision !== stateRevision) return;
       const data = result.data || result;
-      applyLogo(data.logoUrl || data.logo_url || "", data.version || data.logoVersion || "", false);
+      const apiLogoUrl = normalizeLogoUrl(data.logoUrl || data.logo_url || "");
+      const apiLogoVersion = data.version || data.logoVersion || "";
+
+      // A transient repository/API response must not erase a logo that was
+      // already loaded from the last successful upload. There is currently no
+      // "remove logo" action, so an empty value means unavailable, not delete.
+      if (apiLogoUrl) {
+        applyLogo(apiLogoUrl, apiLogoVersion, false);
+      } else if (!currentLogoUrl) {
+        applyLogo("", "", false);
+      }
+
       applyBackgrounds(
         data.backgroundLightUrl || data.background_light_url || DEFAULT_LIGHT_BACKGROUND_URL,
         data.backgroundLightVersion || data.background_light_version || DEFAULT_BACKGROUND_VERSION,

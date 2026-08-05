@@ -85,6 +85,26 @@
   pointer-events: none !important;
 }
 
+/* The uploaded logo is painted on the stable avatar shell as well as the img.
+   This prevents a blank/white frame while the image element is loading. */
+html.has-site-logo .twai-floating-chatbot-component .twai-chatbot-launcher.waigo-logo-background,
+html.has-site-logo .twai-floating-chatbot-component .twai-chatbot-avatar-wrap.waigo-logo-background,
+html.has-site-logo .twai-floating-chatbot-component .admin-support-message-avatar.waigo-logo-background {
+  background-color: transparent !important;
+  background-image: var(--travelwai-site-logo, none) !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: cover !important;
+}
+
+/* Do not draw a white placeholder when no uploaded logo is available yet. */
+html:not(.has-site-logo) .twai-floating-chatbot-component .twai-chatbot-avatar-wrap.waigo-logo-background,
+html:not(.has-site-logo) .twai-floating-chatbot-component .admin-support-message-avatar.waigo-logo-background {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
 .twai-floating-chatbot-component .twai-chatbot-view {
   position: fixed !important;
   right: max(18px, env(safe-area-inset-right)) !important;
@@ -1131,3 +1151,5 @@ body.waigo-style-store-open { overflow: hidden; }
   cursor: wait !important;
   opacity: 0.72 !important;
 }
+
+/* chatbot-logo-color-v3 */

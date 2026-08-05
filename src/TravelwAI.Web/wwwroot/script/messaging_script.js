@@ -64,11 +64,8 @@ function applyMessagingBranding(detail) {
   if (AI_AVATAR_URL === nextAvatar) return;
   AI_AVATAR_URL = nextAvatar;
 
-  document.querySelectorAll("img[data-ai-avatar], .waigo-brand-avatar").forEach(image => {
-    image.setAttribute("data-site-logo", "true");
-    if (image.getAttribute("src") !== nextAvatar) image.setAttribute("src", nextAvatar);
-  });
-
+  // site_branding.js owns logo preloading and DOM updates. Do not set src to
+  // an empty value or reassign the same image while messages are streaming.
   if (typeof renderMessages === "function") renderMessages();
   if (typeof renderConversations === "function") renderConversations(activeConversationSearchQuery);
   if (typeof updateConversationSelection === "function") updateConversationSelection();

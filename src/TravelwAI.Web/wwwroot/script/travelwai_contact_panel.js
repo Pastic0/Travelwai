@@ -51,11 +51,9 @@
     if (managerConfig.avatar === nextAvatar) return;
     managerConfig.avatar = nextAvatar;
 
-    document.querySelectorAll(".waigo-brand-avatar").forEach(image => {
-      image.setAttribute("data-site-logo", "true");
-      if (image.getAttribute("src") !== nextAvatar) image.setAttribute("src", nextAvatar);
-    });
-
+    // site_branding.js owns image preloading and DOM updates. Assigning an
+    // empty src here makes the browser request the current page as an image.
+    // Reassigning it during streaming also causes the brief white avatar.
     if (initialized || getPanel()?.classList.contains("open")) renderMessages();
   }
 

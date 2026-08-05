@@ -79,7 +79,7 @@ public sealed class ManageApiController : ApiControllerBase
         string? logoUrl;
         try
         {
-            logoUrl = await _fileStorage.SaveImageToSupabaseAsync(logo, admin.userId!, "site-branding/logos");
+            logoUrl = await _fileStorage.SaveImageAsync(logo, admin.userId!, "site-branding/logos");
         }
         catch (InvalidOperationException ex)
         {
@@ -91,7 +91,7 @@ public sealed class ManageApiController : ApiControllerBase
         }
         if (string.IsNullOrWhiteSpace(logoUrl))
         {
-            return BadRequest(new { success = false, message = "Không thể lưu logo lên Supabase Storage. Vui lòng kiểm tra định dạng và dung lượng ảnh." });
+            return BadRequest(new { success = false, message = "Không thể lưu logo. Vui lòng kiểm tra cấu hình lưu trữ, định dạng và dung lượng ảnh." });
         }
 
         var now = DateTime.UtcNow;

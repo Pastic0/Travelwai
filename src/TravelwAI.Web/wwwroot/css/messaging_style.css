@@ -3706,3 +3706,24 @@ body.messaging-page img.waigo-brand-avatar {
   background: #22c55e;
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.18);
 }
+
+
+/* Keep WaiGo avatars on the uploaded logo. The base .message-avatar rule uses
+   an !important background shorthand, so this more-specific rule must restore
+   the logo image explicitly. */
+html.has-site-logo body.messaging-page .message-avatar.waigo-logo-background,
+html.has-site-logo body.messaging-page .conversation-item .user-avatar.waigo-logo-background,
+html.has-site-logo body.messaging-page .conversation-header .user-avatar.waigo-logo-background {
+  background-color: transparent !important;
+  background-image: var(--travelwai-site-logo, none) !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: cover !important;
+}
+
+html:not(.has-site-logo) body.messaging-page .message-avatar.waigo-logo-background,
+html:not(.has-site-logo) body.messaging-page .conversation-header .user-avatar.waigo-logo-background {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+/* messaging-chatbot-logo-color-v3 */
