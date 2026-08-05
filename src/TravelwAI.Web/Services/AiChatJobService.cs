@@ -150,18 +150,18 @@ public sealed class AiChatJobService
         }
         catch (OperationCanceledException ex)
         {
-            _logger.LogWarning(ex, "Nhà cung cấp AI phản hồi quá lâu cho AI job {JobId} của người dùng {UserId}", record.JobId, record.UserId);
-            record.MarkFailed("AI phản hồi quá lâu.");
+            _logger.LogWarning(ex, "Ollama phản hồi quá lâu cho AI job {JobId} của người dùng {UserId}", record.JobId, record.UserId);
+            record.MarkFailed("Ollama phản hồi quá lâu.");
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Nhà cung cấp AI từ chối AI job {JobId} của người dùng {UserId}", record.JobId, record.UserId);
+            _logger.LogError(ex, "Ollama từ chối AI job {JobId} của người dùng {UserId}", record.JobId, record.UserId);
             record.MarkFailed(ex.Message);
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Không thể kết nối dịch vụ AI cho AI job {JobId} của người dùng {UserId}", record.JobId, record.UserId);
-            record.MarkFailed("Không thể kết nối dịch vụ AI.");
+            _logger.LogError(ex, "Không thể kết nối Ollama cho AI job {JobId} của người dùng {UserId}", record.JobId, record.UserId);
+            record.MarkFailed("Không thể kết nối máy chủ Ollama.");
         }
         catch (Exception ex)
         {

@@ -198,7 +198,7 @@ public sealed class UiLanguageController : ControllerBase
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
                 {
-                    _logger.LogWarning(ex, "Không thể dịch giao diện sang tiếng Anh bằng dịch vụ AI.");
+                    _logger.LogWarning(ex, "Không thể dịch giao diện sang tiếng Anh bằng Ollama.");
                     foreach (var text in missing) translations[text] = text;
                 }
             }

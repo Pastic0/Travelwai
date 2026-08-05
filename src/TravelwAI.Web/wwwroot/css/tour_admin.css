@@ -5506,30 +5506,3 @@ body.admin-page .admin-account-list-actions .admin-excel-export-button:disabled 
   font-weight: 600;
   white-space: nowrap;
 }
-
-/* Admin AI provider switch */
-body.admin-page .admin-account-list-actions .admin-ai-provider-button {
-  background: linear-gradient(135deg, #f59e0b, #c2410c) !important;
-}
-body.admin-page .admin-account-list-actions .admin-ai-provider-button.is-openrouter {
-  background: linear-gradient(135deg, #a855f7, #6d28d9) !important;
-}
-body.admin-page .admin-account-list-actions .admin-ai-provider-button .interface-icon {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-body.admin-page .admin-account-list-actions .admin-ai-provider-button.is-switching .interface-icon {
-  animation: admin-ai-provider-spin .8s linear infinite;
-}
-body.admin-page .admin-account-list-actions .admin-ai-provider-button:disabled {
-  cursor: wait;
-  opacity: .72;
-}
-@keyframes admin-ai-provider-spin {
-  to { transform: rotate(180deg); }
-}

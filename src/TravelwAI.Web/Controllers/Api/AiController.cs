@@ -115,12 +115,12 @@ public sealed class AiController : ApiControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Nhà cung cấp AI không thể phân tích địa danh cho người dùng {UserId}", current.userId);
+            _logger.LogError(ex, "Ollama không thể phân tích địa danh cho người dùng {UserId}", current.userId);
             return StatusCode(StatusCodes.Status502BadGateway, new { success = false, message = ex.Message });
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Không thể kết nối dịch vụ AI để phân tích địa danh cho người dùng {UserId}", current.userId);
+            _logger.LogError(ex, "Không thể kết nối Ollama để phân tích địa danh cho người dùng {UserId}", current.userId);
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { success = false, message = "Không thể kết nối máy chủ AI để phân tích ảnh." });
         }
         catch (Exception ex)
@@ -174,25 +174,25 @@ public sealed class AiController : ApiControllerBase
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return StatusCode(StatusCodes.Status504GatewayTimeout, new { success = false, message = "AI phản hồi quá lâu." });
+            return StatusCode(StatusCodes.Status504GatewayTimeout, new { success = false, message = "Ollama phản hồi quá lâu." });
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Nhà cung cấp AI từ chối yêu cầu của người dùng {UserId}", current.userId);
+            _logger.LogError(ex, "Ollama từ chối yêu cầu của người dùng {UserId}", current.userId);
             return StatusCode(StatusCodes.Status502BadGateway, new { success = false, message = ex.Message });
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Không thể kết nối dịch vụ AI cho người dùng {UserId}", current.userId);
+            _logger.LogError(ex, "Không thể kết nối Ollama cho người dùng {UserId}", current.userId);
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new
             {
                 success = false,
-                message = "Không thể kết nối dịch vụ AI. Kiểm tra cấu hình OLLAMA_* hoặc OPENROUTER_* trên Render và kết nối mạng của server."
+                message = "Không thể kết nối máy chủ Ollama. Kiểm tra OLLAMA_BASE_URL, OLLAMA_API_KEY và kết nối mạng của server."
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Lỗi nhà cung cấp AI không xác định cho người dùng {UserId}", current.userId);
+            _logger.LogError(ex, "Lỗi Ollama không xác định cho người dùng {UserId}", current.userId);
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { success = false, message = "Dịch vụ AI tạm thời không khả dụng." });
         }
         finally
@@ -237,12 +237,12 @@ public sealed class AiController : ApiControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogError(ex, "Nhà cung cấp AI không thể dịch nội dung sang {TargetLanguage} cho người dùng {UserId}", targetLanguage, current.userId);
+            _logger.LogError(ex, "Ollama không thể dịch nội dung sang {TargetLanguage} cho người dùng {UserId}", targetLanguage, current.userId);
             return StatusCode(StatusCodes.Status502BadGateway, new { success = false, message = ex.Message });
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Không thể kết nối dịch vụ AI để dịch sang {TargetLanguage} cho người dùng {UserId}", targetLanguage, current.userId);
+            _logger.LogError(ex, "Không thể kết nối Ollama để dịch sang {TargetLanguage} cho người dùng {UserId}", targetLanguage, current.userId);
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { success = false, message = "Không thể kết nối máy chủ AI để dịch." });
         }
         catch (Exception ex)

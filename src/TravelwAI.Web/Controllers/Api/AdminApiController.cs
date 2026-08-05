@@ -71,17 +71,8 @@ public sealed class AdminApiController : ApiControllerBase
     private readonly IFileStorageService _fileStorage;
     private readonly ChatbotSettingsService _chatbotSettings;
     private readonly PlanQueueService _planQueueService;
-    private readonly AiProviderSettingsService _aiProviderSettings;
 
-    public AdminApiController(
-        IAuthService authService,
-        IDataRepository repo,
-        NpgsqlDataSource dataSource,
-        TourOfferService offerService,
-        IFileStorageService fileStorage,
-        ChatbotSettingsService chatbotSettings,
-        PlanQueueService planQueueService,
-        AiProviderSettingsService aiProviderSettings) : base(authService)
+    public AdminApiController(IAuthService authService, IDataRepository repo, NpgsqlDataSource dataSource, TourOfferService offerService, IFileStorageService fileStorage, ChatbotSettingsService chatbotSettings, PlanQueueService planQueueService) : base(authService)
     {
         _repo = repo;
         _dataSource = dataSource;
@@ -89,64 +80,6 @@ public sealed class AdminApiController : ApiControllerBase
         _fileStorage = fileStorage;
         _chatbotSettings = chatbotSettings;
         _planQueueService = planQueueService;
-        _aiProviderSettings = aiProviderSettings;
-    }
-
-
-    [HttpGet("ai-provider")]
-    public async Task<IActionResult> GetAiProvider()
-    {
-        var access = await RequireAdminAsync();
-        if (!access.ok) return access.error!;
-
-        var status = await _aiProviderSettings.GetStatusAsync(forceRefresh: true);
-        return Ok(new
-        {
-            success = true,
-            data = new
-            {
-                provider = status.Provider,
-                model = status.Model,
-                openRouterConfigured = status.OpenRouterConfigured,
-                openRouterModel = status.OpenRouterModel,
-                ollamaModel = status.OllamaModel
-            }
-        });
-    }
-
-    [HttpPut("ai-provider")]
-    public async Task<IActionResult> SetAiProvider([FromBody] AdminAiProviderUpdateRequest? request)
-    {
-        var access = await RequireAdminAsync();
-        if (!access.ok) return access.error!;
-
-        var provider = AiProviderSettingsService.NormalizeProvider(request?.Provider);
-        if (provider != AiProviderSettingsService.OllamaProvider && provider != AiProviderSettingsService.OpenRouterProvider)
-            return BadRequest(new { success = false, message = "Nhà cung cấp AI không hợp lệ." });
-
-        try
-        {
-            var status = await _aiProviderSettings.SetProviderAsync(provider, access.userId);
-            return Ok(new
-            {
-                success = true,
-                message = status.Provider == AiProviderSettingsService.OpenRouterProvider
-                    ? $"Đã chuyển AI sang OpenRouter ({status.Model})."
-                    : $"Đã chuyển AI sang Ollama ({status.Model}).",
-                data = new
-                {
-                    provider = status.Provider,
-                    model = status.Model,
-                    openRouterConfigured = status.OpenRouterConfigured,
-                    openRouterModel = status.OpenRouterModel,
-                    ollamaModel = status.OllamaModel
-                }
-            });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { success = false, message = ex.Message });
-        }
     }
 
 
@@ -2404,7 +2337,3 @@ public sealed class AdminProvinceTagsRequest
     public List<string> Tags { get; set; } = new();
 }
 
-public sealed class AdminAiProviderUpdateRequest
-{
-    public string Provider { get; set; } = string.Empty;
-}
