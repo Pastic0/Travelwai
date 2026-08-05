@@ -47,14 +47,11 @@
     elements.loading = $("locationResultLoading");
     elements.error = $("locationResultError");
     elements.content = $("locationResultContent");
-    elements.streamingBanner = $("locationStreamingBanner");
-    elements.streamingStatus = $("locationStreamingStatus");
     elements.summaryCard = $("locationSummaryCard");
     elements.resultLabel = $("locationResultLabel");
     elements.confidenceBadge = $("locationConfidenceBadge");
     elements.resultTitle = $("locationResultTitle");
     elements.resultSummary = $("locationResultSummary");
-    elements.locationLine = $("locationResultLocationLine");
     elements.landmarkCard = $("locationLandmarkCard");
     elements.foodCard = $("locationFoodCard");
     elements.detailCard = $("locationDetailCard");
@@ -109,18 +106,6 @@
 
   function resetStreamingPreview() {
     elements.resultPanel?.classList.remove("is-streaming");
-    if (elements.streamingBanner) elements.streamingBanner.hidden = true;
-    if (elements.streamingStatus) {
-      elements.streamingStatus.textContent = localize(
-        "Đang quan sát ảnh và nhận diện nội dung...",
-        "Examining the image and identifying its content..."
-      );
-    }
-  }
-
-  function setLoadingStatus(message) {
-    if (!elements.streamingStatus || !message) return;
-    elements.streamingStatus.textContent = String(message);
   }
 
   function revealStreamingElement(target) {
@@ -138,7 +123,6 @@
     streamingRevealStage = 0;
     resetResultCards();
     elements.resultPanel?.classList.add("is-streaming");
-    if (elements.streamingBanner) elements.streamingBanner.hidden = false;
     if (elements.analyzeAgainButton) elements.analyzeAgainButton.hidden = true;
 
     elements.resultLabel.textContent = localize("Kết quả nhận diện", "Recognition result");
@@ -259,7 +243,7 @@
     const fields = {};
     const stringKeys = [
       "content_type", "location_status", "confidence", "title", "landmark",
-      "address", "district", "province", "country", "summary", "image_description"
+      "summary", "image_description"
     ];
     const arrayKeys = ["landmarks", "foods", "observations", "identification_basis"];
 
@@ -287,11 +271,10 @@
     const contentType = String(data.content_type || "").trim().toLowerCase();
     const title = String(data.title || "").trim();
     const summary = String(data.summary || "").trim();
-    const locationText = buildLocationText(data);
     const imageDescription = String(data.image_description || "").trim();
     const confidenceReady = Boolean(fields.confidence_score?.complete || fields.confidence?.complete);
 
-    // Luôn tiếp tục điền trường đang hiển thị, nhưng mỗi tầng mới chỉ mở sau tầng phía trên.
+    // Tiếp tục điền trường đang hiển thị, nhưng chỉ mở tầng dưới sau tầng trên.
     if (!elements.summaryCard.hidden) {
       if (contentType === "landmark") elements.resultLabel.textContent = localize("Địa danh", "Landmark");
       else if (contentType === "food") elements.resultLabel.textContent = localize("Ẩm thực", "Food");
@@ -306,10 +289,6 @@
 
     if (!elements.resultSummary.hidden && summary) {
       elements.resultSummary.textContent = summary;
-    }
-
-    if (!elements.locationLine.hidden && locationText) {
-      $("locationProvinceText").textContent = locationText;
     }
 
     if (!elements.landmarkCard.hidden) {
@@ -363,19 +342,8 @@
       return;
     }
 
-    // Tầng 3: địa chỉ chỉ mở sau khi tóm tắt đã trả xong.
+    // Tầng 3: địa danh hoặc ẩm thực.
     if (streamingRevealStage === 2 && fields.summary?.complete) {
-      if (locationText) {
-        $("locationProvinceText").textContent = locationText;
-        revealStreamingElement(elements.locationLine);
-        streamingRevealStage = 3;
-        return;
-      }
-      streamingRevealStage = 3;
-    }
-
-    // Tầng 4: địa danh/ẩm thực.
-    if (streamingRevealStage === 3) {
       if (contentType === "landmark") {
         const landmarks = cleanList(data.landmarks);
         const fallback = String(data.landmark || data.title || "").trim();
@@ -383,7 +351,7 @@
           renderList($("locationLandmarkResult"), landmarks.length ? landmarks : [fallback]);
           revealStreamingElement(elements.landmarkCard);
           elements.foodCard.hidden = true;
-          streamingRevealStage = 4;
+          streamingRevealStage = 3;
           return;
         }
       } else if (contentType === "food") {
@@ -393,41 +361,41 @@
           renderList($("locationFoodResult"), foods.length ? foods : [fallback]);
           revealStreamingElement(elements.foodCard);
           elements.landmarkCard.hidden = true;
-          streamingRevealStage = 4;
+          streamingRevealStage = 3;
           return;
         }
       } else if (contentType === "unknown" && fields.content_type?.complete) {
-        streamingRevealStage = 4;
+        streamingRevealStage = 3;
       }
     }
 
-    // Tầng 5: mô tả tổng thể ảnh.
-    if (streamingRevealStage === 4 && imageDescription) {
+    // Tầng 4: mô tả tổng thể ảnh.
+    if (streamingRevealStage === 3 && imageDescription) {
       renderList($("locationImageDescription"), [imageDescription]);
       revealStreamingElement(elements.detailCard);
-      streamingRevealStage = 5;
+      streamingRevealStage = 4;
       return;
     }
 
-    // Tầng 6: chi tiết quan sát.
-    if (streamingRevealStage === 5 && fields.observations?.found) {
+    // Tầng 5: chi tiết quan sát.
+    if (streamingRevealStage === 4 && fields.observations?.found) {
       if (data.observations.length) {
         renderList($("locationObservationResult"), data.observations);
         revealStreamingElement(elements.observationBlock);
-        streamingRevealStage = 6;
+        streamingRevealStage = 5;
         return;
       }
       if (fields.observations.complete || fields.identification_basis?.found) {
-        streamingRevealStage = 6;
+        streamingRevealStage = 5;
       }
     }
 
-    // Tầng 7: căn cứ nhận diện.
-    if (streamingRevealStage === 6
+    // Tầng 6: căn cứ nhận diện.
+    if (streamingRevealStage === 5
       && fields.identification_basis?.found && data.identification_basis.length) {
       renderList($("locationEvidenceResult"), data.identification_basis);
       revealStreamingElement(elements.evidenceBlock);
-      streamingRevealStage = 7;
+      streamingRevealStage = 6;
     }
   }
 
@@ -481,6 +449,7 @@
     isAnalyzing = value;
     elements.analyzeButton.disabled = !selectedImageData;
     elements.analyzeButton.classList.toggle("is-cancel-analysis", value);
+    elements.analyzeButton.setAttribute("aria-busy", String(Boolean(value)));
     elements.analyzeButton.setAttribute(
       "aria-label",
       value
@@ -524,7 +493,6 @@
     elements.detailCard.hidden = true;
     elements.observationBlock.hidden = true;
     elements.evidenceBlock.hidden = true;
-    elements.locationLine.hidden = true;
     [
       "locationResultTitle", "locationResultSummary", "locationLandmarkResult",
       "locationFoodResult", "locationImageDescription", "locationObservationResult",
@@ -645,14 +613,6 @@
       : `<ul>${list.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
   }
 
-  function buildLocationText(data) {
-    const values = [data?.address, data?.district, data?.province, data?.country]
-      .map((value) => String(value || "").trim())
-      .filter(Boolean)
-      .filter((value, index, array) => array.indexOf(value) === index);
-    return values.join(", ");
-  }
-
   function normalizeConfidence(data) {
     const rawScore = Number(data?.confidence_score ?? data?.confidenceScore);
     const score = Number.isFinite(rawScore) ? Math.max(0, Math.min(100, Math.round(rawScore))) : null;
@@ -700,7 +660,6 @@
     const type = resolveContentType(data);
     resetResultCards();
     elements.resultPanel?.classList.remove("is-streaming");
-    if (elements.streamingBanner) elements.streamingBanner.hidden = true;
     if (elements.analyzeAgainButton) elements.analyzeAgainButton.hidden = false;
     elements.summaryCard.hidden = false;
     elements.confidenceBadge.hidden = false;
@@ -718,12 +677,6 @@
       const landmarkValues = cleanList(data?.landmarks || data?.landmark);
       renderList($("locationLandmarkResult"), landmarkValues.length ? landmarkValues : [title]);
       elements.landmarkCard.hidden = false;
-
-      const locationText = buildLocationText(data);
-      if (locationText) {
-        $("locationProvinceText").textContent = locationText;
-        elements.locationLine.hidden = false;
-      }
     } else if (type === "food") {
       elements.resultLabel.textContent = localize("Ẩm thực", "Food");
       const foodValues = cleanList(data?.foods);
@@ -853,15 +806,11 @@
 
     await readNdjsonStream(response, (event) => {
       const type = String(event?.type || "").toLowerCase();
-      if (type === "status") {
-        setLoadingStatus(event.message);
-        return;
-      }
+      if (type === "status") return;
       if (type === "delta") {
         const delta = String(event.delta || "");
         streamedReply += delta;
         renderStreamingAnalysis(streamedReply);
-        setLoadingStatus(localize("AI đang điền thông tin vào kết quả...", "AI is filling in the result..."));
         return;
       }
       if (type === "completed") {
