@@ -13,13 +13,26 @@ public sealed class OllamaAiService
     private readonly OllamaOptions _options;
     private readonly ILogger<OllamaAiService> _logger;
     private readonly ChatbotSettingsService _chatbotSettings;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly OpenRouterOptions _openRouterOptions;
+    private readonly AiProviderSettingsService _aiProviderSettings;
 
-    public OllamaAiService(HttpClient httpClient, IOptions<OllamaOptions> options, ILogger<OllamaAiService> logger, ChatbotSettingsService chatbotSettings)
+    public OllamaAiService(
+        HttpClient httpClient,
+        IOptions<OllamaOptions> options,
+        IOptions<OpenRouterOptions> openRouterOptions,
+        ILogger<OllamaAiService> logger,
+        ChatbotSettingsService chatbotSettings,
+        IHttpClientFactory httpClientFactory,
+        AiProviderSettingsService aiProviderSettings)
     {
         _httpClient = httpClient;
         _options = options.Value;
+        _openRouterOptions = openRouterOptions.Value;
         _logger = logger;
         _chatbotSettings = chatbotSettings;
+        _httpClientFactory = httpClientFactory;
+        _aiProviderSettings = aiProviderSettings;
     }
 
     public Task<string> ChatAsync(
@@ -291,6 +304,19 @@ public sealed class OllamaAiService
         int? maxResponseWords,
         CancellationToken cancellationToken)
     {
+        var provider = await _aiProviderSettings.GetStatusAsync();
+        return provider.Provider == AiProviderSettingsService.OpenRouterProvider
+            ? await SendOpenRouterStreamingRequestAsync(request, onDelta, sanitizeChatAnswer, maxResponseWords, cancellationToken)
+            : await SendOllamaStreamingRequestAsync(request, onDelta, sanitizeChatAnswer, maxResponseWords, cancellationToken);
+    }
+
+    private async Task<string> SendOllamaStreamingRequestAsync(
+        OllamaChatRequest request,
+        Func<string, CancellationToken, Task>? onDelta,
+        bool sanitizeChatAnswer,
+        int? maxResponseWords,
+        CancellationToken cancellationToken)
+    {
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "api/chat")
         {
             Content = JsonContent.Create(request)
@@ -300,7 +326,7 @@ public sealed class OllamaAiService
         {
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogWarning("Ollama trả về {StatusCode}: {Body}", response.StatusCode, errorBody);
-            throw new InvalidOperationException(ReadError(errorBody) ?? $"Ollama trả về lỗi HTTP {(int)response.StatusCode}.");
+            throw new InvalidOperationException(ReadOllamaError(errorBody) ?? $"Ollama trả về lỗi HTTP {(int)response.StatusCode}.");
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -317,10 +343,7 @@ public sealed class OllamaAiService
             OllamaChatResponse? item;
             try
             {
-                item = JsonSerializer.Deserialize<OllamaChatResponse>(line, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+                item = JsonSerializer.Deserialize<OllamaChatResponse>(line, JsonOptions);
             }
             catch (JsonException ex)
             {
@@ -344,10 +367,202 @@ public sealed class OllamaAiService
             if (item?.Done == true) break;
         }
 
+        return FinalizeAnswer(answerBuilder.ToString(), providerError, "Ollama", sanitizeChatAnswer, maxResponseWords);
+    }
+
+    private async Task<string> SendOpenRouterStreamingRequestAsync(
+        OllamaChatRequest request,
+        Func<string, CancellationToken, Task>? onDelta,
+        bool sanitizeChatAnswer,
+        int? maxResponseWords,
+        CancellationToken cancellationToken)
+    {
+        EnsureOpenRouterConfigured();
+        var client = _httpClientFactory.CreateClient("OpenRouter");
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
+        {
+            Content = JsonContent.Create(BuildOpenRouterRequest(request, stream: true))
+        };
+        using var response = await client.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogWarning("OpenRouter trả về {StatusCode}: {Body}", response.StatusCode, errorBody);
+            throw new InvalidOperationException(ReadOpenRouterError(errorBody) ?? $"OpenRouter trả về lỗi HTTP {(int)response.StatusCode}.");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        var answerBuilder = new StringBuilder();
+        string? providerError = null;
+
+        while (true)
+        {
+            var line = await reader.ReadLineAsync(cancellationToken);
+            if (line is null) break;
+            if (string.IsNullOrWhiteSpace(line) || line.StartsWith(':')) continue;
+            if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var payload = line[5..].Trim();
+            if (payload.Length == 0) continue;
+            if (string.Equals(payload, "[DONE]", StringComparison.Ordinal)) break;
+
+            try
+            {
+                using var document = JsonDocument.Parse(payload);
+                var root = document.RootElement;
+                providerError = ReadOpenRouterError(root) ?? providerError;
+                if (!string.IsNullOrWhiteSpace(providerError)) break;
+
+                var delta = ReadOpenRouterDelta(root);
+                if (delta.Length == 0) continue;
+                answerBuilder.Append(delta);
+                if (onDelta is not null) await onDelta(delta, cancellationToken);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "OpenRouter trả về một dòng SSE không hợp lệ: {Line}", line);
+            }
+        }
+
+        return FinalizeAnswer(answerBuilder.ToString(), providerError, "OpenRouter", sanitizeChatAnswer, maxResponseWords);
+    }
+
+    private async Task<string> SendNonStreamingRequestAsync(
+        OllamaChatRequest request,
+        string operation,
+        CancellationToken cancellationToken)
+    {
+        var provider = await _aiProviderSettings.GetStatusAsync();
+        if (provider.Provider == AiProviderSettingsService.OpenRouterProvider)
+        {
+            EnsureOpenRouterConfigured();
+            var client = _httpClientFactory.CreateClient("OpenRouter");
+            using var response = await client.PostAsJsonAsync("chat/completions", BuildOpenRouterRequest(request, stream: false), cancellationToken);
+            var raw = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("OpenRouter {Operation} trả về {StatusCode}: {Body}", operation, response.StatusCode, raw);
+                throw new InvalidOperationException(ReadOpenRouterError(raw) ?? $"OpenRouter trả về lỗi HTTP {(int)response.StatusCode}.");
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(raw);
+                var error = ReadOpenRouterError(document.RootElement);
+                if (!string.IsNullOrWhiteSpace(error)) throw new InvalidOperationException(error);
+                var content = ReadOpenRouterMessage(document.RootElement).Trim();
+                if (content.Length == 0) throw new InvalidOperationException("OpenRouter không trả về nội dung.");
+                return content;
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "OpenRouter {Operation} trả về JSON không hợp lệ: {Body}", operation, raw);
+                throw new InvalidOperationException("OpenRouter trả về dữ liệu không hợp lệ.", ex);
+            }
+        }
+
+        using var ollamaResponse = await _httpClient.PostAsJsonAsync("api/chat", request, cancellationToken);
+        var ollamaRaw = await ollamaResponse.Content.ReadAsStringAsync(cancellationToken);
+        if (!ollamaResponse.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Ollama {Operation} trả về {StatusCode}: {Body}", operation, ollamaResponse.StatusCode, ollamaRaw);
+            throw new InvalidOperationException(ReadOllamaError(ollamaRaw) ?? $"Ollama trả về lỗi HTTP {(int)ollamaResponse.StatusCode}.");
+        }
+
+        var result = JsonSerializer.Deserialize<OllamaChatResponse>(ollamaRaw, JsonOptions);
+        var value = result?.Message?.Content?.Trim() ?? string.Empty;
+        if (value.Length == 0) throw new InvalidOperationException("Ollama không trả về nội dung.");
+        return value;
+    }
+
+    private object BuildOpenRouterRequest(OllamaChatRequest request, bool stream)
+    {
+        var payload = new Dictionary<string, object?>
+        {
+            ["model"] = _openRouterOptions.Model,
+            ["messages"] = request.Messages.Select(BuildOpenRouterMessage).ToList(),
+            ["stream"] = stream
+        };
+
+        if (request.Options?.Temperature is double temperature) payload["temperature"] = temperature;
+        if (request.Options?.NumPredict is > 0) payload["max_tokens"] = request.Options.NumPredict;
+        if (string.Equals(request.Format, "json", StringComparison.OrdinalIgnoreCase))
+            payload["response_format"] = new Dictionary<string, object?> { ["type"] = "json_object" };
+
+        return payload;
+    }
+
+    private static object BuildOpenRouterMessage(OllamaMessage message)
+    {
+        if (message.Images is not { Count: > 0 })
+        {
+            return new Dictionary<string, object?>
+            {
+                ["role"] = message.Role,
+                ["content"] = message.Content
+            };
+        }
+
+        var content = new List<object>
+        {
+            new Dictionary<string, object?>
+            {
+                ["type"] = "text",
+                ["text"] = message.Content
+            }
+        };
+        foreach (var image in message.Images.Where(value => !string.IsNullOrWhiteSpace(value)))
+        {
+            content.Add(new Dictionary<string, object?>
+            {
+                ["type"] = "image_url",
+                ["image_url"] = new Dictionary<string, object?>
+                {
+                    ["url"] = ToImageDataUrl(image)
+                }
+            });
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["role"] = message.Role,
+            ["content"] = content
+        };
+    }
+
+    private static string ToImageDataUrl(string image)
+    {
+        var value = (image ?? string.Empty).Trim();
+        if (value.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            || value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) return value;
+        var mime = value.StartsWith("iVBOR", StringComparison.Ordinal) ? "image/png"
+            : value.StartsWith("R0lGOD", StringComparison.Ordinal) ? "image/gif"
+            : value.StartsWith("UklGR", StringComparison.Ordinal) ? "image/webp"
+            : "image/jpeg";
+        return $"data:{mime};base64,{value}";
+    }
+
+    private void EnsureOpenRouterConfigured()
+    {
+        if (string.IsNullOrWhiteSpace(_openRouterOptions.ApiKey))
+            throw new InvalidOperationException("OpenRouter chưa có OPENROUTER_API_KEY trên Render.");
+        if (string.IsNullOrWhiteSpace(_openRouterOptions.Model))
+            throw new InvalidOperationException("OpenRouter chưa có OPENROUTER_MODEL.");
+    }
+
+    private static string FinalizeAnswer(
+        string rawAnswer,
+        string? providerError,
+        string providerName,
+        bool sanitizeChatAnswer,
+        int? maxResponseWords)
+    {
         if (!string.IsNullOrWhiteSpace(providerError)) throw new InvalidOperationException(providerError);
 
-        var answer = answerBuilder.ToString().Trim();
-        if (string.IsNullOrWhiteSpace(answer)) throw new InvalidOperationException("Ollama không trả về nội dung.");
+        var answer = rawAnswer.Trim();
+        if (string.IsNullOrWhiteSpace(answer)) throw new InvalidOperationException($"{providerName} không trả về nội dung.");
         if (!sanitizeChatAnswer) return answer;
 
         answer = DecodeUnicodeEscapes(answer);
@@ -356,9 +571,72 @@ public sealed class OllamaAiService
         if (maxResponseWords.HasValue)
             answer = LimitAnswerAtSentenceBoundary(answer, maxResponseWords.Value);
         if (string.IsNullOrWhiteSpace(answer))
-            throw new InvalidOperationException("Ollama chỉ trả về nội dung không hợp lệ.");
+            throw new InvalidOperationException($"{providerName} chỉ trả về nội dung không hợp lệ.");
 
         return answer;
+    }
+
+    private static string ReadOpenRouterDelta(JsonElement root)
+    {
+        if (!root.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0)
+            return string.Empty;
+        var choice = choices[0];
+        if (!choice.TryGetProperty("delta", out var delta) || delta.ValueKind != JsonValueKind.Object)
+            return string.Empty;
+        return ReadContentValue(delta, "content");
+    }
+
+    private static string ReadOpenRouterMessage(JsonElement root)
+    {
+        if (!root.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array || choices.GetArrayLength() == 0)
+            return string.Empty;
+        var choice = choices[0];
+        if (!choice.TryGetProperty("message", out var message) || message.ValueKind != JsonValueKind.Object)
+            return string.Empty;
+        return ReadContentValue(message, "content");
+    }
+
+    private static string ReadContentValue(JsonElement parent, string propertyName)
+    {
+        if (!parent.TryGetProperty(propertyName, out var content)) return string.Empty;
+        if (content.ValueKind == JsonValueKind.String) return content.GetString() ?? string.Empty;
+        if (content.ValueKind != JsonValueKind.Array) return string.Empty;
+
+        var builder = new StringBuilder();
+        foreach (var item in content.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String)
+            {
+                builder.Append(item.GetString());
+                continue;
+            }
+            if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String)
+                builder.Append(text.GetString());
+        }
+        return builder.ToString();
+    }
+
+    private static string? ReadOpenRouterError(JsonElement root)
+    {
+        if (!root.TryGetProperty("error", out var error)) return null;
+        if (error.ValueKind == JsonValueKind.String) return error.GetString();
+        if (error.ValueKind != JsonValueKind.Object) return null;
+        if (error.TryGetProperty("message", out var message) && message.ValueKind == JsonValueKind.String)
+            return message.GetString();
+        return error.ToString();
+    }
+
+    private static string? ReadOpenRouterError(string raw)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(raw);
+            return ReadOpenRouterError(document.RootElement);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public Task<string> TranslateToVietnameseAsync(
@@ -439,25 +717,15 @@ public sealed class OllamaAiService
             }
         };
 
-        using var response = await _httpClient.PostAsJsonAsync("api/chat", request, cancellationToken);
-        var raw = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Ollama message translation to {TargetLanguage} returned {StatusCode}: {Body}", targetLanguage, response.StatusCode, raw);
-            throw new InvalidOperationException(ReadError(raw) ?? $"Ollama returned HTTP {(int)response.StatusCode}.");
-        }
-
-        var result = JsonSerializer.Deserialize<OllamaChatResponse>(raw, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        });
-
-        var translated = DecodeUnicodeEscapes(result?.Message?.Content?.Trim() ?? string.Empty);
+        var translated = DecodeUnicodeEscapes((await SendNonStreamingRequestAsync(
+            request,
+            $"dịch tin nhắn sang {targetLanguage}",
+            cancellationToken)).Trim());
         translated = translated.Replace("```text", string.Empty, StringComparison.OrdinalIgnoreCase)
             .Replace("```", string.Empty, StringComparison.Ordinal)
             .Trim();
         if (string.IsNullOrWhiteSpace(translated))
-            throw new InvalidOperationException("Ollama không trả về bản dịch.");
+            throw new InvalidOperationException("Dịch vụ AI không trả về bản dịch.");
 
         return translated;
     }
@@ -485,26 +753,16 @@ public sealed class OllamaAiService
             }
         };
 
-        using var response = await _httpClient.PostAsJsonAsync("api/chat", request, cancellationToken);
-        var raw = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("Ollama UI translation returned {StatusCode}: {Body}", response.StatusCode, raw);
-            throw new InvalidOperationException(ReadError(raw) ?? $"Ollama returned HTTP {(int)response.StatusCode}.");
-        }
-
-        var result = JsonSerializer.Deserialize<OllamaChatResponse>(raw, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        });
-
-        var content = result?.Message?.Content?.Trim() ?? string.Empty;
+        var content = (await SendNonStreamingRequestAsync(
+            request,
+            "dịch giao diện",
+            cancellationToken)).Trim();
         var start = content.IndexOf('[');
         var end = content.LastIndexOf(']');
-        if (start < 0 || end <= start) throw new InvalidOperationException("Ollama did not return a valid translation array.");
+        if (start < 0 || end <= start) throw new InvalidOperationException("Dịch vụ AI không trả về mảng bản dịch hợp lệ.");
 
         var translated = JsonSerializer.Deserialize<List<string>>(content[start..(end + 1)]) ?? new List<string>();
-        if (translated.Count != source.Count) throw new InvalidOperationException("Ollama returned an incomplete translation array.");
+        if (translated.Count != source.Count) throw new InvalidOperationException("Dịch vụ AI trả về mảng bản dịch không đầy đủ.");
 
         return translated.Select((value, index) =>
         {
@@ -694,14 +952,16 @@ public sealed class OllamaAiService
         return cleaned.Trim();
     }
 
-    private static string? ReadError(string raw)
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private static string? ReadOllamaError(string raw)
     {
         try
         {
-            return JsonSerializer.Deserialize<OllamaChatResponse>(raw, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            })?.Error;
+            return JsonSerializer.Deserialize<OllamaChatResponse>(raw, JsonOptions)?.Error;
         }
         catch
         {

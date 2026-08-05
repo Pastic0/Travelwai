@@ -102,6 +102,7 @@ builder.Services.PostConfigure<SePayOptions>(options =>
     }
 });
 builder.Services.Configure<OllamaOptions>(builder.Configuration.GetSection("Ollama"));
+builder.Services.Configure<OpenRouterOptions>(builder.Configuration.GetSection("OpenRouter"));
 builder.Services.Configure<PersistentTranslationOptions>(builder.Configuration.GetSection("PersistentTranslation"));
 builder.Services.PostConfigure<PersistentTranslationOptions>(options =>
 {
@@ -134,6 +135,17 @@ builder.Services.PostConfigure<OllamaOptions>(options =>
     options.Model = FirstNonEmpty(configuration["OLLAMA_MODEL"], configuration["Ollama:Model"], options.Model, "gemma4:31b-cloud");
     options.ApiKey = FirstNonEmpty(configuration["OLLAMA_API_KEY"], configuration["Ollama:ApiKey"], options.ApiKey);
     if (int.TryParse(FirstNonEmpty(configuration["OLLAMA_TIMEOUT_SECONDS"], configuration["Ollama:TimeoutSeconds"]), out var timeout) && timeout > 0)
+        options.TimeoutSeconds = timeout;
+});
+builder.Services.PostConfigure<OpenRouterOptions>(options =>
+{
+    var configuration = builder.Configuration;
+    options.BaseUrl = FirstNonEmpty(configuration["OPENROUTER_BASE_URL"], configuration["OpenRouter:BaseUrl"], options.BaseUrl, "https://openrouter.ai/api/v1");
+    options.Model = FirstNonEmpty(configuration["OPENROUTER_MODEL"], configuration["OpenRouter:Model"], options.Model, "google/gemma-4-31b-it:free");
+    options.ApiKey = FirstNonEmpty(configuration["OPENROUTER_API_KEY"], configuration["OpenRouter:ApiKey"], options.ApiKey);
+    options.SiteUrl = FirstNonEmpty(configuration["OPENROUTER_SITE_URL"], configuration["OpenRouter:SiteUrl"], options.SiteUrl, "https://travelwai.id.vn");
+    options.AppTitle = FirstNonEmpty(configuration["OPENROUTER_APP_TITLE"], configuration["OpenRouter:AppTitle"], options.AppTitle, "TravelwAI");
+    if (int.TryParse(FirstNonEmpty(configuration["OPENROUTER_TIMEOUT_SECONDS"], configuration["OpenRouter:TimeoutSeconds"]), out var timeout) && timeout > 0)
         options.TimeoutSeconds = timeout;
 });
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
@@ -179,6 +191,21 @@ builder.Services.AddHttpClient<OllamaAiService>((sp, client) =>
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", options.ApiKey.Trim());
     }
 });
+builder.Services.AddHttpClient("OpenRouter", (sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<OpenRouterOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 10, 600));
+    if (!string.IsNullOrWhiteSpace(options.ApiKey))
+    {
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", options.ApiKey.Trim());
+    }
+    if (!string.IsNullOrWhiteSpace(options.SiteUrl))
+        client.DefaultRequestHeaders.TryAddWithoutValidation("HTTP-Referer", options.SiteUrl.Trim());
+    if (!string.IsNullOrWhiteSpace(options.AppTitle))
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-OpenRouter-Title", options.AppTitle.Trim());
+});
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
@@ -219,6 +246,7 @@ builder.Services.AddScoped<AiKnowledgeContextService>();
 builder.Services.AddScoped<RoleFeaturePolicyService>();
 builder.Services.AddScoped<AiUsageLimitService>();
 builder.Services.AddScoped<ChatbotSettingsService>();
+builder.Services.AddScoped<AiProviderSettingsService>();
 builder.Services.AddScoped<AccountPlanSettingsService>();
 builder.Services.AddSingleton<AiChatJobService>();
 builder.Services.AddSingleton<PersistentTranslationStore>();

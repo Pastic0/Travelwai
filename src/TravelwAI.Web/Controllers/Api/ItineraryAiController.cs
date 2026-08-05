@@ -173,7 +173,7 @@ public sealed class ItineraryAiController : ApiControllerBase
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Không thể kết nối Ollama khi tạo lịch trình cho người dùng {UserId}", current.userId);
+            _logger.LogError(ex, "Không thể kết nối dịch vụ AI khi tạo lịch trình cho người dùng {UserId}", current.userId);
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new
             {
                 success = false,

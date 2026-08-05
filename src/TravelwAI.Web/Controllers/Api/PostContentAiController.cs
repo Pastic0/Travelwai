@@ -207,7 +207,7 @@ public sealed class PostContentAiController : ApiControllerBase
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Không thể kết nối Ollama khi tạo bài viết cho từ khóa {Keyword}", keyword);
+            _logger.LogError(ex, "Không thể kết nối dịch vụ AI khi tạo bài viết cho từ khóa {Keyword}", keyword);
             return StatusCode(StatusCodes.Status503ServiceUnavailable, new { success = false, message = "Không thể kết nối dịch vụ AI." });
         }
         catch (Exception ex)
