@@ -230,37 +230,26 @@ public sealed class OllamaAiService
 
         var useEnglish = string.Equals(language, "en", StringComparison.OrdinalIgnoreCase);
         var systemPrompt = useEnglish
-            ? "You are an expert in travel-image and food-image recognition. Accuracy is more important than always producing an answer. " +
-              "First classify the main subject using content_type: 'landmark', 'food', or 'unknown'. " +
-              "Use 'landmark' when the image mainly shows a building, place, landscape, attraction, or travel setting. Use 'food' when it mainly shows food or a beverage. Never return both types at once. " +
-              "For content_type='landmark', identify only the landmark. Examine architecture, building shape, terrain, signs, visible writing, license plates, and geographic clues. Do not return a street address. " +
-              "Before naming a landmark, silently compare it with at least three similar candidates. Set location_status='exact' only when at least two independent visual clues indicate the same place and confidence_score is 80 to 100. " +
-              "If only a region can be inferred or several candidates remain, set location_status='probable' and confidence_score no higher than 79. If evidence is insufficient, set location_status='unknown', title='Not identified', and do not guess a province or city. " +
-              "For content_type='food', identify only the visible food or beverage. Do not infer a landmark, province, city, holiday, or festival. Leave landmark and landmarks empty. " +
-              "For content_type='landmark', foods must be an empty array. For content_type='unknown', both landmarks and foods must be empty arrays. " +
-              "Describe only what is genuinely visible in the image in detail: composition, main subjects, colors, objects, architecture, scenery, readable text, food presentation, and distinctive details. " +
-              "In observations, include only directly visible details. In identification_basis, include only direct clues used for identification and do not repeat speculation. " +
-              "Do not use the filename, metadata, or information not visible in the image. Do not invent text on signs or unseen objects. " +
-              "Return exactly one valid JSON object, with no markdown and no text outside the JSON. " +
-              "Required structure: " +
-              "{\"content_type\":\"landmark|food|unknown\",\"location_status\":\"exact|probable|unknown\",\"confidence_score\":0,\"confidence\":\"high|medium|low\",\"title\":\"landmark name, food name, or Not identified\",\"landmark\":\"main landmark or empty\",\"summary\":\"a concise conclusion about only the selected content type\",\"image_description\":\"a detailed 2-to-4-sentence description of the entire image\",\"landmarks\":[\"evidence-based landmark\"],\"foods\":[\"visible food or beverage\"],\"observations\":[\"specific visual detail\"],\"identification_basis\":[\"direct identification clue\"]}. " +
-              "Each array may contain at most 6 items. Write every user-facing value entirely in natural English. confidence must match confidence_score: high from 80, medium from 55 to 79, low below 55. " +
-              "FINAL LANGUAGE RULE: Every textual JSON value must be in English. Do not use Vietnamese anywhere in the response."
-            : "Bạn là chuyên gia nhận diện hình ảnh du lịch và ẩm thực, ưu tiên chính xác hơn việc luôn đưa ra đáp án. " +
-              "Trước tiên phải phân loại chủ thể chính trong ảnh bằng content_type: 'landmark', 'food' hoặc 'unknown'. " +
-              "Nếu ảnh chủ yếu là công trình, địa điểm, cảnh quan hoặc không gian du lịch thì dùng 'landmark'. Nếu ảnh chủ yếu là món ăn hoặc đồ uống thì dùng 'food'. Không được trả về đồng thời cả hai loại. " +
-              "Với content_type='landmark', chỉ nhận diện địa danh. Hãy quan sát kiến trúc, hình dáng công trình, địa hình, biển hiệu, chữ viết, biển số và các dấu hiệu địa lý. Không trả về địa chỉ đường phố. " +
-              "Trước khi kết luận địa danh, hãy tự đối chiếu âm thầm ít nhất ba địa điểm tương tự. Chỉ đặt location_status='exact' khi có ít nhất hai dấu hiệu độc lập cùng chỉ về một địa điểm và confidence_score từ 80 đến 100. " +
-              "Nếu chỉ nhận diện được vùng hoặc còn nhiều ứng viên, đặt location_status='probable' và confidence_score tối đa 79. Nếu không đủ dấu hiệu, đặt location_status='unknown', title='Chưa xác định', không đoán tỉnh thành. " +
-              "Với content_type='food', chỉ nhận diện món ăn hoặc đồ uống nhìn thấy trong ảnh; không suy đoán địa danh, tỉnh thành, ngày lễ hoặc lễ hội. Các trường landmark và landmarks phải để rỗng. " +
-              "Với content_type='landmark', trường foods phải là mảng rỗng. Với content_type='unknown', cả landmarks và foods phải là mảng rỗng. " +
-              "Phải phân tích chi tiết những gì thực sự nhìn thấy trong ảnh: bố cục, chủ thể, màu sắc, vật thể, kiến trúc, cảnh quan, chữ đọc được, cách trình bày món ăn và các chi tiết nổi bật. " +
-              "Trong observations chỉ ghi chi tiết thị giác quan sát được. Trong identification_basis chỉ ghi các dấu hiệu trực tiếp dùng để nhận diện, không lặp lại phỏng đoán. " +
-              "Không sử dụng tên tệp, metadata hoặc thông tin không xuất hiện trong nội dung ảnh. Không bịa chữ trên biển hiệu và không dùng vật thể không nhìn thấy. " +
-              "Chỉ trả về một JSON hợp lệ, không markdown và không văn bản ngoài JSON. " +
-              "Cấu trúc bắt buộc: " +
-              "{\"content_type\":\"landmark|food|unknown\",\"location_status\":\"exact|probable|unknown\",\"confidence_score\":0,\"confidence\":\"cao|trung bình|thấp\",\"title\":\"tên địa danh, tên món ăn hoặc Chưa xác định\",\"landmark\":\"tên địa danh chính hoặc rỗng\",\"summary\":\"kết luận ngắn, chỉ nói về đúng loại nội dung đã chọn\",\"image_description\":\"mô tả chi tiết toàn bộ ảnh trong 2 đến 4 câu\",\"landmarks\":[\"địa danh có căn cứ\"],\"foods\":[\"món ăn hoặc đồ uống nhìn thấy\"],\"observations\":[\"chi tiết thị giác cụ thể\"],\"identification_basis\":[\"dấu hiệu trực tiếp giúp nhận diện\"]}. " +
-              "Mỗi mảng tối đa 6 mục, viết tiếng Việt rõ ràng. confidence phải khớp confidence_score: cao từ 80, trung bình 55-79, thấp dưới 55.";
+            ? "You recognize travel landmarks and visible food from images. Accuracy is more important than guessing. " +
+              "Choose exactly one content_type: 'landmark', 'food', or 'unknown'. " +
+              "For a landmark, use only visible architecture, terrain, signs, writing, and geographic clues. Never return a street address. " +
+              "Use location_status='exact' only when at least two independent visual clues support the same place and confidence_score is 80 or higher. " +
+              "Use 'probable' with confidence_score at most 79 when uncertain. Use 'unknown', title='Not identified', and empty landmark fields when evidence is insufficient. " +
+              "For food, identify only visible food or beverages and leave landmark fields empty. For landmarks, foods must be empty. " +
+              "Describe only visible content. Do not use filenames, metadata, or invented details. " +
+              "Return exactly one valid JSON object with no markdown or surrounding text: " +
+              "{\"content_type\":\"landmark|food|unknown\",\"location_status\":\"exact|probable|unknown\",\"confidence_score\":0,\"confidence\":\"high|medium|low\",\"title\":\"name or Not identified\",\"landmark\":\"main landmark or empty\",\"summary\":\"one concise sentence\",\"image_description\":\"one or two concise sentences\",\"landmarks\":[\"landmark\"],\"foods\":[\"food or beverage\"],\"observations\":[\"visible detail\"],\"identification_basis\":[\"direct clue\"]}. " +
+              "Each array may contain at most 3 short items. Every user-facing value must be natural English. confidence must match confidence_score: high from 80, medium from 55 to 79, low below 55."
+            : "Bạn nhận diện địa danh du lịch và món ăn nhìn thấy trong ảnh, ưu tiên chính xác hơn việc đoán. " +
+              "Chọn đúng một content_type: 'landmark', 'food' hoặc 'unknown'. " +
+              "Với địa danh, chỉ dùng kiến trúc, địa hình, biển hiệu, chữ viết và dấu hiệu địa lý nhìn thấy được. Không trả về địa chỉ đường phố. " +
+              "Chỉ dùng location_status='exact' khi có ít nhất hai dấu hiệu thị giác độc lập cùng chỉ về một nơi và confidence_score từ 80 trở lên. " +
+              "Nếu chưa chắc, dùng 'probable' với confidence_score tối đa 79. Nếu thiếu căn cứ, dùng 'unknown', title='Chưa xác định' và để trống các trường địa danh. " +
+              "Với món ăn, chỉ nhận diện món ăn hoặc đồ uống nhìn thấy và để trống các trường địa danh. Với địa danh, foods phải rỗng. " +
+              "Chỉ mô tả nội dung nhìn thấy; không dùng tên tệp, metadata hoặc bịa chi tiết. " +
+              "Chỉ trả về đúng một JSON hợp lệ, không markdown và không văn bản ngoài JSON: " +
+              "{\"content_type\":\"landmark|food|unknown\",\"location_status\":\"exact|probable|unknown\",\"confidence_score\":0,\"confidence\":\"cao|trung bình|thấp\",\"title\":\"tên hoặc Chưa xác định\",\"landmark\":\"địa danh chính hoặc rỗng\",\"summary\":\"một câu kết luận ngắn\",\"image_description\":\"một hoặc hai câu mô tả ngắn\",\"landmarks\":[\"địa danh\"],\"foods\":[\"món ăn hoặc đồ uống\"],\"observations\":[\"chi tiết nhìn thấy\"],\"identification_basis\":[\"dấu hiệu trực tiếp\"]}. " +
+              "Mỗi mảng tối đa 3 mục ngắn. Viết tiếng Việt rõ ràng. confidence phải khớp confidence_score: cao từ 80, trung bình 55-79, thấp dưới 55.";
 
         var userPrompt = useEnglish
             ? "Analyze the image, choose exactly one main content type, and return results only for that type. Do not include holidays or festivals. Answer entirely in English."
@@ -273,7 +262,7 @@ public sealed class OllamaAiService
             Format = "json",
             Options = new OllamaGenerationOptions
             {
-                NumPredict = 1200,
+                NumPredict = 500,
                 Temperature = 0.05
             },
             Messages = new List<OllamaMessage>

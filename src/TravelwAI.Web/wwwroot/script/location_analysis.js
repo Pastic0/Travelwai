@@ -3,7 +3,7 @@
 
   const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
   const MAX_INTERNAL_SERVER_RETRIES = 5;
-  const INTERNAL_SERVER_RETRY_DELAY_MS = 400;
+  const INTERNAL_SERVER_RETRY_DELAY_MS = 150;
   let selectedFile = null;
   let selectedImageData = "";
   let selectedPreviewUrl = "";
@@ -47,6 +47,7 @@
     elements.loading = $("locationResultLoading");
     elements.error = $("locationResultError");
     elements.content = $("locationResultContent");
+    elements.streamingBanner = $("locationStreamingBanner");
     elements.summaryCard = $("locationSummaryCard");
     elements.resultLabel = $("locationResultLabel");
     elements.confidenceBadge = $("locationConfidenceBadge");
@@ -106,6 +107,7 @@
 
   function resetStreamingPreview() {
     elements.resultPanel?.classList.remove("is-streaming");
+    if (elements.streamingBanner) elements.streamingBanner.hidden = true;
   }
 
   function revealStreamingElement(target) {
@@ -123,6 +125,7 @@
     streamingRevealStage = 0;
     resetResultCards();
     elements.resultPanel?.classList.add("is-streaming");
+    if (elements.streamingBanner) elements.streamingBanner.hidden = false;
     if (elements.analyzeAgainButton) elements.analyzeAgainButton.hidden = true;
 
     elements.resultLabel.textContent = localize("Kết quả nhận diện", "Recognition result");
@@ -659,7 +662,7 @@
   function renderAnalysis(data) {
     const type = resolveContentType(data);
     resetResultCards();
-    elements.resultPanel?.classList.remove("is-streaming");
+    resetStreamingPreview();
     if (elements.analyzeAgainButton) elements.analyzeAgainButton.hidden = false;
     elements.summaryCard.hidden = false;
     elements.confidenceBadge.hidden = false;
@@ -762,7 +765,7 @@
   }
 
   function waitForRetry(attempt, signal) {
-    const delay = Math.min(INTERNAL_SERVER_RETRY_DELAY_MS * Math.max(1, attempt), 1600);
+    const delay = Math.min(INTERNAL_SERVER_RETRY_DELAY_MS * Math.max(1, attempt), 500);
     return waitForDelay(delay, signal);
   }
 
@@ -797,6 +800,7 @@
       requestError.isInternalServerError = response.status === 500
         || isInternalServerError(response.statusText)
         || isInternalServerError(errorPayload);
+      requestError.canRetryBeforeFirstToken = requestError.isInternalServerError;
       throw requestError;
     }
 
@@ -825,6 +829,8 @@
     if (streamError) {
       const requestError = new Error(String(streamError.message || "analysis-failed"));
       requestError.isInternalServerError = isInternalServerError(streamError);
+      requestError.canRetryBeforeFirstToken = requestError.isInternalServerError
+        && streamedReply.length === 0;
       throw requestError;
     }
 
@@ -883,7 +889,7 @@
           result = await performLocationAnalysisAttempt(token, signal);
           break;
         } catch (error) {
-          const canRetry = error?.isInternalServerError === true
+          const canRetry = error?.canRetryBeforeFirstToken === true
             && retryCount < MAX_INTERNAL_SERVER_RETRIES;
           if (canRetry) continue;
           throw error;
