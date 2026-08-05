@@ -1284,7 +1284,7 @@ function getAdminRevenueSearchText(item) {
 }
 
 function formatAdminRevenueRelevantMoney(value, applicable) {
-  if (!applicable) return '<span class="admin-revenue-not-applicable" title="Khoản này không thuộc tài khoản">—</span>';
+  if (!applicable) return '<span class="admin-revenue-not-applicable" title="Tài khoản này không nhận khoản tiền này">—</span>';
   return formatAdminRevenueMoney(value);
 }
 

@@ -1953,8 +1953,10 @@ public sealed class AdminApiController : ApiControllerBase
 
         decimal grossRevenue = accountOrders.Sum(item => GetOrderOriginalTotal(item.Order));
         decimal discountDeducted = 0m;
+        // These fields represent money RECEIVED by the account shown in the row.
+        // Sales receives commission. Company does not receive the service fee; it pays it to Admin.
         decimal commission = ownSalesOrders.Sum(item => GetOrderCommissionAmount(item.Order));
-        decimal serviceFee = ownCompanyOrders.Sum(item => GetOrderServiceAmount(item.Order));
+        decimal serviceFee = 0m;
         decimal revenue = commission
             + ownCompanyOrders.Sum(item => Math.Max(0, GetOrderOriginalTotal(item.Order) - GetOrderServiceAmount(item.Order)));
         var orderCount = accountOrders.Count;
@@ -1974,7 +1976,8 @@ public sealed class AdminApiController : ApiControllerBase
             discountDeducted = allAdminOrders.Sum(item => GetOrderDiscountAmount(item.Order))
                 + allSalesOrders.Sum(item => GetOrderDiscountAmount(item.Order))
                 + allCompanyOrders.Sum(item => GetOrderDiscountAmount(item.Order));
-            commission = allSalesOrders.Sum(item => GetOrderCommissionAmount(item.Order));
+            // Sales commission is an expense of Admin, not money received by Admin.
+            commission = 0m;
             serviceFee = allCompanyOrders.Sum(item => GetOrderServiceAmount(item.Order));
             revenue = allAdminOrders.Sum(item => GetAdminOwnedOrderRevenue(item.Order))
                 + allSalesOrders.Sum(item => GetAdminSalesOrderRevenue(item.Order))
@@ -1999,8 +2002,9 @@ public sealed class AdminApiController : ApiControllerBase
         }
 
         var discountRelevant = isPrimaryAdmin;
-        var commissionRelevant = isPrimaryAdmin || ownSalesOrders.Count > 0;
-        var serviceFeeRelevant = isPrimaryAdmin || ownCompanyOrders.Count > 0;
+        // Only show a received amount in the role that actually receives it.
+        var commissionRelevant = !IsAdminRole(role) && ownSalesOrders.Count > 0;
+        var serviceFeeRelevant = isPrimaryAdmin;
 
         var username = TextAny(account, "username", "displayName", "display_name");
         var email = accountEmail;
