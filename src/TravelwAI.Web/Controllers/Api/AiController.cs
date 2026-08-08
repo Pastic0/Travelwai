@@ -281,17 +281,22 @@ public sealed class AiController : ApiControllerBase
             || string.Equals(message, "Please try again", StringComparison.OrdinalIgnoreCase))
             return message;
 
-        return ContainsInternalServerError(exception) ? "Vui lòng thử lại" : message;
+        return ContainsRetryableOllamaError(exception) ? "Vui lòng thử lại" : message;
     }
 
-    private static bool ContainsInternalServerError(Exception exception)
+    private static bool ContainsRetryableOllamaError(Exception exception)
     {
         for (var current = exception; current is not null; current = current.InnerException)
         {
             var message = current.Message ?? string.Empty;
             if (message.Contains("InternalServerError", StringComparison.OrdinalIgnoreCase)
                 || message.Contains("Internal Server Error", StringComparison.OrdinalIgnoreCase)
-                || message.Contains("internal_server_error", StringComparison.OrdinalIgnoreCase))
+                || message.Contains("internal_server_error", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("ServiceUnavailable", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("Service Unavailable", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("service_unavailable", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("temporarily overloaded", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("please retry shortly", StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 

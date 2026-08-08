@@ -291,7 +291,7 @@ public sealed class OllamaAiService
             }
         };
 
-        const int maxInternalServerRetries = 3;
+        const int maxTransientRetries = 3;
         for (var retryAttempt = 0; ; retryAttempt += 1)
         {
             try
@@ -304,24 +304,24 @@ public sealed class OllamaAiService
                     cancellationToken: cancellationToken);
                 return SanitizeLocationAnalysisJson(rawAnalysis);
             }
-            catch (OllamaInternalServerException ex) when (retryAttempt < maxInternalServerRetries)
+            catch (OllamaTransientException ex) when (retryAttempt < maxTransientRetries)
             {
                 var nextRetry = retryAttempt + 1;
                 _logger.LogWarning(
                     ex,
-                    "Ollama InternalServerError khi phân tích ảnh; đang retry lần {RetryAttempt}/{MaxRetries}",
+                    "Ollama tạm thời không khả dụng khi phân tích ảnh; đang retry lần {RetryAttempt}/{MaxRetries}",
                     nextRetry,
-                    maxInternalServerRetries);
+                    maxTransientRetries);
 
                 if (onRetry is not null)
-                    await onRetry(nextRetry, maxInternalServerRetries, cancellationToken);
+                    await onRetry(nextRetry, maxTransientRetries, cancellationToken);
 
                 var delayMilliseconds = 350 * (1 << retryAttempt);
                 await Task.Delay(delayMilliseconds, cancellationToken);
             }
-            catch (OllamaInternalServerException ex)
+            catch (OllamaTransientException ex)
             {
-                _logger.LogError(ex, "Ollama vẫn trả InternalServerError sau {MaxRetries} lần thử lại", maxInternalServerRetries);
+                _logger.LogError(ex, "Ollama vẫn tạm thời không khả dụng sau {MaxRetries} lần thử lại", maxTransientRetries);
                 throw new InvalidOperationException(useEnglish ? "Please try again" : "Vui lòng thử lại", ex);
             }
         }
@@ -367,8 +367,8 @@ public sealed class OllamaAiService
             var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogWarning("Ollama trả về {StatusCode}: {Body}", response.StatusCode, errorBody);
             var errorMessage = ReadError(errorBody) ?? $"Ollama trả về lỗi HTTP {(int)response.StatusCode}.";
-            if (response.StatusCode == HttpStatusCode.InternalServerError || IsInternalServerError(errorMessage))
-                throw new OllamaInternalServerException(errorMessage);
+            if (IsRetryableOllamaError(response.StatusCode, errorMessage))
+                throw new OllamaTransientException(errorMessage);
             throw new InvalidOperationException(errorMessage);
         }
 
@@ -415,8 +415,8 @@ public sealed class OllamaAiService
 
         if (!string.IsNullOrWhiteSpace(providerError))
         {
-            if (IsInternalServerError(providerError))
-                throw new OllamaInternalServerException(providerError);
+            if (IsRetryableOllamaError(null, providerError))
+                throw new OllamaTransientException(providerError);
             throw new InvalidOperationException(providerError);
         }
 
@@ -435,17 +435,25 @@ public sealed class OllamaAiService
         return answer;
     }
 
-    private static bool IsInternalServerError(string? message)
+    private static bool IsRetryableOllamaError(HttpStatusCode? statusCode, string? message)
     {
+        if (statusCode is HttpStatusCode.InternalServerError or HttpStatusCode.ServiceUnavailable)
+            return true;
+
         var value = (message ?? string.Empty).Trim();
         return value.Contains("InternalServerError", StringComparison.OrdinalIgnoreCase)
             || value.Contains("Internal Server Error", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("internal_server_error", StringComparison.OrdinalIgnoreCase);
+            || value.Contains("internal_server_error", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("ServiceUnavailable", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("Service Unavailable", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("service_unavailable", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("temporarily overloaded", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("please retry shortly", StringComparison.OrdinalIgnoreCase);
     }
 
-    private sealed class OllamaInternalServerException : InvalidOperationException
+    private sealed class OllamaTransientException : InvalidOperationException
     {
-        public OllamaInternalServerException(string message) : base(message)
+        public OllamaTransientException(string message) : base(message)
         {
         }
     }

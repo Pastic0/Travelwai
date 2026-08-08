@@ -706,7 +706,7 @@
         }
         if (type === "error") {
           const rawMessage = String(event.message || "").trim();
-          const safeMessage = /InternalServerError|Internal Server Error|internal_server_error/i.test(rawMessage)
+          const safeMessage = /InternalServerError|Internal Server Error|internal_server_error|ServiceUnavailable|Service Unavailable|service_unavailable|temporarily overloaded|please retry shortly/i.test(rawMessage)
             ? localize("Vui lòng thử lại", "Please try again")
             : (rawMessage || localize("Không thể phân tích ảnh.", "Unable to analyze the image."));
           throw new Error(safeMessage);
