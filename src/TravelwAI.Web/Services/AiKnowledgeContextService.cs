@@ -122,7 +122,7 @@ public sealed class AiKnowledgeContextService
                     Score = TourMatchScore(tour, terms)
                 })
                 .Where(item => !hasSearchTerms || item.Score > 0)
-                .OrderBy(item => item.Index)
+                .OrderByDescending(item => item.Score)
                 .Take(30)
                 .Select(item =>
                 {
@@ -171,7 +171,7 @@ public sealed class AiKnowledgeContextService
                     Score = PostMatchScore(post, terms, requestedMonth)
                 })
                 .Where(item => !hasSearchFilter || item.Score > 0)
-                .OrderBy(item => item.Index)
+                .OrderByDescending(item => item.Score)
                 .Take(30)
                 .Select(item =>
                 {
