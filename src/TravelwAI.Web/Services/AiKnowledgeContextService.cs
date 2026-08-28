@@ -5,7 +5,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Caching.Memory;
-using TravelwAI.Business.Interfaces;
 using TravelwAI.Data.Interfaces;
 
 namespace TravelwAI.Web.Services;
@@ -25,21 +24,37 @@ public sealed class AiKnowledgeContextService
         "status", "source", "is_deleted", "isDeleted", "created_at", "updated_at"
     };
 
+    private static readonly string[] TourFields =
+    {
+        "id", "name", "title", "description", "destination", "province", "start_date", "end_date",
+        "duration", "price", "slots", "sold", "status", "itinerary", "included", "excluded",
+        "tour_sales_name", "tourSalesName", "owner_role", "ownerRole", "created_at", "updated_at"
+    };
+
+    private static readonly string[] HiddenPostStatuses =
+    {
+        "an", "da xoa", "deleted", "inactive", "draft", "nhap"
+    };
+
+    private static readonly string[] ScheduleSearchFields =
+    {
+        "id", "name", "title", "destination", "province", "start_date", "end_date", "startDate", "endDate",
+        "days", "items", "activities", "notes", "status", "created_at", "updated_at",
+        "user_id", "userId", "shared_with_user_ids", "sharedWithUserIds"
+    };
+
     private readonly IDataRepository _repo;
-    private readonly IScheduleService _scheduleService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IMemoryCache _cache;
     private readonly ILogger<AiKnowledgeContextService> _logger;
 
     public AiKnowledgeContextService(
         IDataRepository repo,
-        IScheduleService scheduleService,
         IHttpClientFactory httpClientFactory,
         IMemoryCache cache,
         ILogger<AiKnowledgeContextService> logger)
     {
         _repo = repo;
-        _scheduleService = scheduleService;
         _httpClientFactory = httpClientFactory;
         _cache = cache;
         _logger = logger;
@@ -70,7 +85,7 @@ public sealed class AiKnowledgeContextService
 
         var toursTask = LoadToursAsync(question);
         var postsTask = LoadPostsAsync(question);
-        var schedulesTask = LoadSchedulesAsync(userId);
+        var schedulesTask = LoadSchedulesAsync(userId, question);
         var wikiTask = LoadWikipediaAsync(question, cancellationToken);
 
 
@@ -105,41 +120,26 @@ public sealed class AiKnowledgeContextService
     {
         try
         {
-            var tours = (await _repo.GetAllAsync("tours", limit: 120))
-                .Where(t => !Bool(t, "is_deleted") && !Bool(t, "isDeleted"))
-                .ToList();
-
             var query = NormalizeSearchText(question);
             var terms = SearchTerms(query);
-
-
             var hasSearchTerms = terms.Count > 0;
-            var selected = tours
-                .Select((tour, index) => new
+            var selected = await _repo.SearchRankedDocumentsAsync(
+                "tours",
+                TourFields,
+                hasSearchTerms ? string.Join(' ', terms) : null,
+                limit: 30,
+                excludeDeleted: true);
+
+            return JsonSerializer.Serialize(selected
+                .Select((item, index) =>
                 {
-                    Tour = tour,
-                    Index = index,
-                    Score = TourMatchScore(tour, terms)
-                })
-                .Where(item => !hasSearchTerms || item.Score > 0)
-                .OrderByDescending(item => item.Score)
-                .Take(30)
-                .Select(item =>
-                {
-                    var compact = Compact(item.Tour, new[]
-                    {
-                        "id", "name", "title", "description", "destination", "province", "start_date", "end_date",
-                        "duration", "price", "slots", "sold", "status", "itinerary", "included", "excluded",
-                        "tour_sales_name", "tourSalesName", "owner_role", "ownerRole", "created_at", "updated_at"
-                    });
-                    compact["ai_match_score"] = item.Score;
-                    compact["ai_is_recent"] = item.Index < 10;
+                    var compact = Compact(item.Document, TourFields);
+                    compact["ai_match_score"] = Math.Round(item.Rank, 4);
+                    compact["ai_is_recent"] = !hasSearchTerms && index < 10;
                     return compact;
                 })
                 .Where(x => x.Count > 0)
-                .ToList();
-
-            return JsonSerializer.Serialize(selected, AiJsonOptions);
+                .ToList(), AiJsonOptions);
         }
         catch (Exception ex)
         {
@@ -152,38 +152,29 @@ public sealed class AiKnowledgeContextService
     {
         try
         {
-            var posts = (await _repo.GetAllFieldsAsync("travel_posts", PostFields, limit: 120))
-                .Where(p => !Bool(p, "is_deleted") && !Bool(p, "isDeleted"))
-                .Where(IsPostVisibleToAi)
-                .ToList();
-
             var query = NormalizeSearchText(question);
             var terms = SearchTerms(query);
             var requestedMonth = ExtractRequestedMonth(question);
-
-
             var hasSearchFilter = terms.Count > 0 || requestedMonth.HasValue;
-            var selected = posts
-                .Select((post, index) => new
+            var selected = await _repo.SearchRankedDocumentsAsync(
+                "travel_posts",
+                PostFields,
+                terms.Count > 0 ? string.Join(' ', terms) : null,
+                limit: 30,
+                month: requestedMonth,
+                excludedNormalizedStatuses: HiddenPostStatuses,
+                excludeDeleted: true);
+
+            return JsonSerializer.Serialize(selected
+                .Select((item, index) =>
                 {
-                    Post = post,
-                    Index = index,
-                    Score = PostMatchScore(post, terms, requestedMonth)
-                })
-                .Where(item => !hasSearchFilter || item.Score > 0)
-                .OrderByDescending(item => item.Score)
-                .Take(30)
-                .Select(item =>
-                {
-                    var compact = Compact(item.Post, PostFields);
-                    compact["ai_match_score"] = item.Score;
-                    compact["ai_is_recent"] = item.Index < 10;
+                    var compact = Compact(item.Document, PostFields);
+                    compact["ai_match_score"] = Math.Round(item.Rank, 4);
+                    compact["ai_is_recent"] = !hasSearchFilter && index < 10;
                     return compact;
                 })
                 .Where(x => x.Count > 0)
-                .ToList();
-
-            return JsonSerializer.Serialize(selected, AiJsonOptions);
+                .ToList(), AiJsonOptions);
         }
         catch (Exception ex)
         {
@@ -193,15 +184,27 @@ public sealed class AiKnowledgeContextService
     }
 
 
-    private async Task<string> LoadSchedulesAsync(string userId)
+    private async Task<string> LoadSchedulesAsync(string userId, string question)
     {
         try
         {
-            var (owned, shared) = await _scheduleService.GetSchedulesForUserAsync(userId);
+            var terms = SearchTerms(NormalizeSearchText(question));
+            var schedules = await _repo.SearchRankedDocumentsAsync(
+                "schedules",
+                ScheduleSearchFields,
+                terms.Count > 0 ? string.Join(' ', terms) : null,
+                limit: 80,
+                authorizedUserId: userId);
             var data = new
             {
-                owned = owned.Take(40).Select(CompactSchedule),
-                shared = shared.Take(40).Select(CompactSchedule)
+                owned = schedules
+                    .Where(item => IsOwnedSchedule(item.Document, userId))
+                    .Take(40)
+                    .Select(CompactSchedule),
+                shared = schedules
+                    .Where(item => !IsOwnedSchedule(item.Document, userId))
+                    .Take(40)
+                    .Select(CompactSchedule)
             };
             return JsonSerializer.Serialize(data, AiJsonOptions);
         }
@@ -266,60 +269,6 @@ public sealed class AiKnowledgeContextService
         }
     }
 
-    private static bool IsPostVisibleToAi(Dictionary<string, object?> post)
-    {
-        var status = NormalizeSearchText(Text(post, "status"));
-        if (string.IsNullOrWhiteSpace(status)) return true;
-
-
-        return status != "an"
-            && status != "da xoa"
-            && status != "deleted"
-            && status != "inactive"
-            && status != "draft"
-            && status != "nhap";
-    }
-
-    private static int PostMatchScore(
-        Dictionary<string, object?> post,
-        IReadOnlyCollection<string> terms,
-        int? requestedMonth)
-    {
-        var title = NormalizeSearchText(Text(post, "title"));
-        var festival = NormalizeSearchText(Text(post, "festival"));
-        var province = NormalizeSearchText(Text(post, "province"));
-        var holidayType = NormalizeSearchText(FirstText(post, "holiday_type", "holidayType"));
-        var keywords = NormalizeSearchText(FirstText(post, "tour_keywords", "tourKeywords"));
-        var summary = NormalizeSearchText(Text(post, "summary"));
-        var content = NormalizeSearchText(Text(post, "content"));
-        var author = NormalizeSearchText(FirstText(post, "author_name", "authorName"));
-
-        var score = 0;
-        var meaningfulPhrase = string.Join(' ', terms);
-        if (!string.IsNullOrWhiteSpace(meaningfulPhrase))
-        {
-            if (title.Contains(meaningfulPhrase, StringComparison.Ordinal)) score += 140;
-            if (festival.Contains(meaningfulPhrase, StringComparison.Ordinal)) score += 110;
-            if (province.Contains(meaningfulPhrase, StringComparison.Ordinal)) score += 90;
-            if (keywords.Contains(meaningfulPhrase, StringComparison.Ordinal)) score += 75;
-        }
-
-        foreach (var term in terms)
-        {
-            if (ContainsSearchTerm(title, term)) score += 24;
-            if (ContainsSearchTerm(festival, term)) score += 18;
-            if (ContainsSearchTerm(province, term)) score += 14;
-            if (ContainsSearchTerm(keywords, term)) score += 10;
-            if (ContainsSearchTerm(holidayType, term)) score += 8;
-            if (ContainsSearchTerm(summary, term)) score += 5;
-            if (ContainsSearchTerm(content, term)) score += 2;
-            if (ContainsSearchTerm(author, term)) score += 2;
-        }
-
-        if (requestedMonth.HasValue && Int(post, "month") == requestedMonth.Value) score += 60;
-        return score;
-    }
-
     private static int? ExtractRequestedMonth(string? question)
     {
         if (string.IsNullOrWhiteSpace(question)) return null;
@@ -330,45 +279,13 @@ public sealed class AiKnowledgeContextService
         return match.Success && int.TryParse(match.Groups["month"].Value, out var month) ? month : null;
     }
 
-    private static int TourMatchScore(Dictionary<string, object?> tour, IReadOnlyCollection<string> terms)
-    {
-        var name = NormalizeSearchText(FirstText(tour, "name", "title"));
-        var destination = NormalizeSearchText(FirstText(tour, "destination", "province"));
-        var description = NormalizeSearchText(Text(tour, "description"));
-        var itinerary = NormalizeSearchText(Text(tour, "itinerary"));
-
-        var score = 0;
-        var meaningfulPhrase = string.Join(' ', terms);
-        if (!string.IsNullOrWhiteSpace(meaningfulPhrase))
-        {
-            if (name.Contains(meaningfulPhrase, StringComparison.Ordinal)) score += 100;
-            if (destination.Contains(meaningfulPhrase, StringComparison.Ordinal)) score += 70;
-        }
-
-        foreach (var term in terms)
-        {
-            if (ContainsSearchTerm(name, term)) score += 20;
-            if (ContainsSearchTerm(destination, term)) score += 12;
-            if (ContainsSearchTerm(description, term)) score += 4;
-            if (ContainsSearchTerm(itinerary, term)) score += 2;
-        }
-
-        return score;
-    }
-
-    private static bool ContainsSearchTerm(string text, string term)
-    {
-        if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(term)) return false;
-        return $" {text} ".Contains($" {term} ", StringComparison.Ordinal);
-    }
-
     private static IReadOnlyCollection<string> SearchTerms(string normalizedQuestion)
     {
         if (string.IsNullOrWhiteSpace(normalizedQuestion)) return Array.Empty<string>();
 
         var ignored = new HashSet<string>(StringComparer.Ordinal)
         {
-            "tour", "du", "lich", "du lich", "bai", "viet", "tin", "tuc", "noi", "dung",
+            "tour", "du", "lich", "trinh", "du lich", "bai", "viet", "tin", "tuc", "noi", "dung",
             "moi", "nhat", "hien", "thi", "cho", "toi", "minh", "co", "nao", "cac", "danh",
             "sach", "tim", "kiem", "xem", "gia", "gioi", "thieu", "ve", "o", "tai"
         };
@@ -394,21 +311,26 @@ public sealed class AiKnowledgeContextService
         return Regex.Replace(builder.ToString().Normalize(NormalizationForm.FormC), @"\s+", " ").Trim();
     }
 
-    private static string FirstText(Dictionary<string, object?> item, params string[] keys)
+    private static bool IsOwnedSchedule(Dictionary<string, object?> item, string userId)
     {
-        foreach (var key in keys)
-        {
-            var value = Text(item, key);
-            if (!string.IsNullOrWhiteSpace(value)) return value;
-        }
-        return string.Empty;
+        var ownerId = item.TryGetValue("user_id", out var snakeCase)
+            ? snakeCase?.ToString()?.Trim()
+            : item.TryGetValue("userId", out var camelCase)
+                ? camelCase?.ToString()?.Trim()
+                : string.Empty;
+        return string.Equals(ownerId, userId, StringComparison.Ordinal);
     }
 
-    private static Dictionary<string, object?> CompactSchedule(Dictionary<string, object?> item) => Compact(item, new[]
+    private static Dictionary<string, object?> CompactSchedule(RankedDocument item)
     {
-        "id", "name", "title", "destination", "province", "start_date", "end_date", "startDate", "endDate",
-        "days", "items", "activities", "notes", "status", "created_at", "updated_at"
-    });
+        var compact = Compact(item.Document, new[]
+        {
+            "id", "name", "title", "destination", "province", "start_date", "end_date", "startDate", "endDate",
+            "days", "items", "activities", "notes", "status", "created_at", "updated_at"
+        });
+        compact["ai_match_score"] = Math.Round(item.Rank, 4);
+        return compact;
+    }
 
     private static Dictionary<string, object?> Compact(Dictionary<string, object?> source, IEnumerable<string> fields)
     {
@@ -429,12 +351,4 @@ public sealed class AiKnowledgeContextService
         if (!string.IsNullOrWhiteSpace(content)) sections.Add($"{title}:\n{content}");
     }
 
-    private static string Text(Dictionary<string, object?> item, string key) =>
-        item.TryGetValue(key, out var value) ? value?.ToString()?.Trim() ?? string.Empty : string.Empty;
-
-    private static bool Bool(Dictionary<string, object?> item, string key) =>
-        item.TryGetValue(key, out var value) && bool.TryParse(value?.ToString(), out var parsed) && parsed;
-
-    private static int Int(Dictionary<string, object?> item, string key) =>
-        item.TryGetValue(key, out var value) && int.TryParse(value?.ToString(), out var parsed) ? parsed : 0;
 }

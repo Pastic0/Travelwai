@@ -13,7 +13,19 @@ public interface IDataRepository
     Task<Dictionary<string, object?>?> GetByIdAsync(string collection, string documentId, bool includeId = true);
     Task<List<Dictionary<string, object?>>> GetAllAsync(string collection, int? limit = null, bool includeId = true);
     Task<List<Dictionary<string, object?>>> GetAllFieldsAsync(string collection, IReadOnlyCollection<string> fields, int? limit = null, bool includeId = true);
+    Task<List<RankedDocument>> SearchRankedDocumentsAsync(
+        string collection,
+        IReadOnlyCollection<string> fields,
+        string? query,
+        int limit,
+        int? month = null,
+        IReadOnlyCollection<string>? excludedNormalizedStatuses = null,
+        bool excludeDeleted = false,
+        bool includeId = true,
+        string? authorizedUserId = null);
     Task<List<Dictionary<string, object?>>> WhereEqualAsync(string collection, string field, object value, int? limit = null, bool includeId = true);
     Task<List<Dictionary<string, object?>>> WhereEqualPagedAsync(string collection, string field, object value, string orderField, bool descending, int limit, int offset, bool includeId = true);
     Task<List<Dictionary<string, object?>>> WhereArrayContainsAsync(string collection, string field, object value, int? limit = null, bool includeId = true);
 }
+
+public sealed record RankedDocument(Dictionary<string, object?> Document, double Rank);
