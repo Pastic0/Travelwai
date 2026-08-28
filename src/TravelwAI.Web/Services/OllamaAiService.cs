@@ -133,7 +133,7 @@ public sealed class OllamaAiService
 
         systemPrompt +=
             "\n\nQUY TẮC NGUỒN DỮ LIỆU: Ưu tiên dữ liệu nội bộ mới nhất (tour, bài viết, lịch trình) trước. " +
-            "Dùng Wikipedia để đối chiếu kiến thức về ngày lễ/lễ hội, không khẳng định dữ kiện nếu nguồn không đủ. " +
+            "Chỉ sử dụng kiến thức từ Wikipedia về ngày lễ/lễ hội, không khẳng định dữ kiện nếu nguồn không đủ. " +
             "Khi thông tin giữa các nguồn mâu thuẫn, nêu rõ sự khác biệt và ưu tiên dữ liệu nội bộ cho giá tour, trạng thái tour và lịch trình cá nhân. " +
             "Khi người dùng hỏi tour theo tên hoặc địa điểm, ưu tiên bản ghi có ai_match_score cao. " +
             "Khi hỏi tour mới hoặc danh sách tour, ưu tiên bản ghi có ai_is_recent=true và phải nêu đúng tên tour, điểm đến, ngày đi, giá và trạng thái nếu các trường này có dữ liệu. " +
