@@ -3,7 +3,7 @@
 
   const DEFAULT_LIGHT_BACKGROUND_URL = "/main_site_image/travelwai-bg-light.webp";
   const DEFAULT_DARK_BACKGROUND_URL = "/main_site_image/travelwai-bg-dark.webp";
-  const DEFAULT_BACKGROUND_VERSION = "2026-07-26-branding-cache-fix-v3";
+  const DEFAULT_BACKGROUND_VERSION = "Alpha001";
   const CACHE_KEY = "travelwai_site_branding_v5";
   const LEGACY_CACHE_KEYS = [
     "travelwai_site_branding_v4",

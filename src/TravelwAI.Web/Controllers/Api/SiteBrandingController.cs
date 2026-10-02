@@ -12,7 +12,7 @@ public sealed class SiteBrandingController : ControllerBase
     private const string BrandingDocumentId = "branding";
     private const string DefaultLightBackgroundUrl = "/main_site_image/travelwai-bg-light.webp";
     private const string DefaultDarkBackgroundUrl = "/main_site_image/travelwai-bg-dark.webp";
-    private const string DefaultBackgroundVersion = "2026-07-26-branding-cache-fix-v3";
+    private const string DefaultBackgroundVersion = "Alpha001";
     private readonly IDataRepository _repo;
 
     public SiteBrandingController(IDataRepository repo)
