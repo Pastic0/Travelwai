@@ -244,13 +244,118 @@ document.addEventListener("DOMContentLoaded", function () {
       let moved = false;
       let pressedProvince = null;
 
+      // Cuộn thường khi bản đồ ở trạng thái gốc -> trang vẫn cuộn được.
+      // Ctrl/⌘ + lăn (hoặc chụm 2 ngón trên touchpad) luôn zoom bản đồ.
       svg.addEventListener("wheel", function (event) {
+        const canZoom = event.ctrlKey || event.metaKey || svg.classList.contains("is-zoomed");
+        if (!canZoom) return;
         zoomSvgAtPointer(svg, event);
       }, { passive: false });
 
+      // ---- Cảm ứng: 1 ngón kéo, 2 ngón chụm để zoom ----
+      const touchPoints = new Map();
+      let touchPan = null;
+      let pinch = null;
+
+      function touchDistance() {
+        const pts = Array.from(touchPoints.values());
+        return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+      }
+
+      function touchCenter() {
+        const pts = Array.from(touchPoints.values());
+        return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      }
+
+      function beginTouchGesture() {
+        const viewBox = (svg.__landingCurrentViewBox || parseViewBox(svg)).slice();
+        if (touchPoints.size === 2) {
+          const rect = svg.getBoundingClientRect();
+          const c = touchCenter();
+          pinch = {
+            dist: touchDistance(),
+            viewBox: viewBox,
+            px: clamp((c.x - rect.left) / rect.width, 0, 1),
+            py: clamp((c.y - rect.top) / rect.height, 0, 1)
+          };
+          touchPan = null;
+          moved = true;
+        } else if (touchPoints.size === 1) {
+          const pt = Array.from(touchPoints.values())[0];
+          touchPan = { x: pt.x, y: pt.y, viewBox: viewBox };
+          pinch = null;
+          moved = false;
+        } else {
+          touchPan = null;
+          pinch = null;
+        }
+      }
+
+      function handleTouchDown(event) {
+        touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        beginTouchGesture();
+      }
+
+      function handleTouchMove(event) {
+        if (!touchPoints.has(event.pointerId)) return;
+        touchPoints.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        const original = svg.__landingOriginalViewBox || parseViewBox(svg);
+        const rect = svg.getBoundingClientRect();
+
+        if (pinch && touchPoints.size === 2) {
+          const start = pinch.viewBox;
+          const c = touchCenter();
+          const px = clamp((c.x - rect.left) / rect.width, 0, 1);
+          const py = clamp((c.y - rect.top) / rect.height, 0, 1);
+          const nextW = clamp(start[2] * (pinch.dist / touchDistance()), original[2] / 2, original[2]);
+          const nextH = nextW * (original[3] / original[2]);
+          const anchorX = start[0] + pinch.px * start[2];
+          const anchorY = start[1] + pinch.py * start[3];
+          setSvgViewBox(svg, [anchorX - px * nextW, anchorY - py * nextH, nextW, nextH]);
+          moved = true;
+          return;
+        }
+
+        if (touchPan && touchPoints.size === 1) {
+          const dx = event.clientX - touchPan.x;
+          const dy = event.clientY - touchPan.y;
+          if (Math.abs(dx) > 8 || Math.abs(dy) > 8) moved = true;
+          if (!moved) return;
+          const start = touchPan.viewBox;
+          setSvgViewBox(svg, [
+            start[0] - (dx / rect.width) * start[2],
+            start[1] - (dy / rect.height) * start[3],
+            start[2],
+            start[3]
+          ]);
+        }
+      }
+
+      function handleTouchEnd(event) {
+        if (!touchPoints.has(event.pointerId)) return;
+        touchPoints.delete(event.pointerId);
+        beginTouchGesture();
+        window.setTimeout(function () {
+          if (!touchPoints.size) moved = false;
+        }, 80);
+      }
+
+      svg.addEventListener("pointermove", function (event) {
+        if (event.pointerType === "touch") handleTouchMove(event);
+      });
+      svg.addEventListener("pointerup", function (event) {
+        if (event.pointerType === "touch") handleTouchEnd(event);
+      });
+      svg.addEventListener("pointercancel", function (event) {
+        if (event.pointerType === "touch") handleTouchEnd(event);
+      });
+
       svg.addEventListener("pointerdown", function (event) {
+        if (event.pointerType === "touch") {
+          handleTouchDown(event);
+          return;
+        }
         if (event.button !== 0) return;
-        if (event.pointerType === "touch") return;
         isPanning = true;
         moved = false;
         startX = event.clientX;
@@ -320,7 +425,7 @@ document.addEventListener("DOMContentLoaded", function () {
         svg.removeAttribute("height");
         svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
         svg.classList.add("landing-vietnam-svg");
-        svg.setAttribute("aria-label", "Bản đồ Việt Nam, kéo để di chuyển, lăn chuột để phóng to thu nhỏ");
+        svg.setAttribute("aria-label", "Bản đồ Việt Nam, kéo để di chuyển, Ctrl + lăn chuột hoặc chụm hai ngón để phóng to thu nhỏ");
         svg.__landingOriginalViewBox = parseViewBox(svg);
         svg.__landingCurrentViewBox = svg.__landingOriginalViewBox.slice();
 

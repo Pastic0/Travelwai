@@ -582,12 +582,23 @@ body.landing-culture-page .landing-footer-newsletter button {
   }
 }
 
-/* ---- Điện thoại / màn hình cảm ứng: vuốt trên bản đồ vẫn cuộn được trang ---- */
+/* ---- Cảm ứng: chưa zoom -> vuốt dọc cuộn trang, chụm 2 ngón zoom bản đồ;
+        đã zoom -> 1 ngón kéo bản đồ (chụm ra lại để trả về cuộn trang) ---- */
+body.landing-culture-page .culture-board-map,
+body.landing-culture-page .culture-board-map svg,
+body.landing-culture-page .landing-vietnam-svg {
+  touch-action: pan-y !important;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.landing-culture-page .culture-board-map svg.is-zoomed {
+  touch-action: none !important;
+}
+
 @media (pointer: coarse) {
-  body.landing-culture-page .culture-board-map,
-  body.landing-culture-page .culture-board-map svg,
-  body.landing-culture-page .landing-vietnam-svg {
-    touch-action: pan-y pinch-zoom !important;
+  body.landing-culture-page .culture-board-map {
     cursor: default;
   }
 }
