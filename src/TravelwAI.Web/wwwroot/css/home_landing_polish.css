@@ -15,6 +15,8 @@
   --tw-accent: #38bdf8;
   --tw-accent-soft: #bae6fd;
   --tw-radius: 26px;
+  --tw-nav-a: rgba(22, 42, 78, 0.8);
+  --tw-nav-b: rgba(18, 36, 68, 0.66);
   --tw-hero-card-a: rgba(28, 52, 92, 0.58);
   --tw-hero-card-b: rgba(20, 40, 76, 0.44);
   --tw-shadow: 0 22px 54px rgba(0, 0, 0, 0.38);
@@ -22,6 +24,8 @@
 
 /* Ảnh bình minh (theme "dark" của site) sáng hơn nên cần lớp phủ đậm hơn */
 html[data-travelwai-theme="dark"] {
+  --tw-nav-a: rgba(22, 42, 78, 0.84);
+  --tw-nav-b: rgba(18, 36, 68, 0.72);
   --tw-hero-card-a: rgba(28, 52, 92, 0.62);
   --tw-hero-card-b: rgba(20, 40, 76, 0.5);
   --tw-glass: rgba(8, 18, 36, 0.72);
@@ -101,7 +105,7 @@ body .main-hero-actions .detail-btn:nth-child(2):hover {
 
 /* Thanh nav: dải tối mờ để chữ menu luôn đọc được trên ảnh sáng */
 body > header.site-header {
-  background: linear-gradient(180deg, rgba(5, 12, 26, 0.86) 0%, rgba(5, 12, 26, 0.6) 100%) !important;
+  background: linear-gradient(180deg, var(--tw-nav-a) 0%, var(--tw-nav-b) 100%) !important;
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
@@ -207,7 +211,7 @@ html[data-travelwai-theme="dark"] body.landing-culture-page::after {
 
 /* ---- Header ---- */
 body.landing-culture-page .landing-header {
-  background: linear-gradient(180deg, rgba(5, 12, 26, 0.88) 0%, rgba(5, 12, 26, 0.62) 100%) !important;
+  background: linear-gradient(180deg, var(--tw-nav-a) 0%, var(--tw-nav-b) 100%) !important;
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
@@ -284,15 +288,15 @@ body.landing-culture-page .landing-overview-actions {
   margin-top: 28px;
 }
 
-/* Bản đồ nằm trong bảng kính tối: bản đồ trắng luôn nổi trên cả 2 ảnh nền */
+/* Bản đồ không còn card nền phía sau */
 body.landing-culture-page .culture-hero-board {
-  padding: clamp(14px, 2vw, 26px) !important;
-  border: 1px solid var(--tw-glass-line) !important;
-  border-radius: 30px !important;
-  background: linear-gradient(160deg, rgba(7, 16, 32, 0.6) 0%, rgba(7, 16, 32, 0.42) 100%) !important;
-  box-shadow: var(--tw-shadow) !important;
-  -webkit-backdrop-filter: blur(12px) !important;
-  backdrop-filter: blur(12px) !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
 body.landing-culture-page .culture-board-map svg .province {
@@ -301,7 +305,7 @@ body.landing-culture-page .culture-board-map svg .province {
 }
 
 body.landing-culture-page .culture-board-map svg {
-  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.45));
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.6));
 }
 
 body.landing-culture-page .culture-map-loading {
@@ -573,10 +577,6 @@ body.landing-culture-page .landing-footer-newsletter button {
     border-radius: 24px;
   }
 
-  body.landing-culture-page .culture-hero-board {
-    padding: 12px !important;
-  }
-
   body.landing-culture-page .landing-story-copy {
     padding-left: 16px;
   }
@@ -619,4 +619,15 @@ body.landing-culture-page .landing-footer-newsletter button {
   body.landing-culture-page .culture-hero-board {
     min-height: 0 !important;
   }
+}
+
+/* Tên tỉnh trên bản đồ: chữ trắng, viền xanh */
+body.landing-culture-page .landing-map-province-label {
+  fill: #ffffff !important;
+  stroke: #0284c7 !important;
+  stroke-width: 5px !important;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
+  font-weight: 800;
+  filter: none !important;
 }
