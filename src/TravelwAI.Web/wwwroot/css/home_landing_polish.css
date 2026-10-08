@@ -651,3 +651,85 @@ body.landing-culture-page .culture-final h2 {
   color: #ffffff;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
 }
+
+/* ==========================================================================
+   Bản đồ nằm gọn trong card (giống các card khác), phần thừa bị cắt
+   ========================================================================== */
+body.landing-culture-page .culture-hero-board {
+  position: relative;
+  padding: clamp(12px, 1.6vw, 20px) !important;
+  border: 1px solid var(--tw-glass-line) !important;
+  border-radius: 30px !important;
+  background: linear-gradient(135deg, var(--tw-hero-card-a) 0%, var(--tw-hero-card-b) 100%) !important;
+  box-shadow: var(--tw-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.15) !important;
+  backdrop-filter: blur(16px) saturate(1.15) !important;
+  overflow: hidden !important;
+  box-sizing: border-box;
+  min-height: 0 !important;
+}
+
+body.landing-culture-page .culture-hero-board .culture-board-main,
+body.landing-culture-page .culture-hero-board .culture-board-map {
+  height: clamp(380px, 66vh, 720px) !important;
+  border-radius: 22px !important;
+  overflow: hidden !important;
+  clip-path: inset(0 round 22px);
+}
+
+body.landing-culture-page .culture-board-map svg,
+body.landing-culture-page .culture-board-map svg.is-zoomed,
+body.landing-culture-page .landing-vietnam-svg {
+  overflow: hidden !important;
+  max-width: 100%;
+}
+
+body.landing-culture-page .culture-map-loading {
+  display: grid;
+  place-items: center;
+  height: 100%;
+}
+
+/* ==========================================================================
+   Khối "Vào TravelwAI..." + 2 nút: card đồng bộ với các card khác
+   ========================================================================== */
+body.landing-culture-page .culture-final {
+  width: min(1080px, calc(100% - 40px));
+  margin: clamp(36px, 5vw, 64px) auto 42px;
+  padding: clamp(28px, 4vw, 52px) !important;
+  border: 1px solid var(--tw-glass-line) !important;
+  border-radius: 30px !important;
+  background: linear-gradient(135deg, var(--tw-hero-card-a) 0%, var(--tw-hero-card-b) 100%) !important;
+  box-shadow: var(--tw-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.15) !important;
+  backdrop-filter: blur(16px) saturate(1.15) !important;
+  text-align: center;
+  min-height: 0 !important;
+  box-sizing: border-box;
+}
+
+body.landing-culture-page .culture-final h2 {
+  max-width: 880px;
+  margin: 0 auto;
+  text-wrap: balance;
+}
+
+body.landing-culture-page .culture-final-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+@media (max-width: 720px) {
+  body.landing-culture-page .culture-hero-board {
+    border-radius: 24px !important;
+    padding: 10px !important;
+  }
+
+  body.landing-culture-page .culture-final {
+    width: calc(100% - 28px);
+    border-radius: 24px !important;
+  }
+}
