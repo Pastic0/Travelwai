@@ -15,11 +15,15 @@
   --tw-accent: #38bdf8;
   --tw-accent-soft: #bae6fd;
   --tw-radius: 26px;
+  --tw-hero-card-a: rgba(28, 52, 92, 0.58);
+  --tw-hero-card-b: rgba(20, 40, 76, 0.44);
   --tw-shadow: 0 22px 54px rgba(0, 0, 0, 0.38);
 }
 
 /* Ảnh bình minh (theme "dark" của site) sáng hơn nên cần lớp phủ đậm hơn */
 html[data-travelwai-theme="dark"] {
+  --tw-hero-card-a: rgba(28, 52, 92, 0.62);
+  --tw-hero-card-b: rgba(20, 40, 76, 0.5);
   --tw-glass: rgba(8, 18, 36, 0.72);
   --tw-glass-strong: rgba(8, 18, 36, 0.84);
 }
@@ -119,8 +123,8 @@ body .content .hero-text {
   border: 1px solid var(--tw-glass-line);
   border-radius: 30px;
   background:
-    linear-gradient(135deg, var(--tw-glass-strong) 0%, var(--tw-glass) 100%);
-  box-shadow: var(--tw-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    linear-gradient(135deg, var(--tw-hero-card-a) 0%, var(--tw-hero-card-b) 100%);
+  box-shadow: var(--tw-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.18);
   -webkit-backdrop-filter: blur(16px) saturate(1.15);
   backdrop-filter: blur(16px) saturate(1.15);
 }
@@ -138,7 +142,7 @@ body .content .hero-text::before {
 body .hero-text h1,
 body .hero-text h2 {
   color: var(--tw-text);
-  font-size: clamp(2.5rem, 5.6vw, 4.6rem);
+  font-size: clamp(1.9rem, 3.8vw, 3rem);
   line-height: 1.08 !important;
   text-shadow: 0 3px 14px rgba(0, 0, 0, 0.55);
 }
@@ -242,8 +246,8 @@ body.landing-culture-page .culture-hero-copy {
   padding: clamp(26px, 3.4vw, 46px);
   border: 1px solid var(--tw-glass-line);
   border-radius: 30px;
-  background: linear-gradient(135deg, var(--tw-glass-strong) 0%, var(--tw-glass) 100%);
-  box-shadow: var(--tw-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, var(--tw-hero-card-a) 0%, var(--tw-hero-card-b) 100%);
+  box-shadow: var(--tw-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.18);
   -webkit-backdrop-filter: blur(16px) saturate(1.15);
   backdrop-filter: blur(16px) saturate(1.15);
 }
@@ -593,5 +597,26 @@ body.landing-culture-page .landing-footer-newsletter button {
   body.landing-culture-page .landing-feature-grid article,
   body.landing-culture-page .landing-method-list article {
     transition: none;
+  }
+}
+
+/* ---- Điện thoại / màn hình cảm ứng: vuốt trên bản đồ vẫn cuộn được trang ---- */
+@media (pointer: coarse) {
+  body.landing-culture-page .culture-board-map,
+  body.landing-culture-page .culture-board-map svg,
+  body.landing-culture-page .landing-vietnam-svg {
+    touch-action: pan-y pinch-zoom !important;
+    cursor: default;
+  }
+}
+
+@media (max-width: 760px) {
+  body.landing-culture-page .culture-board-main,
+  body.landing-culture-page .culture-board-map {
+    height: clamp(300px, 55vh, 460px) !important;
+  }
+
+  body.landing-culture-page .culture-hero-board {
+    min-height: 0 !important;
   }
 }

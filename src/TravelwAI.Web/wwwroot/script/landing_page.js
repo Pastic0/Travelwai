@@ -250,6 +250,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       svg.addEventListener("pointerdown", function (event) {
         if (event.button !== 0) return;
+        if (event.pointerType === "touch") return;
         isPanning = true;
         moved = false;
         startX = event.clientX;
