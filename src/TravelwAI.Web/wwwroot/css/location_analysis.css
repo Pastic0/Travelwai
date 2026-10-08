@@ -641,56 +641,6 @@
   width: 100%;
 }
 
-[data-travelwai-theme="light"] .location-analysis-page,
-.location-analysis-page.travelwai-theme-light {
-  --analysis-card: rgba(255, 255, 255, 0.94);
-  --analysis-soft: #f8fafc;
-  --analysis-text: #172033;
-  --analysis-muted: #64748b;
-  --analysis-border: rgba(203, 213, 225, 0.85);
-}
-
-[data-travelwai-theme="light"] .location-analysis-hero,
-.location-analysis-page.travelwai-theme-light .location-analysis-hero,
-[data-travelwai-theme="light"] .analysis-panel,
-.location-analysis-page.travelwai-theme-light .analysis-panel {
-  color: #172033;
-  background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(203, 213, 225, 0.85);
-}
-
-[data-travelwai-theme="light"] .location-analysis-hero p,
-.location-analysis-page.travelwai-theme-light .location-analysis-hero p,
-[data-travelwai-theme="light"] .location-analysis-hero-badge small,
-.location-analysis-page.travelwai-theme-light .location-analysis-hero-badge small {
-  color: #64748b;
-}
-
-[data-travelwai-theme="light"] .location-analysis-hero-badge,
-.location-analysis-page.travelwai-theme-light .location-analysis-hero-badge {
-  border-color: rgba(37, 99, 235, 0.16);
-  background: rgba(37, 99, 235, 0.055);
-}
-
-[data-travelwai-theme="light"] .scope-chip,
-.location-analysis-page.travelwai-theme-light .scope-chip,
-[data-travelwai-theme="light"] .result-location-line,
-.location-analysis-page.travelwai-theme-light .result-location-line {
-  color: #334155;
-}
-
-[data-travelwai-theme="light"] .secondary-button,
-.location-analysis-page.travelwai-theme-light .secondary-button {
-  color: #2563eb;
-  background: #fff;
-}
-
-[data-travelwai-theme="light"] .result-caution-card,
-.location-analysis-page.travelwai-theme-light .result-caution-card {
-  color: #9a3412;
-  background: #fff7ed;
-}
-
 @media (max-width: 1020px) {
   .location-analysis-workspace {
     grid-template-columns: 1fr;
@@ -963,22 +913,6 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-[data-travelwai-theme="light"] .analysis-stop-button,
-.location-analysis-page.travelwai-theme-light .analysis-stop-button {
-  color: #1d4ed8;
-  border-color: rgba(37, 99, 235, 0.24);
-  background: rgba(37, 99, 235, 0.08);
-}
-
-[data-travelwai-theme="light"] .analysis-stop-button:hover,
-[data-travelwai-theme="light"] .analysis-stop-button:focus-visible,
-.location-analysis-page.travelwai-theme-light .analysis-stop-button:hover,
-.location-analysis-page.travelwai-theme-light .analysis-stop-button:focus-visible {
-  color: #fff;
-  border-color: rgba(220, 38, 38, 0.66);
-  background: #dc2626;
 }
 
 @media (max-width: 520px) {

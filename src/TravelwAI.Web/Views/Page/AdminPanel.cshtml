@@ -408,6 +408,12 @@
   <div class="form-modal" id="systemSettingsModal">
     <div class="form-card system-settings-card">
       <h2 class="system-settings-icon-title" title="Cấu hình hệ thống" aria-label="Cấu hình hệ thống"><span data-interface-icon="settings"></span></h2>
+      <div class="system-settings-section-title">Ảnh nền website</div>
+      <div class="modal-actions">
+        <button class="btn-soft" type="button" onclick="chooseSiteBackground('light')">Đổi nền sáng</button>
+        <button class="btn-soft" type="button" onclick="chooseSiteBackground('dark')">Đổi nền tối</button>
+      </div>
+      <input id="siteBackgroundFile" type="file" accept="image/jpeg,image/png,image/webp" hidden />
       <div class="system-settings-section-title">Cấu hình từng cấp</div>
       <form id="salesLevelSettingsForm">
         <div class="table-wrap sales-level-settings-wrap">
