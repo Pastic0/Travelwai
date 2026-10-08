@@ -744,3 +744,37 @@ body.landing-culture-page .culture-final-actions {
     border-radius: 24px !important;
   }
 }
+
+/* ==========================================================================
+   Điện thoại: sửa bản đồ bị cắt mất phần dưới
+   Nguyên nhân: main_site_style.css (<=720px) ép card .culture-hero-board cao cố định
+   (min(72vw, 420px), tức ~280-300px) trong khi bản đồ bên trong lại cao
+   clamp(380px, 66vh, 720px) => card có overflow:hidden nên cắt mất đáy bản đồ.
+   Cách sửa: card tự co theo bản đồ (height:auto) và bản đồ có chiều cao riêng,
+   dùng dvh để không bị thanh địa chỉ của trình duyệt di động làm lệch.
+   ========================================================================== */
+@media (max-width: 760px) {
+  body.landing-culture-page .culture-hero-board {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding: 10px !important;
+    overflow: hidden !important;
+  }
+
+  body.landing-culture-page .culture-hero-board .culture-board-main,
+  body.landing-culture-page .culture-hero-board .culture-board-map {
+    height: clamp(320px, 62vh, 520px) !important;
+    height: clamp(320px, 62dvh, 520px) !important;
+    min-height: 320px !important;
+    max-height: none !important;
+  }
+
+  body.landing-culture-page .culture-board-map svg,
+  body.landing-culture-page .culture-board-map svg.is-zoomed,
+  body.landing-culture-page .landing-vietnam-svg {
+    height: 100% !important;
+    max-height: 100% !important;
+  }
+}
