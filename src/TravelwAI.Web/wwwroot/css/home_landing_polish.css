@@ -624,10 +624,51 @@ body.landing-culture-page .landing-footer-newsletter button {
 /* Tên tỉnh trên bản đồ: chữ trắng, viền xanh */
 body.landing-culture-page .landing-map-province-label {
   fill: #ffffff !important;
-  stroke: #0284c7 !important;
+  stroke: #000000 !important;
   stroke-width: 5px !important;
   stroke-linejoin: round;
   paint-order: stroke fill;
   font-weight: 800;
   filter: none !important;
+}
+
+body.landing-culture-page .landing-feature-section,
+body.landing-culture-page .landing-method-section,
+body.landing-culture-page .landing-faq-section {
+  margin-block: clamp(36px, 5vw, 64px);
+  padding: clamp(28px, 4vw, 52px) !important;
+  border: 1px solid var(--tw-glass-line) !important;
+  border-radius: 30px;
+  background: linear-gradient(135deg, var(--tw-glass-strong) 0%, var(--tw-glass) 100%);
+  box-shadow: var(--tw-shadow);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+body.landing-culture-page .landing-feature-section .landing-section-title-row h2,
+body.landing-culture-page .landing-method-section .landing-section-title-row h2,
+body.landing-culture-page .landing-faq-section .landing-faq-heading h2 {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  text-wrap: balance;
+}
+
+body.landing-culture-page .culture-final h2 {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  color: #ffffff;
+  -webkit-text-stroke: 8px #000000;
+  paint-order: stroke fill;
+  stroke-linejoin: round;
+  text-shadow: none;
 }
