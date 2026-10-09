@@ -345,6 +345,8 @@ html:not(.has-site-logo) .twai-floating-chatbot-component .admin-support-message
     radial-gradient(circle at 100% 0%, rgba(22, 135, 232, 0.12), transparent 36%),
     linear-gradient(180deg, #f7fbff 0%, #eaf5ff 100%) !important;
   overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
   scrollbar-color: #9fc8ea transparent;
   scrollbar-width: thin;
 }
@@ -746,16 +748,16 @@ html[data-travelwai-theme="dark"] .twai-floating-chatbot-component * {
   .twai-floating-chatbot-component .twai-chatbot-launcher {
     right: max(10px, env(safe-area-inset-right)) !important;
     bottom: max(10px, env(safe-area-inset-bottom)) !important;
-    width: 54px !important;
-    height: 54px !important;
+    width: 42px !important;
+    height: 42px !important;
   }
 
   .twai-floating-chatbot-component .twai-chatbot-view {
     right: max(9px, env(safe-area-inset-right)) !important;
-    bottom: max(72px, calc(env(safe-area-inset-bottom) + 66px)) !important;
+    bottom: max(60px, calc(env(safe-area-inset-bottom) + 54px)) !important;
     width: calc(100vw - 18px) !important;
     height: min(76dvh, 640px) !important;
-    min-height: 390px;
+    min-height: min(390px, calc(var(--twai-vv-h, 100dvh) - 80px));
     border-radius: 20px !important;
   }
 
@@ -1153,3 +1155,33 @@ body.waigo-style-store-open { overflow: hidden; }
 }
 
 /* chatbot-logo-color-v3 */
+
+
+/* ---- Touch / keyboard behaviour (phones) ---------------------------------
+   Only the message list pans vertically; touches elsewhere in the panel must
+   not scroll the page behind it. The header is a drag handle (needs none). */
+.twai-floating-chatbot-component .twai-chatbot-view,
+.twai-floating-chatbot-component .twai-chatbot-header,
+.twai-floating-chatbot-component .twai-chatbot-body,
+.twai-floating-chatbot-component .twai-chatbot-input-area {
+  touch-action: none;
+}
+
+.twai-floating-chatbot-component .twai-chatbot-messages {
+  touch-action: pan-y;
+}
+
+.twai-floating-chatbot-component .twai-chatbot-suggestions,
+.twai-floating-chatbot-component .twai-chatbot-image-preview {
+  touch-action: pan-x pan-y;
+}
+
+/* Keep the panel above the on-screen keyboard (set by visualViewport in JS). */
+@media (max-width: 640px) {
+  html.twai-kb-open .twai-floating-chatbot-component .twai-chatbot-view {
+    bottom: calc(var(--twai-kb-inset, 0px) + 8px) !important;
+    height: calc(var(--twai-vv-h, 100dvh) - 16px) !important;
+    max-height: calc(var(--twai-vv-h, 100dvh) - 16px) !important;
+    min-height: 0 !important;
+  }
+}

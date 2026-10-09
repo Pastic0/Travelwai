@@ -286,7 +286,7 @@ function applyAiJobSnapshot(jobId, result) {
   clearActiveAiJobId(jobId);
   setAiJobRunning(false);
   const input = document.getElementById("messageInput");
-  if (isAiConversation()) input?.focus();
+  if (isAiConversation()) focusMessageInput();
   return true;
 }
 
@@ -376,7 +376,7 @@ async function cancelActiveAiJob() {
     setAiJobRunning(false);
     if (typeof window.TravelwAIToast === "function") window.TravelwAIToast("Đã dừng AI.", "success");
     else showError("Đã dừng AI.");
-    document.getElementById("messageInput")?.focus();
+    focusMessageInput();
   } catch (error) {
     isCancellingAiJob = false;
     aiCancelRequested = false;
@@ -1358,7 +1358,7 @@ async function selectConversation(conversation) {
     currentMessages = loadAiMessages();
     showConversationInterface();
     updateConversationSelection();
-    renderMessages();
+    renderMessages(true);
     return;
   }
   if (currentConversation?.id === conversation.id && websocket) {
@@ -1741,7 +1741,7 @@ async function loadMessages(conversationId, forceRefresh = false) {
       const cachedMessages = readClientCache(cacheName);
       if (Array.isArray(cachedMessages)) {
         currentMessages = cachedMessages;
-        renderMessages();
+        renderMessages(true);
         return currentMessages;
       }
     }
@@ -1759,7 +1759,7 @@ async function loadMessages(conversationId, forceRefresh = false) {
       const data = await response.json();
       currentMessages = data.data || [];
       saveClientCache(cacheName, currentMessages, MESSAGE_CACHE_TTL_MS);
-      renderMessages();
+      renderMessages(true);
       return currentMessages;
     } else {
       throw new Error(`Không thể tải tin nhắn: ${response.statusText}`);
@@ -1774,14 +1774,79 @@ async function loadMessages(conversationId, forceRefresh = false) {
   }
 }
 
-function renderMessages() {
+// --- Scroll-safe rendering ---------------------------------------------------
+// AI replies stream in as many renderMessages() calls. Rebuilding the list and
+// always jumping to the bottom made swipe-scrolling on phones fail.
+let messageListInteracting = false;
+let messageListReleaseTimer = null;
+let messageRenderPending = false;
+
+function isMessageListNearBottom() {
+  const container = document.getElementById("messagesContainer");
+  if (!container) return true;
+  return container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+}
+
+function setMessageListInteracting(active, releaseDelay = 0) {
+  clearTimeout(messageListReleaseTimer);
+  if (active) {
+    messageListInteracting = true;
+    return;
+  }
+  messageListReleaseTimer = window.setTimeout(() => {
+    messageListInteracting = false;
+    if (messageRenderPending) {
+      messageRenderPending = false;
+      renderMessages();
+    }
+  }, releaseDelay);
+}
+
+function bindMessageListScrollGuard() {
+  const container = document.getElementById("messagesContainer");
+  if (!container || container.dataset.scrollGuardBound === "true") return;
+  container.dataset.scrollGuardBound = "true";
+  // Leave the DOM alone while a finger is down or momentum scrolling is running.
+  container.addEventListener("touchstart", () => setMessageListInteracting(true), { passive: true });
+  container.addEventListener("touchend", () => setMessageListInteracting(false, 700), { passive: true });
+  container.addEventListener("touchcancel", () => setMessageListInteracting(false, 700), { passive: true });
+  container.addEventListener("wheel", () => { setMessageListInteracting(true); setMessageListInteracting(false, 250); }, { passive: true });
+}
+
+function shouldAutoFocusMessageInput() {
+  try { return !window.matchMedia("(pointer: coarse), (max-width: 640px)").matches; }
+  catch (_) { return true; }
+}
+
+function focusMessageInput() {
+  if (!shouldAutoFocusMessageInput()) return;
+  document.getElementById("messageInput")?.focus();
+}
+
+// forceBottom: true when opening/switching a conversation (always start at newest).
+function renderMessages(forceBottom = false) {
   const messageList = document.getElementById("messagesList");
-  messageList.innerHTML = "";
+  if (!messageList) return;
+  bindMessageListScrollGuard();
+
+  if (messageListInteracting && !forceBottom) {
+    messageRenderPending = true;
+    return;
+  }
+
+  const container = document.getElementById("messagesContainer");
+  const previousTop = container ? container.scrollTop : 0;
+  const stickToBottom = forceBottom === true || !messageList.childElementCount || isMessageListNearBottom();
+
+  const fragment = document.createDocumentFragment();
   currentMessages.forEach((message) => {
-    const messageElement = createMessageElement(message);
-    messageList.appendChild(messageElement);
+    fragment.appendChild(createMessageElement(message));
   });
-  scrollToBottom();
+  messageList.replaceChildren(fragment);
+
+  if (stickToBottom) scrollToBottom();
+  else if (container) container.scrollTop = previousTop;
+
   window.TravelwAITranslation?.refreshConversationControl?.(
     document.getElementById("translateConversationBtn"),
     messageList
@@ -1793,9 +1858,11 @@ function appendMessage(message) {
     return;
   }
   const messageList = document.getElementById("messagesList");
+  const wasNearBottom = isMessageListNearBottom();
   const messageElement = createMessageElement(message);
   messageList.appendChild(messageElement);
-  scrollToBottom();
+  const ownMessage = String(message?.sender_id || "") === String(getCurrentUserId() || "");
+  if (ownMessage || wasNearBottom) scrollToBottom();
   window.TravelwAITranslation?.refreshConversationControl?.(
     document.getElementById("translateConversationBtn"),
     messageElement
@@ -1805,11 +1872,12 @@ function appendMessage(message) {
 function appendStatusMessage(statusText) {
   const messageList = document.getElementById("messagesList");
   if (!messageList || !statusText) return;
+  const wasNearBottom = isMessageListNearBottom();
   const statusElement = document.createElement("div");
   statusElement.className = "status-message";
   statusElement.textContent = statusText;
   messageList.appendChild(statusElement);
-  scrollToBottom();
+  if (wasNearBottom) scrollToBottom();
 }
 
 function handlePresenceStatus(message) {

@@ -314,12 +314,79 @@
     return row;
   }
 
+  function shouldAutoFocusChatInput() {
+    try { return !window.matchMedia("(pointer: coarse), (max-width: 640px)").matches; }
+    catch (_) { return true; }
+  }
+
+  function focusChatInput() {
+    if (!shouldAutoFocusChatInput()) return;
+    document.getElementById("supportAdminInput")?.focus();
+  }
+
+  // --- Scroll-safe rendering -------------------------------------------------
+  // Streaming AI replies call renderMessages() many times. Rebuilding the list and
+  // forcing scrollTop to the bottom each time made swipe-scrolling on phones fail.
+  let listInteracting = false;
+  let listReleaseTimer = null;
+  let renderFrame = 0;
+  let forceNextBottom = false;
+
+  function isNearBottom(list) {
+    return list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+  }
+
+  function setListInteracting(active, releaseDelay = 0) {
+    clearTimeout(listReleaseTimer);
+    if (active) {
+      listInteracting = true;
+      return;
+    }
+    listReleaseTimer = window.setTimeout(() => {
+      listInteracting = false;
+      if (renderFrame === -1) {
+        renderFrame = 0;
+        renderMessages();
+      }
+    }, releaseDelay);
+  }
+
+  function bindMessageListScrollGuard() {
+    const list = document.getElementById("supportAdminMessages");
+    if (!list || list.dataset.scrollGuardBound === "true") return;
+    list.dataset.scrollGuardBound = "true";
+    // Keep the list DOM untouched while a finger is down or momentum scroll is running.
+    list.addEventListener("touchstart", () => setListInteracting(true), { passive: true });
+    list.addEventListener("touchend", () => setListInteracting(false, 700), { passive: true });
+    list.addEventListener("touchcancel", () => setListInteracting(false, 700), { passive: true });
+    list.addEventListener("wheel", () => { setListInteracting(true); setListInteracting(false, 250); }, { passive: true });
+  }
+
   function renderMessages() {
+    // Coalesce bursts of calls into one render per animation frame.
+    if (renderFrame > 0) return;
+    if (listInteracting) {
+      renderFrame = -1; // render pending until the user releases the list
+      return;
+    }
+    renderFrame = window.requestAnimationFrame(performRenderMessages);
+  }
+
+  function performRenderMessages() {
+    renderFrame = 0;
     const list = document.getElementById("supportAdminMessages");
     if (!list) return;
-    list.innerHTML = "";
-    getVisibleMessages().forEach((message) => list.appendChild(createMessageElement(message)));
-    list.scrollTop = list.scrollHeight;
+    if (listInteracting) {
+      renderFrame = -1;
+      return;
+    }
+    const previousTop = list.scrollTop;
+    const stickToBottom = forceNextBottom || !list.childElementCount || isNearBottom(list);
+    forceNextBottom = false;
+    const fragment = document.createDocumentFragment();
+    getVisibleMessages().forEach((message) => fragment.appendChild(createMessageElement(message)));
+    list.replaceChildren(fragment);
+    list.scrollTop = stickToBottom ? list.scrollHeight : previousTop;
     window.TravelwAITranslation?.refreshConversationControl?.(
       document.getElementById("supportTranslateConversationButton"),
       list
@@ -329,9 +396,11 @@
   function appendMessage(message) {
     const list = document.getElementById("supportAdminMessages");
     if (!list) return;
+    const wasNearBottom = isNearBottom(list);
     const messageElement = createMessageElement(message);
     list.appendChild(messageElement);
-    list.scrollTop = list.scrollHeight;
+    // Always follow the user's own message; follow replies only if already at the bottom.
+    if (!isAiSender(message) || wasNearBottom) list.scrollTop = list.scrollHeight;
     window.TravelwAITranslation?.refreshConversationControl?.(
       document.getElementById("supportTranslateConversationButton"),
       messageElement
@@ -445,7 +514,7 @@
     clearActiveAiJobId(jobId);
     setSendingState(false);
     renderMessages();
-    document.getElementById("supportAdminInput")?.focus();
+    focusChatInput();
     return true;
   }
 
@@ -536,7 +605,7 @@
       isCancellingAiJob = false;
       setSendingState(false);
       setSupportStatus("Đã dừng AI.", "success");
-      document.getElementById("supportAdminInput")?.focus();
+      focusChatInput();
     } catch (error) {
       isCancellingAiJob = false;
       aiCancelRequested = false;
@@ -1307,11 +1376,12 @@
     panel.classList.add("open");
     restorePanelPosition(panel);
     panel.setAttribute("aria-hidden", "false");
-    document.getElementById("supportAdminInput")?.focus();
+    focusChatInput();
 
     await initializePanelContent();
+    forceNextBottom = true;
     renderMessages();
-    document.getElementById("supportAdminInput")?.focus();
+    focusChatInput();
   }
 
 
@@ -1509,8 +1579,26 @@
     });
   }
 
+  function bindViewportInsets() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    const update = () => {
+      const inset = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      const keyboardOpen = inset > 80;
+      root.style.setProperty("--twai-kb-inset", keyboardOpen ? `${inset}px` : "0px");
+      root.style.setProperty("--twai-vv-h", `${Math.round(vv.height)}px`);
+      root.classList.toggle("twai-kb-open", keyboardOpen);
+    };
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    update();
+  }
+
   function bindEvents() {
     bindPanelDragging();
+    bindMessageListScrollGuard();
+    bindViewportInsets();
 
     document.querySelectorAll('[data-contact-panel-trigger]').forEach((trigger) => {
       trigger.addEventListener("click", openPanel);

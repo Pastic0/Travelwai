@@ -3727,3 +3727,11 @@ html:not(.has-site-logo) body.messaging-page .conversation-header .user-avatar.w
   box-shadow: none !important;
 }
 /* messaging-chatbot-logo-color-v3 */
+
+
+/* Phones: the message list pans vertically and never chains to the page behind. */
+.messages-container {
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
