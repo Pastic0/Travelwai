@@ -1024,3 +1024,36 @@ body.landing-culture-page .landing-feature-grid b::after {
     margin-inline: auto;
   }
 }
+
+/* ---- Thanh gạch dưới: trả về kiểu cũ (xanh đặc bo tròn), giữ độ dài/vị trí hiện tại ----
+   Home: thanh chuyển xuống dưới dòng "theo cách riêng của bạn" ---- */
+body .content .hero-text h1::after {
+  content: none !important;
+  display: none !important;
+}
+
+body .content .hero-text h2::after,
+body.landing-culture-page .culture-hero-copy h1::after,
+body.landing-culture-page .landing-section-title-row h2::after,
+body.landing-culture-page .landing-faq-heading h2::after,
+body.landing-culture-page .culture-final h2::after,
+body.landing-culture-page .landing-feature-heading::after,
+body.landing-culture-page .landing-feature-grid b::after {
+  content: "";
+  display: block;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--tw-accent), #a5f3fc);
+  box-shadow: none;
+  animation: none;
+  transform: none;
+}
+
+body .content .hero-text h2::after {
+  width: min(100%, clamp(120px, 14vw, 190px));
+  margin: 18px 0 6px;
+}
+
+body.landing-culture-page .landing-feature-grid b::after {
+  height: 4px;
+}
