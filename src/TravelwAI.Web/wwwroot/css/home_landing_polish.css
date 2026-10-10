@@ -1184,11 +1184,10 @@ body.landing-culture-page #overview .culture-hero-board .culture-board-map {
    Điều hướng NỬA VÒNG TRÒN bên phải (không card, chỉ nét cung + chữ)
    - Tâm vòng tròn nằm ở mép phải màn hình, chỉ lộ nửa bên trái
    - Chữ mục hiện tại nằm giữa cung, nét cung chừa khoảng hở cho chữ
-   - Vòng tick xoay thuận chiều kim đồng hồ khi chuyển mục
+   - Chuyển mục: các chấm trượt mượt dọc cung theo chiều kim đồng hồ
    ========================================================================== */
 body.landing-culture-page aside.landing-section-rail {
   --tw-rail-r: 72px;
-  --tw-rail-rot: 0deg;
   --tw-rail-gap: 15px; /* nửa chiều cao khoảng hở cho chữ */
   position: fixed !important;
   right: 0 !important;
@@ -1202,9 +1201,8 @@ body.landing-culture-page aside.landing-section-rail {
   z-index: 1100;
 }
 
-/* nét cung ngoài: chỉ có viền, bị cắt một đoạn ở giữa để chừa chỗ cho chữ */
-body.landing-culture-page aside.landing-section-rail::before,
-body.landing-culture-page aside.landing-section-rail::after {
+/* nét cung: chỉ có viền, bị cắt một đoạn ở giữa để chừa chỗ cho chữ */
+body.landing-culture-page aside.landing-section-rail::before {
   content: "";
   position: absolute;
   pointer-events: none;
@@ -1231,34 +1229,6 @@ body.landing-culture-page aside.landing-section-rail::before {
     #000 calc(50% + var(--tw-rail-gap)), #000 100%);
 }
 
-/* vòng tick bên trong: xoay khi chuyển mục */
-body.landing-culture-page aside.landing-section-rail::after {
-  left: calc(var(--tw-rail-r) * -1 + 8px);
-  top: calc(var(--tw-rail-r) * -1 + 8px);
-  width: calc(var(--tw-rail-r) * 2 - 16px);
-  height: calc(var(--tw-rail-r) * 2 - 16px);
-  background: repeating-conic-gradient(from 0deg,
-    rgba(186, 230, 253, 0.85) 0deg 1.4deg, transparent 1.4deg 7deg);
-  -webkit-mask-image:
-    radial-gradient(circle, transparent calc(50% - 6px), #000 calc(50% - 6px), #000 50%, transparent 50%),
-    linear-gradient(to bottom,
-      #000 0, #000 calc(50% - var(--tw-rail-gap)),
-      transparent calc(50% - var(--tw-rail-gap)), transparent calc(50% + var(--tw-rail-gap)),
-      #000 calc(50% + var(--tw-rail-gap)), #000 100%);
-  mask-image:
-    radial-gradient(circle, transparent calc(50% - 6px), #000 calc(50% - 6px), #000 50%, transparent 50%),
-    linear-gradient(to bottom,
-      #000 0, #000 calc(50% - var(--tw-rail-gap)),
-      transparent calc(50% - var(--tw-rail-gap)), transparent calc(50% + var(--tw-rail-gap)),
-      #000 calc(50% + var(--tw-rail-gap)), #000 100%);
-  transform: rotate(var(--tw-rail-rot));
-  opacity: 0.8;
-}
-
-body.landing-culture-page aside.landing-section-rail.is-ready::after {
-  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
 /* chấm của các mục, trượt dọc theo cung */
 body.landing-culture-page aside.landing-section-rail a {
   position: absolute !important;
@@ -1272,7 +1242,7 @@ body.landing-culture-page aside.landing-section-rail a {
 }
 
 body.landing-culture-page aside.landing-section-rail.is-ready a {
-  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.45s ease;
+  transition: transform 1.1s cubic-bezier(0.65, 0, 0.25, 1), opacity 0.6s ease;
 }
 
 body.landing-culture-page aside.landing-section-rail a.is-visible {
@@ -1303,7 +1273,7 @@ body.landing-culture-page aside.landing-section-rail a.is-current::after {
   box-shadow: none !important;
 }
 
-/* chữ: không nền, căn giữa đúng điểm trên cung; chỉ mục hiện tại có chữ */
+/* chữ: không nền, căn giữa đúng điểm trên cung; chỉ mục hiện tại có chữ, màu xanh sáng */
 body.landing-culture-page aside.landing-section-rail a span {
   position: absolute !important;
   left: 50% !important;
@@ -1313,7 +1283,7 @@ body.landing-culture-page aside.landing-section-rail a span {
   padding: 0 !important;
   background: none !important;
   border-radius: 0 !important;
-  color: #fff !important;
+  color: #ffffff !important;
   font-size: 11.5px !important;
   font-weight: 800;
   letter-spacing: 0.14em !important;
@@ -1322,12 +1292,18 @@ body.landing-culture-page aside.landing-section-rail a span {
   white-space: nowrap;
   opacity: 0 !important;
   pointer-events: none;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.35s ease, color 0.6s ease, text-shadow 0.6s ease;
 }
 
 body.landing-culture-page aside.landing-section-rail a.is-current span {
   opacity: 1 !important;
-  transition: opacity 0.4s ease 0.35s;
+  color: #7dd3fc !important;
+  text-shadow:
+    0 0 6px rgba(56, 189, 248, 0.95),
+    0 0 16px rgba(56, 189, 248, 0.7),
+    0 0 30px rgba(56, 189, 248, 0.45),
+    0 1px 3px rgba(0, 0, 0, 0.75) !important;
+  transition: opacity 0.7s ease 0.45s, color 0.7s ease 0.45s, text-shadow 0.9s ease 0.45s;
 }
 
 @media (max-height: 560px) {
@@ -1339,6 +1315,6 @@ body.landing-culture-page aside.landing-section-rail a.is-current span {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.landing-culture-page aside.landing-section-rail.is-ready::after,
-  body.landing-culture-page aside.landing-section-rail.is-ready a { transition: none; }
+  body.landing-culture-page aside.landing-section-rail.is-ready a,
+  body.landing-culture-page aside.landing-section-rail a span { transition: none !important; }
 }

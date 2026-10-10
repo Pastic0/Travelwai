@@ -1,7 +1,7 @@
 /* Điều hướng nửa vòng tròn (Landing)
    - Chữ của mục hiện tại nằm giữa cung tròn (nét cung chừa khoảng hở cho chữ)
    - Hiện tối đa 3 mục: mục hiện tại + mục kế bên (đầu/cuối danh sách thì lấy thêm mục thứ 2 cùng phía)
-   - Chuyển sang mục tiếp theo: vòng tròn xoay THUẬN chiều kim đồng hồ
+   - Chuyển sang mục tiếp theo: các chấm trượt mượt dọc cung THUẬN chiều kim đồng hồ
    - Trạng thái mục đang xem lấy từ class .active do landing_page.js gắn */
 (function () {
   "use strict";
@@ -31,9 +31,6 @@
     const key = active + ":" + R;
     if (key === lastKey) return;
     lastKey = key;
-
-    // vòng tròn xoay thuận chiều kim đồng hồ mỗi khi sang mục kế tiếp
-    rail.style.setProperty("--tw-rail-rot", (active * STEP) + "deg");
 
     links.forEach(function (link, i) {
       const d = i - active;
