@@ -19,10 +19,25 @@ document.addEventListener("DOMContentLoaded", function () {
     return header ? header.offsetHeight : 0;
   }
 
+  function syncLandingHeaderHeight() {
+    document.documentElement.style.setProperty("--landing-header-h", getLandingHeaderHeight() + "px");
+  }
+  syncLandingHeaderHeight();
+  window.addEventListener("resize", syncLandingHeaderHeight, { passive: true });
+
+  // Cuộn sao cho card của phần được chọn nằm giữa vùng nhìn thấy (dưới header), cả dọc lẫn ngang
   function scrollTargetToSection(target) {
-    const targetTop = target.getBoundingClientRect().top + window.scrollY;
-    const nextTop = Math.max(0, targetTop - getLandingHeaderHeight());
-    window.scrollTo({ top: nextTop, behavior: "smooth" });
+    const header = getLandingHeaderHeight();
+    const rect = target.getBoundingClientRect();
+    const visibleHeight = window.innerHeight - header;
+    const targetCenter = rect.top + window.scrollY + rect.height / 2;
+    let nextTop = targetCenter - header - visibleHeight / 2;
+    // card cao hơn vùng nhìn thấy thì đưa đầu card lên ngay dưới header
+    if (rect.height >= visibleHeight) nextTop = rect.top + window.scrollY - header;
+    const maxTop = document.documentElement.scrollHeight - window.innerHeight;
+    nextTop = Math.min(Math.max(0, nextTop), Math.max(0, maxTop));
+    const left = rect.left + window.scrollX + rect.width / 2 - window.innerWidth / 2;
+    window.scrollTo({ top: nextTop, left: Math.max(0, left), behavior: "smooth" });
   }
 
   function getSectionDirection(target) {

@@ -1338,3 +1338,200 @@ body.landing-culture-page aside.landing-section-rail a span::before {
   body.landing-culture-page aside.landing-section-rail.is-ready a,
   body.landing-culture-page aside.landing-section-rail a span { transition: none !important; }
 }
+
+/* ==========================================================================
+   Card kính mờ gọn lại, bám sát nội dung (KHÔNG áp dụng cho card #overview)
+   + khoảng cách giữa các phần rộng ra một chút
+   ========================================================================== */
+body.landing-culture-page {
+  --lp-card-pad: clamp(20px, 2.6vw, 32px);
+  --lp-item-pad: clamp(16px, 1.8vw, 22px);
+  --lp-section-gap: clamp(44px, 5.5vw, 76px);
+}
+
+/* Khoảng cách giữa các phần */
+body.landing-culture-page .landing-feature-section,
+body.landing-culture-page .landing-method-section,
+body.landing-culture-page .landing-faq-section {
+  margin-block: var(--lp-section-gap) !important;
+}
+
+body.landing-culture-page .landing-story-section {
+  padding-block: 0 !important;
+  margin-block: var(--lp-section-gap) !important;
+}
+
+body.landing-culture-page .culture-final {
+  margin-top: var(--lp-section-gap) !important;
+}
+
+/* Khung section: padding nhỏ lại */
+body.landing-culture-page .landing-feature-section,
+body.landing-culture-page .landing-method-section,
+body.landing-culture-page .landing-faq-section,
+body.landing-culture-page .culture-final {
+  padding: var(--lp-card-pad) !important;
+  border-radius: 24px !important;
+}
+
+/* Tính năng */
+body.landing-culture-page .landing-feature-layout {
+  gap: clamp(18px, 3vw, 36px);
+}
+
+body.landing-culture-page .landing-feature-layout .landing-feature-grid.landing-feature-grid-focused {
+  gap: 14px !important;
+}
+
+body.landing-culture-page .landing-feature-layout .landing-feature-grid-focused article,
+body.landing-culture-page .landing-feature-grid article {
+  min-height: 0 !important;
+  height: auto !important;
+  padding: var(--lp-item-pad) !important;
+  border-radius: 18px !important;
+}
+
+body.landing-culture-page .landing-feature-grid p,
+body.landing-culture-page .landing-feature-grid-focused .feature-card-tour p,
+body.landing-culture-page .landing-feature-layout .landing-feature-grid-focused .feature-card-tour p {
+  margin: 0;
+  font-size: 0.95rem !important;
+  line-height: 1.55 !important;
+}
+
+/* Câu chuyện */
+body.landing-culture-page .landing-story-card {
+  padding: var(--lp-card-pad) !important;
+  border-radius: 24px !important;
+  gap: clamp(16px, 2.4vw, 28px);
+}
+
+body.landing-culture-page .landing-story-copy p {
+  font-size: clamp(1rem, 1.3vw, 1.12rem);
+  line-height: 1.6 !important;
+  margin: 0;
+}
+
+body.landing-culture-page .landing-story-copy a {
+  margin-top: 12px;
+  padding: 8px 16px;
+}
+
+/* Phương pháp */
+body.landing-culture-page .landing-method-section .landing-section-title-row {
+  margin-bottom: 0;
+}
+
+body.landing-culture-page .landing-method-list {
+  gap: 12px !important;
+  margin-top: 20px !important;
+}
+
+body.landing-culture-page .landing-method-list article {
+  padding: var(--lp-item-pad) clamp(16px, 2vw, 24px) !important;
+  min-height: 0 !important;
+  border-radius: 18px !important;
+}
+
+body.landing-culture-page .landing-method-list p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.55 !important;
+}
+
+/* Câu hỏi thường gặp */
+body.landing-culture-page .landing-faq-list {
+  gap: 10px !important;
+}
+
+body.landing-culture-page .landing-faq-list details {
+  border-radius: 16px !important;
+}
+
+body.landing-culture-page .landing-faq-list summary {
+  padding: 14px 18px !important;
+}
+
+body.landing-culture-page .landing-faq-list details p {
+  margin: 0;
+  padding: 0 18px 14px !important;
+  font-size: 0.95rem;
+  line-height: 1.55 !important;
+}
+
+/* Khối kêu gọi cuối */
+body.landing-culture-page .culture-final-actions {
+  margin-top: 20px !important;
+}
+
+@media (max-width: 760px) {
+  body.landing-culture-page .landing-feature-section,
+  body.landing-culture-page .landing-method-section,
+  body.landing-culture-page .landing-faq-section,
+  body.landing-culture-page .culture-final {
+    padding: 18px !important;
+    border-radius: 20px !important;
+  }
+
+  body.landing-culture-page .landing-story-card {
+    padding: 18px !important;
+    border-radius: 20px !important;
+  }
+}
+
+/* ==========================================================================
+   Mỗi phần = 1 màn hình (Tổng quan → Câu hỏi)
+   Mỗi section được bọc trong .landing-screen cao tối thiểu bằng màn hình,
+   card nằm giữa và vẫn gọn như cũ.
+   ========================================================================== */
+body.landing-culture-page .landing-screen {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 100vh;
+  min-height: 100svh;
+  /* chừa đúng chiều cao header cố định ở trên => card nằm giữa vùng nhìn thấy */
+  padding-block: var(--landing-header-h, 72px) 0;
+}
+
+body.landing-culture-page .landing-screen > section {
+  margin-block: 0 !important;
+  flex: 0 0 auto;
+}
+
+body.landing-culture-page .landing-screen > .landing-story-section {
+  padding-block: 0 !important;
+}
+
+body.landing-culture-page .culture-final {
+  margin-top: 0 !important;
+}
+
+/* Tổng quan giữ nguyên như cũ: không tách thành 1 màn hình riêng */
+body.landing-culture-page .landing-screen.landing-screen-overview {
+  display: block;
+  min-height: 0;
+  padding-block: 0;
+}
+
+body.landing-culture-page .landing-screen-overview > #overview {
+  margin: clamp(20px, 3.5vw, 44px) auto clamp(28px, 4vw, 56px) !important;
+}
+
+/* Khoảng cách cố định 180px giữa card Tổng quan và card Tính năng */
+body.landing-culture-page .landing-screen-overview > #overview {
+  margin-bottom: 0 !important;
+}
+
+body.landing-culture-page .landing-screen-overview + .landing-screen {
+  justify-content: flex-start;
+  padding-top: 180px;
+}
+
+/* Tiêu đề "Vào TravelwAI..." cỡ chữ bằng tiêu đề Tổng quan */
+body.landing-culture-page .culture-final h2 {
+  font-size: clamp(1.9rem, 3.4vw, 2.8rem) !important;
+  line-height: 1.2 !important;
+  letter-spacing: normal !important;
+}
