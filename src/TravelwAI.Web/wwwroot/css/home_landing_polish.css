@@ -1179,3 +1179,99 @@ body.landing-culture-page #overview .culture-hero-board .culture-board-map {
     min-height: 0 !important;
   }
 }
+
+/* ==========================================================================
+   Thanh điều hướng NỬA VÒNG TRÒN bên phải: hiện 3 mục, xoay thuận chiều kim đồng hồ
+   Tâm vòng tròn nằm ngay mép phải màn hình, chỉ lộ nửa bên trái.
+   ========================================================================== */
+body.landing-culture-page aside.landing-section-rail {
+  --tw-rail-r: 120px;
+  position: fixed !important;
+  right: 0 !important;
+  left: auto !important;
+  top: 50% !important;
+  width: 0 !important;
+  height: 0 !important;
+  transform: none !important;
+  display: block !important;
+  gap: 0 !important;
+  z-index: 1100;
+}
+
+/* nửa hình tròn làm nền cho các chấm */
+body.landing-culture-page aside.landing-section-rail::before {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: calc(var(--tw-rail-r) * -1);
+  width: var(--tw-rail-r);
+  height: calc(var(--tw-rail-r) * 2);
+  box-sizing: border-box;
+  border: 1px solid var(--tw-glass-line);
+  border-right: 0;
+  border-radius: 999px 0 0 999px;
+  background: linear-gradient(135deg, var(--tw-hero-card-a) 0%, var(--tw-hero-card-b) 100%);
+  box-shadow: var(--tw-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.15);
+  pointer-events: none;
+}
+
+body.landing-culture-page aside.landing-section-rail a {
+  position: absolute !important;
+  left: 0;
+  top: 0;
+  width: 20px !important;
+  height: 20px !important;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+body.landing-culture-page aside.landing-section-rail.is-ready a {
+  transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s ease;
+}
+
+body.landing-culture-page aside.landing-section-rail a.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+body.landing-culture-page aside.landing-section-rail a::after {
+  width: 8px !important;
+  height: 8px !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+  box-shadow: 0 0 0 2px rgba(7, 16, 32, 0.55) !important;
+  transition: width 0.3s ease, height 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
+}
+
+body.landing-culture-page aside.landing-section-rail a.is-current::after,
+body.landing-culture-page aside.landing-section-rail a:hover::after,
+body.landing-culture-page aside.landing-section-rail a:focus-visible::after {
+  width: 12px !important;
+  height: 12px !important;
+  background: var(--tw-accent) !important;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.32), 0 0 14px rgba(56, 189, 248, 0.6) !important;
+}
+
+/* nhãn: nằm bên trái chấm; mục đang chọn rõ nhất, 2 mục còn lại mờ hơn */
+body.landing-culture-page aside.landing-section-rail a span {
+  right: 22px !important;
+  opacity: 0.72;
+  font-size: 11px !important;
+  letter-spacing: 0.12em !important;
+  transform: translateY(-50%) !important;
+}
+
+body.landing-culture-page aside.landing-section-rail a.is-current span,
+body.landing-culture-page aside.landing-section-rail a:hover span {
+  opacity: 1;
+}
+
+@media (max-height: 560px) {
+  body.landing-culture-page aside.landing-section-rail { --tw-rail-r: 90px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.landing-culture-page aside.landing-section-rail.is-ready a { transition: none; }
+}
