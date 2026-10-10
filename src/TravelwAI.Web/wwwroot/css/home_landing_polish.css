@@ -1125,3 +1125,57 @@ body.landing-culture-page #overview .culture-hero-board {
     width: 100% !important;
   }
 }
+
+/* ---- Card Tổng quan: gọn hơn, rộng bằng card Tính năng, tiêu đề cỡ bằng "Gói gọn tiện ích..." ---- */
+body.landing-culture-page #overview.culture-hero {
+  width: min(1080px, calc(100% - 40px));
+  padding: clamp(18px, 2.4vw, 32px) !important;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+  gap: clamp(20px, 3vw, 40px);
+}
+
+body.landing-culture-page #overview .culture-hero-copy h1 {
+  max-width: 100%;
+  font-size: clamp(1.9rem, 3.4vw, 2.8rem) !important;
+  line-height: 1.2 !important;
+  letter-spacing: normal !important;
+}
+
+body.landing-culture-page #overview .culture-hero .landing-lead,
+body.landing-culture-page #overview .landing-lead {
+  margin-top: 14px;
+  font-size: clamp(0.98rem, 1.25vw, 1.08rem) !important;
+  line-height: 1.65 !important;
+}
+
+body.landing-culture-page #overview .landing-overview-actions {
+  margin-top: 20px;
+}
+
+body.landing-culture-page #overview .culture-hero-board .culture-board-main,
+body.landing-culture-page #overview .culture-hero-board .culture-board-map {
+  height: clamp(300px, 52vh, 500px) !important;
+  min-height: 0 !important;
+}
+
+@media (max-width: 1100px) {
+  body.landing-culture-page #overview.culture-hero {
+    grid-template-columns: 1fr !important;
+  }
+  body.landing-culture-page #overview .culture-hero-board {
+    justify-self: stretch;
+    width: 100% !important;
+  }
+}
+
+@media (max-width: 760px) {
+  body.landing-culture-page #overview.culture-hero {
+    width: min(100% - 28px, 520px) !important;
+    padding: 16px !important;
+  }
+  body.landing-culture-page #overview .culture-hero-board .culture-board-main,
+  body.landing-culture-page #overview .culture-hero-board .culture-board-map {
+    height: clamp(260px, 50dvh, 380px) !important;
+    min-height: 0 !important;
+  }
+}
