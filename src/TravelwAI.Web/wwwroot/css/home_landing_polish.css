@@ -1562,3 +1562,66 @@ body.landing-culture-page .landing-autoplay-btn.is-paused .icon-play {
     min-width: 42px;
   }
 }
+
+
+/* ---- Thanh tiến trình đếm ngược dưới nav (7 giây / lần chuyển phần) ---- */
+body.landing-culture-page .landing-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 3px;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--tw-accent, #22d3ee), #a5f3fc);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.55);
+  pointer-events: none;
+}
+
+body.landing-culture-page .landing-progress.is-running {
+  animation: landingProgressFill var(--landing-progress-ms, 7000ms) linear forwards;
+}
+
+@keyframes landingProgressFill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* ---- Animation khi chuyển phần: nội dung trượt + mờ dần vào theo hướng chuyển ---- */
+body.landing-culture-page section[id].section-slide-run.section-nav-focus > * {
+  animation-duration: 0.8s;
+  animation-timing-function: cubic-bezier(0.22, 0.8, 0.28, 1);
+  animation-fill-mode: both;
+}
+
+body.landing-culture-page section[id].section-slide-from-right.section-nav-focus > * {
+  animation-name: landingSlideInRight;
+}
+
+body.landing-culture-page section[id].section-slide-from-left.section-nav-focus > * {
+  animation-name: landingSlideInLeft;
+}
+
+body.landing-culture-page section[id].section-slide-run.section-nav-focus > *:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+body.landing-culture-page section[id].section-slide-run.section-nav-focus > *:nth-child(n+3) {
+  animation-delay: 0.2s;
+}
+
+@keyframes landingSlideInRight {
+  from { opacity: 0; transform: translate3d(64px, 0, 0) scale(0.98); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+
+@keyframes landingSlideInLeft {
+  from { opacity: 0; transform: translate3d(-64px, 0, 0) scale(0.98); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.landing-culture-page section[id].section-slide-run.section-nav-focus > * {
+    animation: none !important;
+  }
+}
