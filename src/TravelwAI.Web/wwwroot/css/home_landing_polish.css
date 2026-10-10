@@ -1338,3 +1338,15 @@ body.landing-culture-page aside.landing-section-rail a span::before {
   body.landing-culture-page aside.landing-section-rail.is-ready a,
   body.landing-culture-page aside.landing-section-rail a span { transition: none !important; }
 }
+
+
+/* ===== Landing: mỗi lúc chỉ hiện một phần (máy tính + điện thoại) ===== */
+body.landing-single main > section[id]:not(.is-current) { display: none !important; }
+
+body.landing-single main > section[id].section-slide-run.section-slide-from-right { animation: landingSingleInRight .45s ease both; }
+body.landing-single main > section[id].section-slide-run.section-slide-from-left { animation: landingSingleInLeft .45s ease both; }
+@keyframes landingSingleInRight { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+@keyframes landingSingleInLeft { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  body.landing-single main > section[id].section-slide-run { animation: none !important; }
+}
