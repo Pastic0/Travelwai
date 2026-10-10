@@ -1,0 +1,140 @@
+/* Landing dạng "từng phần một" (full-screen slides).
+   Chỉ kích hoạt khi JS thêm class .landing-slides vào <body> -> nếu JS lỗi, trang vẫn cuộn bình thường. */
+html:has(body.landing-slides),
+body.landing-slides {
+  height: 100%;
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+body.landing-slides {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+body.landing-slides .landing-header {
+  position: relative !important;
+  flex: 0 0 auto;
+  z-index: 60;
+}
+
+body.landing-slides main {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* mỗi section được JS bọc trong 1 .ls-slide */
+body.landing-slides .ls-slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate3d(0, 48px, 0);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.22, 0.8, 0.28, 1), visibility 0s linear 0.6s;
+  scrollbar-width: none;
+}
+body.landing-slides .ls-slide::-webkit-scrollbar { display: none; }
+
+body.landing-slides .ls-slide.is-before { transform: translate3d(0, -48px, 0); }
+
+body.landing-slides .ls-slide.is-current {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  transition-delay: 0s;
+}
+
+/* căn giữa theo chiều dọc, vẫn cuộn được nếu nội dung cao hơn màn hình */
+body.landing-slides .ls-slide > section {
+  margin-block: auto !important;
+  flex: 0 0 auto;
+  min-height: 0 !important;
+}
+body.landing-slides .ls-slide > .culture-hero { width: 100%; box-sizing: border-box; }
+body.landing-slides .ls-slide > .culture-final { margin-block: auto !important; }
+
+body.landing-slides .ls-slide > .landing-footer {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
+body.landing-slides .ls-slide > #start { margin-bottom: auto !important; }
+
+/* bản đồ vừa với chiều cao màn hình */
+body.landing-slides .culture-hero-board .culture-board-main,
+body.landing-slides .culture-hero-board .culture-board-map {
+  height: clamp(300px, calc(100vh - 250px), 720px) !important;
+  height: clamp(300px, calc(100dvh - 250px), 720px) !important;
+}
+@media (max-width: 760px) {
+  body.landing-slides .culture-hero-board .culture-board-main,
+  body.landing-slides .culture-hero-board .culture-board-map {
+    height: clamp(260px, 42dvh, 420px) !important;
+  }
+}
+
+/* thanh tiến trình 5 giây dưới header */
+.ls-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: linear-gradient(90deg, #22d3ee, #a5f3fc);
+  pointer-events: none;
+}
+.ls-progress.run { animation: ls-progress var(--ls-interval, 5s) linear forwards; }
+@keyframes ls-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* chấm điều hướng (hiện khi rail cung tròn bị ẩn) */
+.ls-dots { display: none; }
+@media (max-width: 1180px) {
+  body.landing-slides .ls-dots {
+    position: fixed;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 70;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ls-dots button {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+  .ls-dots button::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+    transition: height 0.3s ease, background 0.3s ease;
+  }
+  .ls-dots button.active::before { height: 20px; border-radius: 6px; background: #22d3ee; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.landing-slides .ls-slide { transition: opacity 0.2s ease, visibility 0s linear 0.2s; transform: none !important; }
+  .ls-progress.run { animation-duration: var(--ls-interval, 5s); }
+}
