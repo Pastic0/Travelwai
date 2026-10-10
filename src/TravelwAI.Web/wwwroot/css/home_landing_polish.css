@@ -1183,15 +1183,12 @@ body.landing-culture-page #overview .culture-hero-board .culture-board-map {
 /* ==========================================================================
    Điều hướng NỬA VÒNG TRÒN bên phải (không animation)
    - Tâm vòng tròn nằm ở mép phải màn hình, chỉ lộ nửa bên trái
-   - Cung liền một dải card mờ (cùng kiểu card 2x2 phần tính năng)
-   - Mục hiện tại: card mờ + chữ trắng in đậm nằm giữa cung
+   - Cung trắng đậm, ngắt (nét đứt) ở vị trí từng mục
+   - Mục hiện tại: card mờ + chữ trắng in đậm nằm trong chỗ ngắt giữa cung
    - Mục trước / sau: chấm tròn trên cung (rê chuột để xem tên)
    ========================================================================== */
 body.landing-culture-page aside.landing-section-rail {
   --tw-rail-r: 72px;
-  --tw-rail-w: 22px;   /* bề dày dải cung */
-  --tw-rail-ri: calc(var(--tw-rail-r) - var(--tw-rail-w) / 2);
-  --tw-rail-ro: calc(var(--tw-rail-r) + var(--tw-rail-w) / 2);
   position: fixed !important;
   right: 0 !important;
   left: auto !important;
@@ -1204,44 +1201,38 @@ body.landing-culture-page aside.landing-section-rail {
   z-index: 1100;
 }
 
-/* dải cung liền: nền kính giống card tính năng, chỉ giữ phần vành (mask) */
-body.landing-culture-page aside.landing-section-rail::before,
-body.landing-culture-page aside.landing-section-rail::after {
+/* vòng cung trắng đậm; bị ngắt (nét đứt) ở vị trí từng mục.
+   Vị trí/độ rộng các chỗ ngắt do landing_rail.js gán qua --tw-b0/1/2-c (góc tâm) và -h (nửa độ rộng) */
+body.landing-culture-page aside.landing-section-rail::before {
   content: "";
   position: absolute;
   z-index: 0;
   pointer-events: none;
-  border-radius: 50%;
   box-sizing: border-box;
-  left: calc(var(--tw-rail-ro) * -1);
-  top: calc(var(--tw-rail-ro) * -1);
-  width: calc(var(--tw-rail-ro) * 2);
-  height: calc(var(--tw-rail-ro) * 2);
-  -webkit-mask-image: radial-gradient(circle closest-side,
-    transparent calc(var(--tw-rail-ri) - 0.5px), #000 calc(var(--tw-rail-ri) + 0.5px), #000 100%);
-  mask-image: radial-gradient(circle closest-side,
-    transparent calc(var(--tw-rail-ri) - 0.5px), #000 calc(var(--tw-rail-ri) + 0.5px), #000 100%);
+  border-radius: 50%;
+  left: calc((var(--tw-rail-r) + 2px) * -1);
+  top: calc((var(--tw-rail-r) + 2px) * -1);
+  width: calc((var(--tw-rail-r) + 2px) * 2);
+  height: calc((var(--tw-rail-r) + 2px) * 2);
+  border: 4px solid #ffffff;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.45));
+  -webkit-mask-composite: source-in, source-in;
+  mask-composite: intersect, intersect;
+  -webkit-mask-image:
+    conic-gradient(#000 0deg, #000 calc(var(--tw-b0-c, 0deg) - var(--tw-b0-h, 0deg)), transparent calc(var(--tw-b0-c, 0deg) - var(--tw-b0-h, 0deg)), transparent calc(var(--tw-b0-c, 0deg) + var(--tw-b0-h, 0deg)), #000 calc(var(--tw-b0-c, 0deg) + var(--tw-b0-h, 0deg)), #000 360deg),
+    conic-gradient(#000 0deg, #000 calc(var(--tw-b1-c, 0deg) - var(--tw-b1-h, 0deg)), transparent calc(var(--tw-b1-c, 0deg) - var(--tw-b1-h, 0deg)), transparent calc(var(--tw-b1-c, 0deg) + var(--tw-b1-h, 0deg)), #000 calc(var(--tw-b1-c, 0deg) + var(--tw-b1-h, 0deg)), #000 360deg),
+    conic-gradient(#000 0deg, #000 calc(var(--tw-b2-c, 0deg) - var(--tw-b2-h, 0deg)), transparent calc(var(--tw-b2-c, 0deg) - var(--tw-b2-h, 0deg)), transparent calc(var(--tw-b2-c, 0deg) + var(--tw-b2-h, 0deg)), #000 calc(var(--tw-b2-c, 0deg) + var(--tw-b2-h, 0deg)), #000 360deg);
+  mask-image:
+    conic-gradient(#000 0deg, #000 calc(var(--tw-b0-c, 0deg) - var(--tw-b0-h, 0deg)), transparent calc(var(--tw-b0-c, 0deg) - var(--tw-b0-h, 0deg)), transparent calc(var(--tw-b0-c, 0deg) + var(--tw-b0-h, 0deg)), #000 calc(var(--tw-b0-c, 0deg) + var(--tw-b0-h, 0deg)), #000 360deg),
+    conic-gradient(#000 0deg, #000 calc(var(--tw-b1-c, 0deg) - var(--tw-b1-h, 0deg)), transparent calc(var(--tw-b1-c, 0deg) - var(--tw-b1-h, 0deg)), transparent calc(var(--tw-b1-c, 0deg) + var(--tw-b1-h, 0deg)), #000 calc(var(--tw-b1-c, 0deg) + var(--tw-b1-h, 0deg)), #000 360deg),
+    conic-gradient(#000 0deg, #000 calc(var(--tw-b2-c, 0deg) - var(--tw-b2-h, 0deg)), transparent calc(var(--tw-b2-c, 0deg) - var(--tw-b2-h, 0deg)), transparent calc(var(--tw-b2-c, 0deg) + var(--tw-b2-h, 0deg)), #000 calc(var(--tw-b2-c, 0deg) + var(--tw-b2-h, 0deg)), #000 360deg);
 }
 
-body.landing-culture-page aside.landing-section-rail::before {
-  background: linear-gradient(135deg, var(--tw-hero-card-a) 0%, var(--tw-hero-card-b) 100%);
-  -webkit-backdrop-filter: blur(16px) saturate(1.15);
-  backdrop-filter: blur(16px) saturate(1.15);
-}
-
-/* viền mảnh hai mép dải cung (tương đương border của card) */
 body.landing-culture-page aside.landing-section-rail::after {
-  background: radial-gradient(circle closest-side,
-    transparent calc(var(--tw-rail-ri) - 0.5px),
-    var(--tw-glass-line) calc(var(--tw-rail-ri) - 0.5px),
-    var(--tw-glass-line) calc(var(--tw-rail-ri) + 1px),
-    transparent calc(var(--tw-rail-ri) + 1px),
-    transparent calc(var(--tw-rail-ro) - 1.5px),
-    var(--tw-glass-line) calc(var(--tw-rail-ro) - 1.5px),
-    var(--tw-glass-line) 100%);
+  content: none !important;
 }
 
-/* mỗi mục: điểm neo nằm giữa dải cung */
+/* mỗi mục: điểm neo nằm trên cung */
 body.landing-culture-page aside.landing-section-rail a {
   position: absolute !important;
   z-index: 1;
