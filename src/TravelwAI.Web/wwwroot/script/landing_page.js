@@ -36,6 +36,8 @@ document.addEventListener("DOMContentLoaded", function () {
     if (rect.height >= visibleHeight) nextTop = rect.top + window.scrollY - header;
     const maxTop = document.documentElement.scrollHeight - window.innerHeight;
     nextTop = Math.min(Math.max(0, nextTop), Math.max(0, maxTop));
+    // "Bắt đầu": cuộn xuống dưới cùng của trang
+    if (target.id === "start") nextTop = Math.max(0, maxTop);
     const left = rect.left + window.scrollX + rect.width / 2 - window.innerWidth / 2;
     window.scrollTo({ top: nextTop, left: Math.max(0, left), behavior: "smooth" });
   }
