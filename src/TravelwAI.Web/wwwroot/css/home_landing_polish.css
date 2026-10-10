@@ -1181,11 +1181,15 @@ body.landing-culture-page #overview .culture-hero-board .culture-board-map {
 }
 
 /* ==========================================================================
-   Thanh điều hướng NỬA VÒNG TRÒN bên phải: hiện 3 mục, xoay thuận chiều kim đồng hồ
-   Tâm vòng tròn nằm ngay mép phải màn hình, chỉ lộ nửa bên trái.
+   Điều hướng NỬA VÒNG TRÒN bên phải (không card, chỉ nét cung + chữ)
+   - Tâm vòng tròn nằm ở mép phải màn hình, chỉ lộ nửa bên trái
+   - Chữ mục hiện tại nằm giữa cung, nét cung chừa khoảng hở cho chữ
+   - Vòng tick xoay thuận chiều kim đồng hồ khi chuyển mục
    ========================================================================== */
 body.landing-culture-page aside.landing-section-rail {
-  --tw-rail-r: 120px;
+  --tw-rail-r: 72px;
+  --tw-rail-rot: 0deg;
+  --tw-rail-gap: 15px; /* nửa chiều cao khoảng hở cho chữ */
   position: fixed !important;
   right: 0 !important;
   left: auto !important;
@@ -1198,38 +1202,77 @@ body.landing-culture-page aside.landing-section-rail {
   z-index: 1100;
 }
 
-/* nửa hình tròn làm nền cho các chấm */
-body.landing-culture-page aside.landing-section-rail::before {
+/* nét cung ngoài: chỉ có viền, bị cắt một đoạn ở giữa để chừa chỗ cho chữ */
+body.landing-culture-page aside.landing-section-rail::before,
+body.landing-culture-page aside.landing-section-rail::after {
   content: "";
   position: absolute;
-  right: 0;
-  top: calc(var(--tw-rail-r) * -1);
-  width: var(--tw-rail-r);
-  height: calc(var(--tw-rail-r) * 2);
-  box-sizing: border-box;
-  border: 1px solid var(--tw-glass-line);
-  border-right: 0;
-  border-radius: 999px 0 0 999px;
-  background: linear-gradient(135deg, var(--tw-hero-card-a) 0%, var(--tw-hero-card-b) 100%);
-  box-shadow: var(--tw-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  -webkit-backdrop-filter: blur(14px) saturate(1.15);
-  backdrop-filter: blur(14px) saturate(1.15);
   pointer-events: none;
+  border-radius: 50%;
+  box-sizing: border-box;
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
 }
 
+body.landing-culture-page aside.landing-section-rail::before {
+  left: calc(var(--tw-rail-r) * -1);
+  top: calc(var(--tw-rail-r) * -1);
+  width: calc(var(--tw-rail-r) * 2);
+  height: calc(var(--tw-rail-r) * 2);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.55));
+  -webkit-mask-image: linear-gradient(to bottom,
+    #000 0, #000 calc(50% - var(--tw-rail-gap)),
+    transparent calc(50% - var(--tw-rail-gap)), transparent calc(50% + var(--tw-rail-gap)),
+    #000 calc(50% + var(--tw-rail-gap)), #000 100%);
+  mask-image: linear-gradient(to bottom,
+    #000 0, #000 calc(50% - var(--tw-rail-gap)),
+    transparent calc(50% - var(--tw-rail-gap)), transparent calc(50% + var(--tw-rail-gap)),
+    #000 calc(50% + var(--tw-rail-gap)), #000 100%);
+}
+
+/* vòng tick bên trong: xoay khi chuyển mục */
+body.landing-culture-page aside.landing-section-rail::after {
+  left: calc(var(--tw-rail-r) * -1 + 8px);
+  top: calc(var(--tw-rail-r) * -1 + 8px);
+  width: calc(var(--tw-rail-r) * 2 - 16px);
+  height: calc(var(--tw-rail-r) * 2 - 16px);
+  background: repeating-conic-gradient(from 0deg,
+    rgba(186, 230, 253, 0.85) 0deg 1.4deg, transparent 1.4deg 7deg);
+  -webkit-mask-image:
+    radial-gradient(circle, transparent calc(50% - 6px), #000 calc(50% - 6px), #000 50%, transparent 50%),
+    linear-gradient(to bottom,
+      #000 0, #000 calc(50% - var(--tw-rail-gap)),
+      transparent calc(50% - var(--tw-rail-gap)), transparent calc(50% + var(--tw-rail-gap)),
+      #000 calc(50% + var(--tw-rail-gap)), #000 100%);
+  mask-image:
+    radial-gradient(circle, transparent calc(50% - 6px), #000 calc(50% - 6px), #000 50%, transparent 50%),
+    linear-gradient(to bottom,
+      #000 0, #000 calc(50% - var(--tw-rail-gap)),
+      transparent calc(50% - var(--tw-rail-gap)), transparent calc(50% + var(--tw-rail-gap)),
+      #000 calc(50% + var(--tw-rail-gap)), #000 100%);
+  transform: rotate(var(--tw-rail-rot));
+  opacity: 0.8;
+}
+
+body.landing-culture-page aside.landing-section-rail.is-ready::after {
+  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* chấm của các mục, trượt dọc theo cung */
 body.landing-culture-page aside.landing-section-rail a {
   position: absolute !important;
   left: 0;
   top: 0;
-  width: 20px !important;
-  height: 20px !important;
+  width: 22px !important;
+  height: 22px !important;
   opacity: 0;
   pointer-events: none;
   will-change: transform, opacity;
 }
 
 body.landing-culture-page aside.landing-section-rail.is-ready a {
-  transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s ease;
+  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.45s ease;
 }
 
 body.landing-culture-page aside.landing-section-rail a.is-visible {
@@ -1238,40 +1281,64 @@ body.landing-culture-page aside.landing-section-rail a.is-visible {
 }
 
 body.landing-culture-page aside.landing-section-rail a::after {
-  width: 8px !important;
-  height: 8px !important;
-  background: rgba(255, 255, 255, 0.7) !important;
-  box-shadow: 0 0 0 2px rgba(7, 16, 32, 0.55) !important;
-  transition: width 0.3s ease, height 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
+  width: 7px !important;
+  height: 7px !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 0 0 2px rgba(7, 16, 32, 0.5), 0 0 8px rgba(0, 0, 0, 0.5) !important;
+  transition: width 0.3s ease, height 0.3s ease, background 0.3s ease, transform 0.3s ease;
 }
 
-body.landing-culture-page aside.landing-section-rail a.is-current::after,
 body.landing-culture-page aside.landing-section-rail a:hover::after,
 body.landing-culture-page aside.landing-section-rail a:focus-visible::after {
-  width: 12px !important;
-  height: 12px !important;
+  width: 11px !important;
+  height: 11px !important;
   background: var(--tw-accent) !important;
-  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.32), 0 0 14px rgba(56, 189, 248, 0.6) !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3), 0 0 12px rgba(56, 189, 248, 0.6) !important;
 }
 
-/* nhãn: nằm bên trái chấm; mục đang chọn rõ nhất, 2 mục còn lại mờ hơn */
+/* mục hiện tại: chấm ẩn đi, nhường chỗ cho chữ nằm giữa cung */
+body.landing-culture-page aside.landing-section-rail a.is-current::after {
+  width: 0 !important;
+  height: 0 !important;
+  box-shadow: none !important;
+}
+
+/* chữ: không nền, căn giữa đúng điểm trên cung; chỉ mục hiện tại có chữ */
 body.landing-culture-page aside.landing-section-rail a span {
-  right: 22px !important;
-  opacity: 0.72;
-  font-size: 11px !important;
-  letter-spacing: 0.12em !important;
-  transform: translateY(-50%) !important;
+  position: absolute !important;
+  left: 50% !important;
+  right: auto !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  padding: 0 !important;
+  background: none !important;
+  border-radius: 0 !important;
+  color: #fff !important;
+  font-size: 11.5px !important;
+  font-weight: 800;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.9) !important;
+  white-space: nowrap;
+  opacity: 0 !important;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
-body.landing-culture-page aside.landing-section-rail a.is-current span,
-body.landing-culture-page aside.landing-section-rail a:hover span {
-  opacity: 1;
+body.landing-culture-page aside.landing-section-rail a.is-current span {
+  opacity: 1 !important;
+  transition: opacity 0.4s ease 0.35s;
 }
 
 @media (max-height: 560px) {
-  body.landing-culture-page aside.landing-section-rail { --tw-rail-r: 90px; }
+  body.landing-culture-page aside.landing-section-rail { --tw-rail-r: 58px; }
+}
+
+@media (max-width: 1180px) {
+  body.landing-culture-page aside.landing-section-rail { display: none !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  body.landing-culture-page aside.landing-section-rail.is-ready::after,
   body.landing-culture-page aside.landing-section-rail.is-ready a { transition: none; }
 }

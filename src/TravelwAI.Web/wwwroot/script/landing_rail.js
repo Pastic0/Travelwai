@@ -1,7 +1,8 @@
-/* Thanh điều hướng nửa vòng tròn (Landing)
-   - Chỉ hiện 3 mục: trước / hiện tại / kế tiếp
-   - Chuyển sang mục kế tiếp thì bánh xoay THEO CHIỀU KIM ĐỒNG HỒ
-   - Trạng thái "đang ở mục nào" lấy từ class .active mà landing_page.js đã gắn */
+/* Điều hướng nửa vòng tròn (Landing)
+   - Chữ của mục hiện tại nằm giữa cung tròn (nét cung chừa khoảng hở cho chữ)
+   - Hiện tối đa 3 mục: mục hiện tại + mục kế bên (đầu/cuối danh sách thì lấy thêm mục thứ 2 cùng phía)
+   - Chuyển sang mục tiếp theo: vòng tròn xoay THUẬN chiều kim đồng hồ
+   - Trạng thái mục đang xem lấy từ class .active do landing_page.js gắn */
 (function () {
   "use strict";
   const rail = document.querySelector(".landing-section-rail");
@@ -10,12 +11,17 @@
   const n = links.length;
   if (n < 2) return;
 
-  const STEP = 34; // độ lệch góc giữa 2 mục liền kề
+  const STEP = 38; // độ lệch góc giữa 2 mục liền kề
   let lastKey = "";
+
+  links.forEach(function (link) {
+    const label = link.querySelector("span");
+    if (label && !link.title) link.title = label.textContent.trim();
+  });
 
   function radius() {
     const v = parseFloat(getComputedStyle(rail).getPropertyValue("--tw-rail-r"));
-    return Number.isFinite(v) && v > 0 ? v : 120;
+    return Number.isFinite(v) && v > 0 ? v : 72;
   }
 
   function layout() {
@@ -26,16 +32,20 @@
     if (key === lastKey) return;
     lastKey = key;
 
-    // cửa sổ 3 mục, không quay vòng: đầu/cuối danh sách thì mục active nằm ở đầu/cuối cung
-    const c = Math.min(Math.max(active, 1), n - 2);
+    // vòng tròn xoay thuận chiều kim đồng hồ mỗi khi sang mục kế tiếp
+    rail.style.setProperty("--tw-rail-rot", (active * STEP) + "deg");
 
     links.forEach(function (link, i) {
-      const theta = (c - i) * STEP; // dương = phía trên, âm = phía dưới
-      const visible = Math.abs(c - i) <= 1;
+      const d = i - active;
+      let visible = Math.abs(d) <= 1;
+      if (active === 0 && d === 2) visible = true;
+      if (active === n - 1 && d === -2) visible = true;
+
+      const theta = -d * STEP; // mục kế tiếp nằm phía dưới, mục trước nằm phía trên
       link.style.transform =
         "rotate(" + theta + "deg) translateX(" + (-R) + "px) rotate(" + (-theta) + "deg) translate(-50%, -50%)";
       link.classList.toggle("is-visible", visible);
-      link.classList.toggle("is-current", i === active);
+      link.classList.toggle("is-current", d === 0);
       link.setAttribute("aria-hidden", visible ? "false" : "true");
       link.tabIndex = visible ? 0 : -1;
     });
