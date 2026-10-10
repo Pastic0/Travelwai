@@ -19,19 +19,9 @@ document.addEventListener("DOMContentLoaded", function () {
     return header ? header.offsetHeight : 0;
   }
 
-  // Gán chiều cao header thật cho CSS để mỗi section cao đúng bằng 1 màn hình
-  function syncHeaderHeightVar() {
-    const h = getLandingHeaderHeight();
-    if (h > 0) document.documentElement.style.setProperty("--tw-header-h", h + "px");
-  }
-  syncHeaderHeightVar();
-  window.addEventListener("resize", syncHeaderHeightVar, { passive: true });
-  window.addEventListener("load", syncHeaderHeightVar);
-
   function scrollTargetToSection(target) {
     const targetTop = target.getBoundingClientRect().top + window.scrollY;
-    const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--tw-section-gap")) || 0;
-    const nextTop = Math.max(0, targetTop - getLandingHeaderHeight() - gap);
+    const nextTop = Math.max(0, targetTop - getLandingHeaderHeight());
     window.scrollTo({ top: nextTop, behavior: "smooth" });
   }
 
