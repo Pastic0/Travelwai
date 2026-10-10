@@ -889,3 +889,138 @@ body.landing-culture-page .landing-feature-grid b::after {
   height: 4px;
   margin-top: 10px;
 }
+
+/* ---- Thanh xanh dưới chữ: bản tinh chỉnh (mảnh, chuyển màu, phát sáng nhẹ, trượt ra khi tải) ---- */
+body .content .hero-text h1::after,
+body.landing-culture-page .culture-hero-copy h1::after,
+body.landing-culture-page .landing-section-title-row h2::after,
+body.landing-culture-page .landing-faq-heading h2::after,
+body.landing-culture-page .culture-final h2::after,
+body.landing-culture-page .landing-feature-heading::after,
+body.landing-culture-page .landing-feature-grid b::after {
+  height: 4px;
+  margin: 16px 0 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0284c7 0%, #38bdf8 38%, #67e8f9 72%, #e0f7ff 100%);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.55), 0 1px 0 rgba(255, 255, 255, 0.25) inset;
+  transform-origin: left center;
+  animation: tw-underline-grow 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+
+body.landing-culture-page .landing-feature-grid b::after {
+  height: 3px;
+  margin-top: 10px;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.45);
+}
+
+/* căn giữa các tiêu đề section: thanh vẫn bằng chữ, mọc từ giữa ra */
+body.landing-culture-page .landing-section-title-row h2::after,
+body.landing-culture-page .culture-final h2::after {
+  transform-origin: center;
+}
+
+@keyframes tw-underline-grow {
+  from { transform: scaleX(0); opacity: 0; }
+  to   { transform: scaleX(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body .content .hero-text h1::after,
+  body.landing-culture-page .culture-hero-copy h1::after,
+  body.landing-culture-page .landing-section-title-row h2::after,
+  body.landing-culture-page .landing-faq-heading h2::after,
+  body.landing-culture-page .culture-final h2::after,
+  body.landing-culture-page .landing-feature-heading::after,
+  body.landing-culture-page .landing-feature-grid b::after {
+    animation: none;
+  }
+}
+
+/* ---- Thanh gạch dưới: kiểu "nét sáng" mờ dần + ánh sáng nhẹ (đè lên kiểu cũ) ---- */
+body .content .hero-text h1::after,
+body.landing-culture-page .culture-hero-copy h1::after,
+body.landing-culture-page .landing-section-title-row h2::after,
+body.landing-culture-page .landing-faq-heading h2::after,
+body.landing-culture-page .culture-final h2::after,
+body.landing-culture-page .landing-feature-heading::after,
+body.landing-culture-page .landing-feature-grid b::after {
+  height: 4px;
+  margin: 16px 0 0;
+  border-radius: 999px;
+  /* đậm ở đầu chữ, sáng lên ở giữa, tan dần về cuối */
+  background: linear-gradient(90deg,
+    var(--tw-accent) 0%,
+    #7dd3fc 38%,
+    #a5f3fc 62%,
+    rgba(165, 243, 252, 0) 100%);
+  box-shadow:
+    0 0 14px rgba(56, 189, 248, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.35) inset;
+  transform-origin: left center;
+  animation: tw-underline-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* tiêu đề căn giữa: nét sáng đối xứng, tan ở hai đầu */
+body.landing-culture-page .landing-section-title-row h2::after,
+body.landing-culture-page .culture-final h2::after {
+  background: linear-gradient(90deg,
+    rgba(165, 243, 252, 0) 0%,
+    #7dd3fc 22%,
+    var(--tw-accent) 50%,
+    #7dd3fc 78%,
+    rgba(165, 243, 252, 0) 100%);
+  transform-origin: center;
+}
+
+/* thanh trong 4 ô: mảnh hơn một chút */
+body.landing-culture-page .landing-feature-grid b::after {
+  height: 3px;
+  margin-top: 12px;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.45);
+}
+
+@keyframes tw-underline-in {
+  from { transform: scaleX(0); opacity: 0; }
+  to   { transform: scaleX(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body .content .hero-text h1::after,
+  body.landing-culture-page .culture-hero-copy h1::after,
+  body.landing-culture-page .landing-section-title-row h2::after,
+  body.landing-culture-page .landing-faq-heading h2::after,
+  body.landing-culture-page .culture-final h2::after,
+  body.landing-culture-page .landing-feature-heading::after,
+  body.landing-culture-page .landing-feature-grid b::after {
+    animation: none;
+  }
+}
+
+/* ---- Thanh gạch dưới: chốt độ dài + vị trí ----
+   - Tiêu đề lớn (có thể xuống nhiều dòng): thanh ngắn cố định, sát lề chữ, cách chữ 18px
+   - Tiêu đề căn giữa: thanh cùng độ dài, nằm chính giữa
+   - Tiêu đề trong 4 ô: thanh ngắn 44px (cùng nhịp ở cả 4 ô) ---- */
+body .content .hero-text h1::after,
+body.landing-culture-page .culture-hero-copy h1::after,
+body.landing-culture-page .landing-faq-heading h2::after,
+body.landing-culture-page .landing-feature-heading::after {
+  width: min(100%, clamp(120px, 14vw, 190px));
+  margin: 18px 0 6px;
+}
+
+body.landing-culture-page .landing-section-title-row h2::after,
+body.landing-culture-page .culture-final h2::after {
+  width: min(100%, clamp(120px, 14vw, 190px));
+  margin: 18px auto 0;
+}
+
+body.landing-culture-page .landing-feature-grid b::after {
+  width: 44px;
+  margin: 12px 0 0;
+}
+
+@media (max-width: 900px) {
+  body.landing-culture-page .landing-feature-heading::after {
+    margin-inline: auto;
+  }
+}
