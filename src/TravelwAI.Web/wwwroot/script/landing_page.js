@@ -19,8 +19,21 @@ document.addEventListener("DOMContentLoaded", function () {
     return header ? header.offsetHeight : 0;
   }
 
-  // Chế độ "mỗi lúc một phần": chỉ phần đang chọn được hiện, các phần khác bị ẩn (display:none).
-  document.body.classList.add("landing-single");
+  // Gán chiều cao header thật cho CSS để mỗi section cao đúng bằng 1 màn hình
+  function syncHeaderHeightVar() {
+    const h = getLandingHeaderHeight();
+    if (h > 0) document.documentElement.style.setProperty("--tw-header-h", h + "px");
+  }
+  syncHeaderHeightVar();
+  window.addEventListener("resize", syncHeaderHeightVar, { passive: true });
+  window.addEventListener("load", syncHeaderHeightVar);
+
+  function scrollTargetToSection(target) {
+    const targetTop = target.getBoundingClientRect().top + window.scrollY;
+    const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--tw-section-gap")) || 0;
+    const nextTop = Math.max(0, targetTop - getLandingHeaderHeight() - gap);
+    window.scrollTo({ top: nextTop, behavior: "smooth" });
+  }
 
   function getSectionDirection(target) {
     const nextIndex = Math.max(0, sections.indexOf(target));
@@ -28,91 +41,66 @@ document.addEventListener("DOMContentLoaded", function () {
     return nextIndex > activeSectionIndex ? "next" : "prev";
   }
 
-  function showSection(target, options) {
+  function playLandingSectionSlide(target, direction) {
     if (!target) return;
-    options = options || {};
-    const direction = options.direction || getSectionDirection(target);
-    const changed = target.id !== activeSectionId || !target.classList.contains("is-current");
 
-    sections.forEach(function (section) {
-      section.classList.toggle("is-current", section === target);
-      if (section !== target) {
-        section.classList.remove("section-slide-run", "section-slide-from-left", "section-slide-from-right");
-      }
-    });
+    const targetIndex = sections.indexOf(target);
+    if (targetIndex >= 0) {
+      activeSectionIndex = targetIndex;
+      activeSectionId = target.id;
+    }
 
-    activeSectionIndex = Math.max(0, sections.indexOf(target));
-    activeSectionId = target.id;
+    const slideClass = direction === "prev" ? "section-slide-from-left" : "section-slide-from-right";
+    document.body.classList.remove("landing-slide-next", "landing-slide-prev");
+    document.body.classList.add(direction === "prev" ? "landing-slide-prev" : "landing-slide-next");
+
     target.classList.add("is-visible");
+    target.classList.remove("section-slide-run", "section-slide-from-left", "section-slide-from-right", "section-nav-focus");
+    void target.offsetWidth;
+    target.classList.add("section-slide-run", slideClass, "section-nav-focus");
 
-    navLinks.forEach(function (link) {
-      link.classList.toggle("active", link.getAttribute("href") === "#" + target.id);
-    });
-
-    if (changed && !options.instant) {
-      const slideClass = direction === "prev" ? "section-slide-from-left" : "section-slide-from-right";
-      target.classList.remove("section-slide-run", "section-slide-from-left", "section-slide-from-right");
-      void target.offsetWidth;
-      target.classList.add("section-slide-run", slideClass);
-      window.clearTimeout(sectionSlideTimer);
-      sectionSlideTimer = window.setTimeout(function () {
-        target.classList.remove("section-slide-run", "section-slide-from-left", "section-slide-from-right");
-      }, 700);
-    }
-
-    if (changed || options.forceTop) window.scrollTo({ top: 0, behavior: "auto" });
-    window.dispatchEvent(new Event("resize"));
-  }
-
-  function goToSection(target, pushHistory) {
-    if (!target) return;
-    showSection(target);
-    if (pushHistory && window.location.hash !== "#" + target.id) {
-      try { history.pushState(null, "", "#" + target.id); } catch (e) { /* ignore */ }
-    }
+    window.clearTimeout(sectionSlideTimer);
+    sectionSlideTimer = window.setTimeout(function () {
+      target.classList.remove("section-slide-run", "section-slide-from-left", "section-slide-from-right", "section-nav-focus");
+    }, 920);
   }
 
   document.querySelectorAll('a[href^="#"]').forEach(function (link) {
     link.addEventListener("click", function (event) {
-      const target = sections.find(function (section) {
-        return "#" + section.id === link.getAttribute("href");
-      });
+      const target = document.querySelector(link.getAttribute("href"));
       if (!target) return;
+
       event.preventDefault();
-      goToSection(target, true);
+      playLandingSectionSlide(target, getSectionDirection(target));
+      scrollTargetToSection(target);
     });
   });
 
-  window.addEventListener("popstate", function () {
-    const target = sections.find(function (section) { return "#" + section.id === window.location.hash; });
-    showSection(target || sections[0]);
-  });
+  function setActiveTab() {
+    if (!navLinks.length || !sections.length) return;
 
-  // Vuốt trái/phải trên điện thoại để chuyển phần kế tiếp / trước đó.
-  (function initSwipe() {
-    let start = null;
-    const SKIP = "#landingVietnamMap, input, textarea, select, button, [data-no-swipe]";
+    let activeId = sections[0].id;
+    const point = window.scrollY + window.innerHeight * 0.5;
 
-    document.addEventListener("touchstart", function (event) {
-      if (event.touches.length !== 1 || event.target.closest(SKIP)) { start = null; return; }
-      const t = event.touches[0];
-      start = { x: t.clientX, y: t.clientY, time: Date.now() };
-    }, { passive: true });
+    sections.forEach(function (section) {
+      const top = section.offsetTop;
+      const bottom = top + section.offsetHeight;
+      if (point >= top && point <= bottom) activeId = section.id;
+      if (top <= point) activeId = section.id;
+    });
 
-    document.addEventListener("touchend", function (event) {
-      if (!start) return;
-      const t = event.changedTouches[0];
-      const dx = t.clientX - start.x;
-      const dy = t.clientY - start.y;
-      const elapsed = Date.now() - start.time;
-      start = null;
-      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5 || elapsed > 800) return;
-      const next = sections[activeSectionIndex + (dx < 0 ? 1 : -1)];
-      if (next) goToSection(next, true);
-    }, { passive: true });
+    const nextSection = sections.find(function (section) {
+      return section.id === activeId;
+    });
 
-    document.addEventListener("touchcancel", function () { start = null; }, { passive: true });
-  })();
+    if (nextSection && activeId !== activeSectionId) {
+      playLandingSectionSlide(nextSection, getSectionDirection(nextSection));
+    }
+
+    navLinks.forEach(function (link) {
+      link.classList.toggle("active", link.getAttribute("href") === `#${activeId}`);
+    });
+  }
 
   function initLandingVietnamMap() {
     const mapContainer = document.getElementById("landingVietnamMap");
@@ -479,8 +467,34 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function initLandingSectionAnimations() {
-    const hashTarget = sections.find(function (section) { return "#" + section.id === window.location.hash; });
-    showSection(hashTarget || sections[0], { instant: true, forceTop: Boolean(hashTarget) });
+    const landingSections = Array.from(document.querySelectorAll('.landing-culture-page main > section[id]'));
+    if (!landingSections.length) return;
+
+    landingSections[0].classList.add('is-visible');
+
+    if (!('IntersectionObserver' in window)) {
+      landingSections.forEach(function (section) {
+        section.classList.add('is-visible');
+      });
+      return;
+    }
+
+    const observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-visible');
+        if (entry.target.id && entry.target.id !== activeSectionId) {
+          playLandingSectionSlide(entry.target, getSectionDirection(entry.target));
+        }
+      });
+    }, {
+      threshold: 0.28,
+      rootMargin: '-12% 0px -18% 0px'
+    });
+
+    landingSections.forEach(function (section) {
+      observer.observe(section);
+    });
   }
 
   function initLandingNewsletter() {
@@ -543,4 +557,6 @@ document.addEventListener("DOMContentLoaded", function () {
   initLandingSectionAnimations();
   initLandingVietnamMap();
   initLandingNewsletter();
+  setActiveTab();
+  window.addEventListener("scroll", setActiveTab, { passive: true });
 });
