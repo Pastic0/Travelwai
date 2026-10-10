@@ -2158,9 +2158,6 @@ header {
 .landing-culture-page main > section[id] {
   min-height: calc(100vh - 76px);
   scroll-margin-top: 76px;
-  opacity: .18;
-  transform: translateY(24px);
-  transition: opacity .75s ease, transform .75s ease;
 }
 
 .landing-culture-page main > section[id].is-visible,
@@ -2170,9 +2167,8 @@ header {
 }
 
 .landing-culture-page main > section[id] > * {
-  opacity: 0;
-  transform: translateY(18px);
-  transition: opacity .68s ease, transform .68s ease;
+  opacity: 1;
+  transform: none;
 }
 
 .landing-culture-page main > section[id].is-visible > *,
@@ -2190,7 +2186,7 @@ header {
 }
 
 .landing-culture-page main > section[id].section-nav-focus > * {
-  animation: landingSectionFocus .72s cubic-bezier(.2,.75,.2,1) both;
+  animation: none;
 }
 
 @keyframes landingSectionFocus {
