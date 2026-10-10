@@ -778,3 +778,15 @@ body.landing-culture-page .culture-final-actions {
     max-height: 100% !important;
   }
 }
+
+
+/* ---- Khối tiện ích (#features): bỏ card nền phía sau, chỉ giữ 4 thẻ tính năng ---- */
+body.landing-culture-page .landing-feature-section {
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0;
+  background: none !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
