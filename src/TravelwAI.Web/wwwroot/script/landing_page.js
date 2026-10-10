@@ -69,7 +69,7 @@ document.addEventListener("DOMContentLoaded", function () {
     window.clearTimeout(sectionSlideTimer);
     sectionSlideTimer = window.setTimeout(function () {
       target.classList.remove("section-slide-run", "section-slide-from-left", "section-slide-from-right", "section-nav-focus");
-    }, 1100);
+    }, 920);
   }
 
   document.querySelectorAll('a[href^="#"]').forEach(function (link) {
@@ -83,19 +83,12 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // Tự động chuyển từng phần mỗi 7 giây (Tổng quan -> ... -> Bắt đầu -> quay lại Tổng quan)
-  // Mặc định luôn ở trạng thái đang chạy; thanh tiến trình dưới nav đếm ngược thời gian chuyển.
-  const AUTO_ADVANCE_MS = 7000;
+  // Tự động chuyển từng phần mỗi 5 giây (Tổng quan -> ... -> Bắt đầu -> quay lại Tổng quan)
+  const AUTO_ADVANCE_MS = 5000;
   const autoplayBtn = document.getElementById("landingAutoplayBtn");
-  let autoplayOn = true;
+  const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let autoplayOn = !reducedMotion;
   let autoplayTimer = null;
-
-  const header = document.querySelector(".landing-header");
-  const progressBar = document.createElement("div");
-  progressBar.className = "landing-progress";
-  progressBar.setAttribute("aria-hidden", "true");
-  progressBar.style.setProperty("--landing-progress-ms", AUTO_ADVANCE_MS + "ms");
-  if (header) header.appendChild(progressBar);
 
   function goToSection(target) {
     if (!target) return;
@@ -109,20 +102,14 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function stopAutoplayTimer() {
-    window.clearTimeout(autoplayTimer);
+    window.clearInterval(autoplayTimer);
     autoplayTimer = null;
-    progressBar.classList.remove("is-running");
   }
 
   function startAutoplayTimer() {
     stopAutoplayTimer();
     if (!autoplayOn || document.hidden) return;
-    void progressBar.offsetWidth; // khởi động lại animation thanh tiến trình
-    progressBar.classList.add("is-running");
-    autoplayTimer = window.setTimeout(function () {
-      advanceSection();
-      startAutoplayTimer();
-    }, AUTO_ADVANCE_MS);
+    autoplayTimer = window.setInterval(advanceSection, AUTO_ADVANCE_MS);
   }
 
   function renderAutoplayButton() {
