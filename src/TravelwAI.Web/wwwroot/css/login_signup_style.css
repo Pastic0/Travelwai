@@ -66,17 +66,7 @@ body {
   background-attachment: fixed;
 }
 
-/* Lớp phủ tối nhẹ để chữ luôn rõ trên cả 2 ảnh nền (giống landing) */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    linear-gradient(90deg, rgba(4, 10, 24, 0.55) 0%, rgba(4, 10, 24, 0.3) 55%, rgba(4, 10, 24, 0.2) 100%),
-    linear-gradient(180deg, rgba(4, 10, 24, 0.45) 0%, rgba(4, 10, 24, 0) 30%, rgba(4, 10, 24, 0.42) 100%);
-}
+/* Không dùng lớp phủ tối: nền hiển thị rõ như trang Home (chữ nằm trong card kính nên vẫn đọc được) */
 
 /* --------------------------------------------------------------------------
    Logo + chữ TravelwAI nằm trong card kính

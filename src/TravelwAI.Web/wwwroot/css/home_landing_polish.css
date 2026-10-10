@@ -1057,3 +1057,11 @@ body .content .hero-text h2::after {
 body.landing-culture-page .landing-feature-grid b::after {
   height: 4px;
 }
+
+/* ---- Nền Landing rõ như trang Home: bỏ lớp phủ tối ---- */
+body.landing-culture-page::after,
+html[data-travelwai-theme="dark"] body.landing-culture-page::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+}
