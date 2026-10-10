@@ -1535,30 +1535,3 @@ body.landing-culture-page .culture-final h2 {
   line-height: 1.2 !important;
   letter-spacing: normal !important;
 }
-
-/* Nút tạm dừng / tiếp tục tự động chuyển phần */
-body.landing-culture-page .landing-autoplay-btn {
-  display: inline-grid;
-  place-items: center;
-  width: 44px;
-  min-width: 44px;
-  padding: 0 !important;
-  font: inherit;
-  cursor: pointer;
-}
-
-body.landing-culture-page .landing-autoplay-btn .icon-play,
-body.landing-culture-page .landing-autoplay-btn.is-paused .icon-pause {
-  display: none;
-}
-
-body.landing-culture-page .landing-autoplay-btn.is-paused .icon-play {
-  display: block;
-}
-
-@media (max-width: 900px) {
-  body.landing-culture-page .landing-autoplay-btn {
-    width: 42px;
-    min-width: 42px;
-  }
-}

@@ -83,64 +83,6 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // Tự động chuyển từng phần mỗi 5 giây (Tổng quan -> ... -> Bắt đầu -> quay lại Tổng quan)
-  const AUTO_ADVANCE_MS = 5000;
-  const autoplayBtn = document.getElementById("landingAutoplayBtn");
-  const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let autoplayOn = !reducedMotion;
-  let autoplayTimer = null;
-
-  function goToSection(target) {
-    if (!target) return;
-    playLandingSectionSlide(target, getSectionDirection(target));
-    scrollTargetToSection(target);
-  }
-
-  function advanceSection() {
-    if (!sections.length) return;
-    goToSection(sections[(activeSectionIndex + 1) % sections.length]);
-  }
-
-  function stopAutoplayTimer() {
-    window.clearInterval(autoplayTimer);
-    autoplayTimer = null;
-  }
-
-  function startAutoplayTimer() {
-    stopAutoplayTimer();
-    if (!autoplayOn || document.hidden) return;
-    autoplayTimer = window.setInterval(advanceSection, AUTO_ADVANCE_MS);
-  }
-
-  function renderAutoplayButton() {
-    if (!autoplayBtn) return;
-    const label = autoplayOn ? "Tạm dừng tự động chuyển phần" : "Tiếp tục tự động chuyển phần";
-    autoplayBtn.classList.toggle("is-paused", !autoplayOn);
-    autoplayBtn.setAttribute("aria-pressed", autoplayOn ? "true" : "false");
-    autoplayBtn.setAttribute("aria-label", label);
-    autoplayBtn.title = label;
-  }
-
-  if (autoplayBtn) {
-    autoplayBtn.addEventListener("click", function () {
-      autoplayOn = !autoplayOn;
-      renderAutoplayButton();
-      startAutoplayTimer();
-    });
-  }
-
-  // Người dùng tự cuộn/bấm: tính lại 5 giây từ lúc đó
-  ["wheel", "touchstart", "keydown", "pointerdown"].forEach(function (evt) {
-    window.addEventListener(evt, function () {
-      if (autoplayOn) startAutoplayTimer();
-    }, { passive: true });
-  });
-
-  document.addEventListener("visibilitychange", startAutoplayTimer);
-
-  renderAutoplayButton();
-  startAutoplayTimer();
-
   function setActiveTab() {
     if (!navLinks.length || !sections.length) return;
 
